@@ -1,0 +1,118 @@
+{{define "download_detail.html"}}
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ollama Model Manager — {{if .D}}{{.D.Model}}{{else}}Download{{end}}</title>
+  {{template "style" .}}
+  {{template "htmx_script" .}}
+  {{template "dialog_script" .}}
+</head>
+<body>
+  {{template "nav" .}}
+  <main>
+    <p><a href="/downloads" class="muted">← All downloads</a></p>
+    {{if .NotFound}}
+      <div class="error-box">That download doesn't exist (it may have been cleared from the history).</div>
+    {{else}}
+      {{template "download_detail_body.html" .}}
+    {{end}}
+    {{template "footer" .}}
+  </main>
+  {{if .D}}{{template "retry_dialog" .}}{{end}}
+</body>
+</html>
+{{end}}
+
+{{define "download_detail_body.html"}}
+<div id="download-detail" {{if .D.Active}}hx-get="/downloads/{{.D.ID}}" hx-trigger="every 2s" hx-swap="outerHTML"{{end}}>
+  {{with .D}}
+  <div class="panel">
+    <div class="row between">
+      <h2 class="mono" style="margin:0">{{.Model}} <span class="badge {{.Status}}">{{.Status}}</span></h2>
+      <div class="row">
+        {{if .Active}}<form method="post" action="/downloads/{{.ID}}/cancel" class="inline"><input type="hidden" name="from" value="detail"><button type="submit" class="danger small">Cancel</button></form>{{end}}
+        {{if .Retryable}}<button type="button" class="small" data-dialog-open="retry-modal"
+            data-fill-model="{{.Model}}" data-fill-action="/downloads/{{.ID}}/retry">Retry</button>{{end}}
+        {{if eq .Status "completed"}}<a class="btn secondary small" href="/models/{{.Model}}">View model</a>{{end}}
+      </div>
+    </div>
+    {{with $.Live}}
+    <div class="progress-bar" style="height:10px"><div class="fill" style="width: {{pct .Percent}}%"></div></div>
+    <div class="live-stats">
+      <span><strong>{{pct .Percent}}%</strong></span>
+      <span>{{bytes .Completed}} of {{if .Total}}{{bytes .Total}}{{else}}?{{end}}</span>
+      <span>Speed <strong>{{speed .Speed}}</strong></span>
+      <span>ETA <strong>{{if .ETA}}{{eta .ETA}}{{else}}-{{end}}</strong></span>
+    </div>
+    {{end}}
+    <div style="height:14px"></div>
+    <dl class="kv">
+      <dt>Requested by</dt><dd>{{.RequestedBy}}</dd>
+      <dt>Requested</dt><dd>{{time .CreatedAt}}</dd>
+      <dt>Started</dt><dd>{{with .StartedAt}}{{time .}}{{else}}-{{end}}</dd>
+      <dt>Finished</dt><dd>{{with .FinishedAt}}{{time .}}{{else}}-{{end}}</dd>
+      <dt>Took</dt><dd>{{took .StartedAt .FinishedAt}}</dd>
+      <dt>Downloaded</dt><dd>{{bytes .CompletedBytes}}{{if .TotalBytes}} of {{bytes .TotalBytes}}{{end}}</dd>
+      <dt>Attempts</dt><dd>{{.Attempts}}</dd>
+      {{with .Error}}<dt>Error</dt><dd class="wrap" style="color:var(--err-text)">{{elideurls .}} <span class="muted">(full error in the log below)</span></dd>{{end}}
+    </dl>
+  </div>
+  {{end}}
+  {{with .Hints}}
+  <div class="panel hints" id="suggestions">
+    <h2>Suggestions</h2>
+    {{range .}}
+    <div class="hint">
+      <h3>{{.Title}}</h3>
+      <p>{{.Text}}</p>
+      {{with .Steps}}<ol>{{range .}}<li>{{.}}</li>{{end}}</ol>{{end}}
+      {{with .Commands}}<pre class="cmd">{{range $i, $c := .}}{{if $i}}
+{{end}}{{$c}}{{end}}</pre>{{end}}
+      {{with .Links}}<div class="hint-links">{{range .}}<a href="{{.URL}}"{{if not (hasprefix .URL "/")}} target="_blank" rel="noopener noreferrer"{{end}}>{{.Label}}{{if not (hasprefix .URL "/")}} ↗{{end}}</a>{{end}}</div>{{end}}
+    </div>
+    {{end}}
+  </div>
+  {{end}}
+  <div class="panel">
+    <h2>Log</h2>
+    <div class="table-wrap">
+    <table class="log">
+      <tbody>
+      {{range .Logs}}
+        <tr class="{{.Level}}">
+          <td class="when">{{time .At}}</td>
+          <td class="lvl">{{if ne .Level "info"}}<span class="badge {{.Level}}">{{.Level}}</span>{{end}}</td>
+          <td class="msg">{{.Message}}</td>
+        </tr>
+      {{else}}
+        <tr><td class="muted">No log entries yet.</td></tr>
+      {{end}}
+      </tbody>
+    </table>
+    </div>
+  </div>
+</div>
+{{end}}
+
+{{/* Retry, optionally under a different model name. Shared by every Retry
+     button on a page, which fills in the model and target (dialog.js); when a
+     retry is rejected, .Retry carries it back to reopen with the error. */}}
+{{define "retry_dialog"}}
+<dialog id="retry-modal" aria-labelledby="retry-title" {{if .Retry}}data-dialog-autoopen{{end}}>
+  <form method="post" data-fill="action" data-fill-attr="action" {{with .Retry}}action="/downloads/{{.ID}}/retry"{{end}} class="form-grid">
+    <h2 id="retry-title">Retry download</h2>
+    {{with .Retry}}<div class="error-box">{{.Error}}</div>{{end}}
+    {{if .D}}<input type="hidden" name="from" value="detail">{{end}}
+    <label>Model
+      <input type="text" name="model" data-fill="model" value="{{with .Retry}}{{.Model}}{{end}}" required autocomplete="off" spellcheck="false">
+    </label>
+    <p class="muted" style="font-size:13px; margin:0">Change the name to fetch a different model or tag instead, e.g. to fix a typo or pick another quantisation. A new name is checked against its registry first.</p>
+    <div class="dialog-actions">
+      <button type="button" class="secondary" data-dialog-close>Cancel</button>
+      <button type="submit">Retry</button>
+    </div>
+  </form>
+</dialog>
+{{end}}

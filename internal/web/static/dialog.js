@@ -4,7 +4,8 @@
 //
 // One dialog can serve many openers: each data-fill-<key>="value" on the opener
 // is copied into the dialog's [data-fill="<key>"] elements (an input's value,
-// anything else's text), e.g. the model name in a shared delete confirmation.
+// anything else's text; or the attribute named by data-fill-attr, e.g. a
+// form's action), e.g. the model name in a shared delete confirmation.
 //
 // A [data-dismiss] button removes the .notice it's in.
 //
@@ -48,8 +49,10 @@ function fill(dialog, opener) {
     if (k.indexOf("fill") !== 0 || k.length === 4) return;
     var key = k.charAt(4).toLowerCase() + k.slice(5); // dataset camelCases data-fill-foo-bar -> fillFooBar
     dialog.querySelectorAll('[data-fill="' + key + '"]').forEach(function (el) {
-      if ("value" in el && el.tagName !== "BUTTON") el.value = opener.dataset[k];
-      else el.textContent = opener.dataset[k];
+      var v = opener.dataset[k];
+      if (el.dataset.fillAttr) el.setAttribute(el.dataset.fillAttr, v);
+      else if ("value" in el && el.tagName !== "BUTTON" && el.tagName !== "FORM") el.value = v;
+      else el.textContent = v;
     });
   });
 }

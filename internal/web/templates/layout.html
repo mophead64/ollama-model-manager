@@ -87,8 +87,11 @@
     color: white; font-size: 14px; cursor: pointer; font-weight: 500;
   }
   button:hover { background: var(--accent-dark); }
-  button.secondary { background: var(--panel); color: var(--text); border-color: var(--border); }
-  button.secondary:hover { background: var(--hover); }
+  .btn { display: inline-block; text-decoration: none; }
+  .btn:hover { background: var(--accent-dark); }
+  button.secondary, .btn.secondary { background: var(--panel); color: var(--text); border-color: var(--border); }
+  button.secondary:hover, .btn.secondary:hover { background: var(--hover); }
+  .btn.small { padding: 4px 10px; font-size: 13px; }
   button.danger { background: var(--panel); color: var(--danger); border-color: var(--danger); }
   button.danger:hover { background: var(--danger-bg); }
   button.danger-solid { background: var(--danger); border-color: var(--danger); color: white; }
@@ -105,6 +108,39 @@
   .badge.update { background: var(--b-amber-bg); color: var(--b-amber); text-decoration: none; }
   .badge.auto { background: var(--b-purple-bg); color: var(--b-purple); }
   .badge.manual { background: var(--b-gray-bg); color: var(--b-manual); }
+  .badge.queued { background: var(--b-gray-bg); color: var(--b-manual); }
+  .badge.downloading { background: var(--b-blue-bg); color: var(--b-blue); }
+  .badge.cancelled { background: var(--b-amber-bg); color: var(--b-amber); }
+  .badge.warn { background: var(--b-amber-bg); color: var(--b-amber); }
+  .badge.error { background: var(--b-red-bg); color: var(--b-red); }
+  .badge.info { background: var(--b-gray-bg); color: var(--b-gray); }
+  .nav-badge { display: inline-block; min-width: 18px; padding: 0 6px; margin-left: 2px; border-radius: 999px; background: var(--accent); color: white; font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; }
+  .notice.warning { background: var(--b-amber-bg); color: var(--b-amber); }
+  .live-card { border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 14px; }
+  .live-card .progress-bar { height: 10px; margin: 10px 0 8px; }
+  .live-stats { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--muted); }
+  .live-stats strong { color: var(--text); font-weight: 600; }
+  .dl-form { display: flex; gap: 10px; flex-wrap: wrap; }
+  .dl-form input[type=text] { flex: 1 1 320px; }
+  /* Fixed layout so one long line (e.g. a signed URL in an error) wraps
+     instead of stretching the table off the page. */
+  .hints { border-left: 4px solid var(--b-amber); }
+  .hint + .hint { border-top: 1px solid var(--border); margin-top: 16px; padding-top: 16px; }
+  .hint h3 { margin: 0 0 6px; font-size: 15px; }
+  .hint p { margin: 0 0 8px; font-size: 14px; line-height: 1.5; }
+  .hint ol { margin: 0 0 10px; padding-left: 22px; font-size: 14px; line-height: 1.6; }
+  .hint pre.cmd { margin: 0 0 10px; max-height: none; }
+  .hint-links { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 14px; }
+  .hint-links a, a.hint-link { color: var(--accent); text-decoration: none; }
+  .hint-links a:hover, a.hint-link:hover { text-decoration: underline; }
+  a.hint-link { display: block; font-size: 12px; margin-top: 2px; }
+  table.log { table-layout: fixed; }
+  table.log td { font-size: 13px; vertical-align: top; }
+  table.log td.when { width: 170px; white-space: nowrap; color: var(--muted); }
+  table.log td.lvl { width: 72px; }
+  table.log td.msg, dd.wrap { overflow-wrap: anywhere; word-break: normal; }
+  @media (max-width: 720px) { table.log td.when { width: 110px; white-space: normal; } }
+  table.log tr.error td.msg { color: var(--err-text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; white-space: pre-wrap; }
   .muted { color: var(--muted); }
   .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
   .row.between { justify-content: space-between; }
@@ -195,7 +231,8 @@
 {{define "nav"}}
 <nav>
   <span class="brand">Ollama Model Manager</span>
-  {{if .User}}<a href="/models">Models</a>{{end}}
+  {{if .User}}<a href="/models">Models</a>
+  <a href="/downloads">Downloads {{template "nav_dl_badge" .}}</a>{{end}}
   <div class="theme-switch" role="group" aria-label="Colour theme">
     <button type="button" class="secondary" data-theme-choice="auto">Auto</button>
     <button type="button" class="secondary" data-theme-choice="dark">Dark</button>
@@ -237,6 +274,10 @@
   {{end}}
 </nav>
 {{end}}
+
+{{/* Count of queued + running downloads. The downloads panel re-sends it
+     out-of-band on each poll so it stays current there. */}}
+{{define "nav_dl_badge"}}<span id="nav-dl-badge" class="nav-badge"{{if .Fragment}} hx-swap-oob="true"{{end}}{{if not .ActiveDownloads}} hidden{{end}}>{{.ActiveDownloads}}</span>{{end}}
 
 {{define "footer"}}
 <footer class="hint">

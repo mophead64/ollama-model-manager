@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/mophead64/ollama-model-manager/internal/downloads"
 	"github.com/mophead64/ollama-model-manager/internal/ollama"
 	"github.com/mophead64/ollama-model-manager/internal/store"
 	"github.com/mophead64/ollama-model-manager/internal/version"
@@ -85,7 +86,22 @@ func main() {
 		log.Info("model deletion disabled", "var", "ALLOW_MODEL_DELETE")
 	}
 
-	srv, err := web.NewServer(ol, st, web.Config{ModelsDir: modelsDir, AllowDelete: allowDelete}, log)
+	// The download queue runs in the background for the life of the process,
+	// independent of any browser session.
+	dl := downloads.New(st, ol, log)
+	dlDone := make(chan struct{})
+	go func() { dl.Run(ctx); close(dlDone) }()
+	defer func() {
+		// Let the worker record where an in-flight download got to (it's
+		// requeued to resume on the next start) before the database closes.
+		select {
+		case <-dlDone:
+		case <-time.After(5 * time.Second):
+			log.Warn("download worker didn't stop in time")
+		}
+	}()
+
+	srv, err := web.NewServer(ol, st, dl, web.Config{ModelsDir: modelsDir, AllowDelete: allowDelete}, log)
 	if err != nil {
 		log.Error("failed to initialize web server", "error", err)
 		os.Exit(1)

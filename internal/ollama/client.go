@@ -14,8 +14,9 @@ import (
 )
 
 type Client struct {
-	base string
-	http *http.Client
+	base   string
+	http   *http.Client // for quick API calls
+	stream *http.Client // for pulls, which can run for hours
 }
 
 // New returns a client for the Ollama server at base, e.g.
@@ -26,7 +27,7 @@ func New(base string) *Client {
 	if !strings.Contains(base, "://") {
 		base = "http://" + base
 	}
-	return &Client{base: base, http: &http.Client{Timeout: 30 * time.Second}}
+	return &Client{base: base, http: &http.Client{Timeout: 30 * time.Second}, stream: &http.Client{}}
 }
 
 func (c *Client) BaseURL() string { return c.base }

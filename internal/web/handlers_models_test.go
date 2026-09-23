@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mophead64/ollama-model-manager/internal/downloads"
 	"github.com/mophead64/ollama-model-manager/internal/ollama"
 	"github.com/mophead64/ollama-model-manager/internal/store"
 )
@@ -32,6 +33,14 @@ func fakeOllama(t *testing.T, n int) *httptest.Server {
 			}
 			parts = append(parts, `{"name":"user/custom:v1","size":2048,"digest":"abc123","details":{"family":"qwen"},"capabilities":["completion","vision"]}`)
 			fmt.Fprintf(w, `{"models":[%s]}`, strings.Join(parts, ","))
+		case "/api/pull":
+			for _, line := range []string{
+				`{"status":"pulling manifest"}`,
+				`{"status":"pulling abc","digest":"sha256:abc","total":2048,"completed":2048}`,
+				`{"status":"success"}`,
+			} {
+				fmt.Fprintln(w, line)
+			}
 		case "/api/delete":
 			body, _ := io.ReadAll(r.Body)
 			if strings.Contains(string(body), "fail-me") {
@@ -58,6 +67,24 @@ func fakeOllama(t *testing.T, n int) *httptest.Server {
 // signed-in user. Set by newTestServer.
 var testSession *http.Cookie
 
+// testManager and testStore are the download manager and store behind the
+// last newTestServer; the manager isn't running unless a test starts it.
+var (
+	testManager *downloads.Manager
+	testStore   *store.Store
+)
+
+// fakeRegistry answers model manifest checks: 404 for "missing*", 200 otherwise.
+type fakeRegistry struct{}
+
+func (fakeRegistry) RoundTrip(r *http.Request) (*http.Response, error) {
+	code := http.StatusOK
+	if strings.Contains(r.URL.Path, "/missing") {
+		code = http.StatusNotFound
+	}
+	return &http.Response{StatusCode: code, Status: http.StatusText(code), Body: io.NopCloser(strings.NewReader(""))}, nil
+}
+
 func newTestStore(t *testing.T) *store.Store {
 	t.Helper()
 	st, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "test.db"))
@@ -78,7 +105,11 @@ func newTestServer(t *testing.T, base string) http.Handler {
 	token, _ := st.CreateSession(context.Background(), u.ID)
 	testSession = &http.Cookie{Name: sessionCookie, Value: token}
 
-	s, err := NewServer(ollama.New(base), st, Config{ModelsDir: t.TempDir(), AllowDelete: true}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	testManager = downloads.New(st, ollama.New(base), log)
+	testManager.SetRegistryClient(&http.Client{Transport: fakeRegistry{}})
+	testStore = st
+	s, err := NewServer(ollama.New(base), st, testManager, Config{ModelsDir: t.TempDir(), AllowDelete: true}, log)
 	if err != nil {
 		t.Fatal(err)
 	}

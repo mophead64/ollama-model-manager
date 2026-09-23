@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/mophead64/ollama-model-manager/internal/downloads"
 	"github.com/mophead64/ollama-model-manager/internal/ollama"
 	"github.com/mophead64/ollama-model-manager/internal/store"
 	"github.com/mophead64/ollama-model-manager/internal/version"
@@ -28,6 +29,7 @@ type Config struct {
 type Server struct {
 	ol  *ollama.Client
 	st  *store.Store
+	dl  *downloads.Manager
 	cfg Config
 	log *slog.Logger
 
@@ -36,13 +38,13 @@ type Server struct {
 	logins  *loginLimiter
 }
 
-func NewServer(ol *ollama.Client, st *store.Store, cfg Config, log *slog.Logger) (*Server, error) {
+func NewServer(ol *ollama.Client, st *store.Store, dl *downloads.Manager, cfg Config, log *slog.Logger) (*Server, error) {
 	tmpl, err := template.New("").Funcs(templateFuncs).ParseFS(templateFS, "templates/*.html")
 	if err != nil {
 		return nil, fmt.Errorf("parse templates: %w", err)
 	}
 	return &Server{
-		ol: ol, st: st, cfg: cfg, log: log,
+		ol: ol, st: st, dl: dl, cfg: cfg, log: log,
 		tmpl: tmpl, updates: newUpdateChecker(), logins: newLoginLimiter(),
 	}, nil
 }
@@ -72,6 +74,14 @@ func (s *Server) Routes() http.Handler {
 	// so it can't be followed by /delete.
 	mux.HandleFunc("POST /models/delete", s.handleDeleteModel)
 
+	mux.HandleFunc("GET /downloads", s.handleDownloads)
+	mux.HandleFunc("POST /downloads", s.handleQueueDownload)
+	mux.HandleFunc("POST /downloads/clear", s.handleClearDownloads)
+	mux.HandleFunc("GET /downloads/{id}", s.handleDownloadDetail)
+	mux.HandleFunc("POST /downloads/{id}/cancel", s.handleCancelDownload)
+	mux.HandleFunc("POST /downloads/{id}/retry", s.handleRetryDownload)
+	mux.HandleFunc("POST /downloads/{id}/delete", s.handleDeleteDownload)
+
 	// Rejects cross-site POSTs (via Sec-Fetch-Site/Origin), so another page
 	// can't submit forms here using the session cookie.
 	return http.NewCrossOriginProtection().Handler(s.requireAuth(mux))
@@ -90,6 +100,10 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 		if _, set := m["User"]; !set {
 			if u := currentUser(r); u != nil {
 				m["User"] = u
+				// For the count badge on the nav's Downloads link.
+				if n, err := s.st.CountActiveDownloads(r.Context()); err == nil {
+					m["ActiveDownloads"] = n
+				}
 			}
 		}
 	}

@@ -1,0 +1,101 @@
+{{define "downloads_panel.html"}}
+<div id="downloads-panel" hx-get="/downloads?page={{.Page}}" hx-trigger="every {{.PollEvery}}" hx-swap="outerHTML">
+  {{if .Fragment}}{{template "nav_dl_badge" .}}{{end}}
+  <div class="panel">
+    <h2>Queue</h2>
+    {{if not .Active}}
+      <p class="muted" style="margin:0">Nothing queued. Models download one at a time in the background, so you can close the page once they're queued.</p>
+    {{else}}
+      {{range .Active}}{{if eq .Status "downloading"}}
+      <div class="live-card">
+        <div class="row between">
+          <div><strong class="mono">{{.Model}}</strong> <span class="badge downloading">downloading</span></div>
+          <div class="row">
+            <a class="btn secondary small" href="/downloads/{{.ID}}">Log</a>
+            <form method="post" action="/downloads/{{.ID}}/cancel" class="inline"><button type="submit" class="danger small">Cancel</button></form>
+          </div>
+        </div>
+        {{with .Live}}
+        <div class="progress-bar"><div class="fill" style="width: {{pct .Percent}}%"></div></div>
+        <div class="live-stats">
+          <span><strong>{{pct .Percent}}%</strong></span>
+          <span>{{bytes .Completed}} of {{if .Total}}{{bytes .Total}}{{else}}?{{end}}</span>
+          <span>Speed <strong>{{speed .Speed}}</strong></span>
+          <span>ETA <strong>{{if .ETA}}{{eta .ETA}}{{else}}-{{end}}</strong></span>
+          <span class="mono">{{.Status}}</span>
+        </div>
+        {{else}}
+        <div class="progress-bar"><div class="fill" style="width: {{pct (progress .CompletedBytes .TotalBytes)}}%"></div></div>
+        <div class="live-stats"><span>Starting…</span></div>
+        {{end}}
+      </div>
+      {{end}}{{end}}
+
+      {{if gt (len .Active) 1}}
+      <div class="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Model</th><th>Requested by</th><th>Queued</th><th></th></tr></thead>
+        <tbody>
+        {{range .Active}}{{if eq .Status "queued"}}
+          <tr>
+            <td>{{.Position}}</td>
+            <td class="mono">{{.Model}}</td>
+            <td>{{.RequestedBy}}</td>
+            <td>{{time .QueuedAt}}</td>
+            <td class="actions">
+              <a class="btn secondary small" href="/downloads/{{.ID}}">Log</a>
+              <form method="post" action="/downloads/{{.ID}}/cancel" class="inline"><button type="submit" class="secondary small">Remove</button></form>
+            </td>
+          </tr>
+        {{end}}{{end}}
+        </tbody>
+      </table>
+      </div>
+      {{else if eq (index .Active 0).Status "queued"}}
+      <p class="muted" style="margin:0"><span class="mono">{{(index .Active 0).Model}}</span> is next; starting shortly.</p>
+      {{end}}
+    {{end}}
+  </div>
+
+  <div class="panel">
+    <div class="row between">
+      <h2>History</h2>
+      {{if .History}}
+      <form method="post" action="/downloads/clear" class="inline"><button type="submit" class="secondary small">Clear history</button></form>
+      {{end}}
+    </div>
+    {{if not .History}}
+      <p class="muted" style="margin:0">Finished downloads appear here.</p>
+    {{else}}
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Model</th><th>Status</th><th>Size</th><th>Took</th><th>Finished</th><th>Requested by</th><th></th></tr></thead>
+      <tbody>
+      {{range .History}}
+        <tr>
+          <td class="mono">{{if eq .Status "completed"}}<a class="model-link" href="/models/{{.Model}}">{{.Model}}</a>{{else}}{{.Model}}{{end}}</td>
+          <td><span class="badge {{.Status}}">{{.Status}}</span>{{with .Error}}<div class="path-line" title="{{.}}" style="max-width:260px">{{elideurls .}}</div>{{end}}{{if .Hint}}<a class="hint-link" href="/downloads/{{.ID}}#suggestions">💡 {{.Hint}}</a>{{end}}</td>
+          <td>{{if .TotalBytes}}{{bytes .TotalBytes}}{{else}}-{{end}}</td>
+          <td>{{took .StartedAt .FinishedAt}}</td>
+          <td>{{with .FinishedAt}}{{time .}}{{else}}-{{end}}</td>
+          <td>{{.RequestedBy}}</td>
+          <td class="actions">
+            <a class="btn secondary small" href="/downloads/{{.ID}}">Log</a>
+            {{if .Retryable}}<button type="button" class="small" data-dialog-open="retry-modal"
+                data-fill-model="{{.Model}}" data-fill-action="/downloads/{{.ID}}/retry">Retry</button>{{end}}
+            <form method="post" action="/downloads/{{.ID}}/delete" class="inline"><button type="submit" class="secondary small" title="Remove from history">✕</button></form>
+          </td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table>
+    </div>
+    <div class="pagination">
+      <span class="muted">Page {{.Page}} of {{.TotalPages}}</span>
+      {{if gt .Page 1}}<a class="btn secondary" hx-get="/downloads?page={{sub .Page 1}}" hx-target="#downloads-panel" hx-swap="outerHTML" hx-push-url="true">← Prev</a>{{end}}
+      {{if lt .Page .TotalPages}}<a class="btn secondary" hx-get="/downloads?page={{add .Page 1}}" hx-target="#downloads-panel" hx-swap="outerHTML" hx-push-url="true">Next →</a>{{end}}
+    </div>
+    {{end}}
+  </div>
+</div>
+{{end}}

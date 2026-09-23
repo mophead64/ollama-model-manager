@@ -1,0 +1,41 @@
+{{define "downloads.html"}}
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ollama Model Manager — Downloads</title>
+  {{template "style" .}}
+  {{template "htmx_script" .}}
+  {{template "dialog_script" .}}
+</head>
+<body>
+  {{template "nav" .}}
+  <main>
+    {{with .Queued}}
+      {{if $.Warning}}
+      <div class="notice warning" role="status" data-clear-param="queued"><span>Queued <strong>{{.}}</strong>. {{$.Warning}}</span><button type="button" class="notice-close" data-dismiss aria-label="Dismiss">×</button></div>
+      {{else}}
+      <div class="notice" role="status" data-clear-param="queued"><span>Queued <strong>{{.}}</strong>. It downloads in the background, so you can leave this page.</span><button type="button" class="notice-close" data-dismiss aria-label="Dismiss">×</button></div>
+      {{end}}
+    {{end}}
+    <div class="panel">
+      <h2>Download a model</h2>
+      {{with .FormError}}<div class="error-box">{{.}}</div>{{end}}
+      <form method="post" action="/downloads" class="dl-form">
+        <input type="text" name="model" value="{{.FormValue}}" placeholder="e.g. llama3.2, qwen3:8b, hf.co/user/repo:Q4_K_M" aria-label="Model name" required autofocus>
+        <button type="submit">Queue download</button>
+      </form>
+      <p class="muted" style="font-size:13px; margin-bottom:0">
+        Any name <code>ollama pull</code> accepts: models from ollama.com (<code>gemma3:4b</code>, <code>user/model</code>) or
+        Hugging Face GGUF repos (<code>hf.co/user/repo:quant</code>). Pasting a whole <code>ollama pull …</code> command or an
+        ollama.com / huggingface.co link works too. Each name is checked against its registry before it's queued.
+      </p>
+    </div>
+    {{template "downloads_panel.html" .}}
+    {{template "footer" .}}
+  </main>
+  {{template "retry_dialog" .}}
+</body>
+</html>
+{{end}}

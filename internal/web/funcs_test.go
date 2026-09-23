@@ -10,3 +10,14 @@ func TestFormatCount(t *testing.T) {
 		}
 	}
 }
+
+func TestElideURLQueries(t *testing.T) {
+	in := `Failed: Head "https://us.aws.cdn.hf.co/xet-bridge-us/6a51/1e9b?user_id=public&Expires=1790170164&Signature=MEUCIQ": blocked redirect to a different host`
+	want := `Failed: Head "https://us.aws.cdn.hf.co/xet-bridge-us/6a51/1e9b?…": blocked redirect to a different host`
+	if got := elideURLQueries(in); got != want {
+		t.Errorf("got  %s\nwant %s", got, want)
+	}
+	if got := elideURLQueries("no urls here"); got != "no urls here" {
+		t.Errorf("plain text changed: %q", got)
+	}
+}

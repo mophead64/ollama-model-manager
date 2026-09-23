@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mophead64/ollama-model-manager/internal/downloads"
 	"github.com/mophead64/ollama-model-manager/internal/ollama"
 )
 
@@ -48,7 +49,8 @@ func TestDeleteModel(t *testing.T) {
 func TestDeleteDisabled(t *testing.T) {
 	fake := fakeOllama(t, 1)
 	st := newTestStore(t)
-	s, _ := NewServer(ollama.New(fake.URL), st, Config{AllowDelete: false}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	s, _ := NewServer(ollama.New(fake.URL), st, downloads.New(st, ollama.New(fake.URL), log), Config{AllowDelete: false}, log)
 	h := s.Routes()
 	u, _ := st.CreateUser(t.Context(), "admin", "test-password")
 	token, _ := st.CreateSession(t.Context(), u.ID)
