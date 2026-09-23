@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/mophead64/ollama-model-manager/internal/downloads"
+	"github.com/mophead64/ollama-model-manager/internal/library"
 	"github.com/mophead64/ollama-model-manager/internal/ollama"
 	"github.com/mophead64/ollama-model-manager/internal/store"
 	"github.com/mophead64/ollama-model-manager/internal/sysinfo"
@@ -26,6 +27,8 @@ var staticFS embed.FS
 type Config struct {
 	ModelsDir   string // where Ollama stores models, as seen by this process; "" if unknown
 	AllowDelete bool   // whether users may delete models (ALLOW_MODEL_DELETE)
+	LibraryURL  string // the ollama.com model library; "" for the real one
+	HFURL       string // Hugging Face; "" for the real one
 }
 
 type Server struct {
@@ -33,6 +36,7 @@ type Server struct {
 	st  *store.Store
 	dl  *downloads.Manager
 	sys *sysinfo.Sampler
+	lib *library.Client
 	cfg Config
 	log *slog.Logger
 
@@ -47,7 +51,7 @@ func NewServer(ol *ollama.Client, st *store.Store, dl *downloads.Manager, sys *s
 		return nil, fmt.Errorf("parse templates: %w", err)
 	}
 	return &Server{
-		ol: ol, st: st, dl: dl, sys: sys, cfg: cfg, log: log,
+		ol: ol, st: st, dl: dl, sys: sys, lib: library.New(cfg.LibraryURL, cfg.HFURL), cfg: cfg, log: log,
 		tmpl: tmpl, updates: newUpdateChecker(), logins: newLoginLimiter(),
 	}, nil
 }
@@ -78,6 +82,9 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /models/delete", s.handleDeleteModel)
 	mux.HandleFunc("POST /models/load", s.handleLoadModel)
 	mux.HandleFunc("POST /models/unload", s.handleUnloadModel)
+	mux.HandleFunc("GET /discover", s.handleDiscover)
+	mux.HandleFunc("GET /discover/tags", s.handleDiscoverTags)
+	mux.HandleFunc("GET /discover/hf/files", s.handleDiscoverHFFiles)
 	mux.HandleFunc("GET /chat", s.handleChatPage)
 	mux.HandleFunc("GET /chat/model", s.handleChatModelInfo)
 	mux.HandleFunc("POST /chat", s.handleChat)

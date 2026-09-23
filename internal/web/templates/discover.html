@@ -1,0 +1,256 @@
+{{define "discover.html"}}
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ollama Model Manager — Discover</title>
+  {{template "style" .}}
+  {{template "htmx_script" .}}
+  {{template "dialog_script" .}}
+</head>
+<body>
+  {{template "nav" .}}
+  <main>
+    <div class="panel">
+      <div class="row between">
+        <h2>Discover models</h2>
+        {{if .State.HF}}
+        <a class="hint-link" href="https://huggingface.co/models?library=gguf" target="_blank" rel="noopener noreferrer">Browse on huggingface.co ↗</a>
+        {{else}}
+        <a class="hint-link" href="https://ollama.com/search" target="_blank" rel="noopener noreferrer">Browse on ollama.com ↗</a>
+        {{end}}
+      </div>
+      <div class="disc-tabs">
+        <a href="/discover" class="disc-tab"{{if not .State.HF}} aria-current="true"{{end}}>Ollama library</a>
+        <a href="/discover?src=hf" class="disc-tab"{{if .State.HF}} aria-current="true"{{end}}>Hugging Face</a>
+      </div>
+      <form action="/discover" hx-get="/discover" hx-target="#discover-results" hx-swap="outerHTML" hx-push-url="true"
+            hx-trigger="submit, input changed delay:400ms from:#d-q, change from:.disc-filter">
+        {{if .State.HF}}<input type="hidden" name="src" value="hf">{{end}}
+        <div class="row">
+          <label for="d-q" class="muted">{{if .State.HF}}Search GGUF models on Hugging Face{{else}}Search the Ollama library{{end}}</label>
+          <input id="d-q" type="text" name="q" value="{{.State.Query}}" placeholder="{{if .State.HF}}e.g. qwen, unsloth, coder{{else}}e.g. qwen, coder, embed{{end}}" autocomplete="off">
+          <select name="o" class="disc-filter" aria-label="Order">
+            {{if .State.HF}}
+            {{range .HFSorts}}<option value="{{.}}"{{if eq $.State.Order .}} selected{{end}}>{{template "hf_sort_label" .}}</option>{{end}}
+            {{else}}
+            <option value="popular"{{if eq .State.Order "popular"}} selected{{end}}>Most popular</option>
+            <option value="newest"{{if eq .State.Order "newest"}} selected{{end}}>Newest</option>
+            {{end}}
+          </select>
+          <button type="submit">Search</button>
+        </div>
+        <div class="row cap-filter disc-filter" role="group" aria-label="Filters">
+          {{if not .State.HF}}
+          <span class="muted">Has</span>
+          {{range .Caps}}
+          <label class="cap-chip"><input type="checkbox" name="c" value="{{.Name}}" {{if .Selected}}checked{{end}}> {{.Name}}</label>
+          {{end}}
+          <span class="muted disc-sep">·</span>
+          {{end}}
+          <input type="hidden" name="fit" value="0">
+          <label class="cap-chip"><input type="checkbox" name="fit" value="1" {{if .State.Fit}}checked{{end}}> Runs on this machine</label>
+        </div>
+      </form>
+      <div class="memory-strip">
+        {{with .Hardware}}
+        <span><span class="muted">Estimating fit for</span> {{.}}</span>
+        {{else}}
+        <span class="muted">This machine's hardware hasn't been read yet, so sizes can't be checked against it.</span>
+        {{end}}
+        <span class="disc-legend">
+          <span class="badge on">✓ fits</span>
+          <span class="badge warn">◐ partly on CPU</span>
+          <span class="badge error">✗ too big</span>
+        </span>
+      </div>
+      <p class="muted disc-note">
+        {{if .State.HF}}
+        Sizes on each result are estimates for a 4-bit quantisation. Open <em>Files</em> for each quantisation's real size.
+        Gated repos need their terms accepted on Hugging Face, and a token set up in Ollama, before they'll download.
+        {{else}}
+        Sizes on each result are estimates for the default 4-bit download. Open <em>Tags</em> for each download's real size.
+        {{end}}
+        Checked against the machine running this app; if Ollama runs somewhere else, its hardware may differ.
+      </p>
+    </div>
+    {{template "discover_results" .}}
+  </main>
+  {{template "footer" .}}
+</body>
+</html>
+{{end}}
+
+{{define "hf_sort_label"}}{{if eq . "downloads"}}Most downloaded{{else if eq . "trending"}}Trending{{else if eq . "likes"}}Most liked{{else}}Newest{{end}}{{end}}
+
+{{define "discover_results"}}
+<div id="discover-results">
+  {{if .Error}}
+  <div class="error-box">Search failed: {{.Error}}</div>
+  {{else if or .Cards .HFCards .NextURL}}
+  <div class="disc-grid">{{template "discover_cards" .}}</div>
+  {{else if .Hidden}}
+  <div class="panel muted">None of the models found would run on this machine. Untick <em>Runs on this machine</em> to see them.</div>
+  {{else}}
+  <div class="panel muted">No models found{{with .State.Query}} for “{{.}}”{{end}}.</div>
+  {{end}}
+</div>
+{{end}}
+
+{{/* One page of results, followed by a sentinel that loads the next page
+     when it scrolls into view (the link works without JavaScript). */}}
+{{define "discover_cards"}}
+{{range .Cards}}{{template "discover_card" .}}{{end}}
+{{range .HFCards}}{{template "discover_hf_card" .}}{{end}}
+{{with .NextURL}}
+<div class="disc-more" hx-get="{{.}}" hx-trigger="revealed" hx-swap="outerHTML">
+  <a class="btn secondary" href="{{.}}">Load more</a>
+</div>
+{{end}}
+{{end}}
+
+{{/* A card's Installed / Queued / Downloading badges. */}}
+{{define "discover_status"}}
+{{if .Installed}}<span class="badge completed">Installed</span>{{end}}
+{{with .Active}}{{template "dl_status_badge" .}}{{end}}
+{{end}}
+
+{{/* A queued or running download, linking to its page. */}}
+{{define "dl_status_badge"}}<a class="badge {{.Status}}" href="/downloads/{{.ID}}" title="Open the download">{{if eq .Status "downloading"}}Downloading{{if ge .Percent 0.0}} {{printf "%.0f" .Percent}}%{{end}}{{else}}Queued{{end}}</a>{{end}}
+
+{{define "discover_card"}}
+<article class="disc-card">
+  <div class="row between">
+    <h3 class="disc-name">{{.Name}}</h3>
+    <span class="row disc-top">
+      {{template "discover_status" .}}
+      <a class="hint-link" href="https://ollama.com/library/{{.Name}}" target="_blank" rel="noopener noreferrer" aria-label="{{.Name}} on ollama.com">ollama.com ↗</a>
+    </span>
+  </div>
+  {{with .Description}}<p class="disc-desc">{{.}}</p>{{end}}
+  <div class="caps">
+    {{range .Capabilities}}<span class="badge cap">{{.}}</span>{{end}}
+    {{if .Cloud}}<span class="badge auto">cloud</span>{{end}}
+  </div>
+  {{with .Sizes}}
+  <div class="disc-sizes" aria-label="Sizes">
+    {{range .}}<span class="badge {{.Fit.Badge}}" title="{{.Fit.Detail}}">{{.Fit.Symbol}} {{.Label}}</span>{{end}}
+  </div>
+  {{end}}
+  <div class="disc-meta muted">
+    {{with .Pulls}}<span>{{.}} pulls</span>{{end}}
+    {{with .Tags}}<span>{{.}} tag{{if ne . 1}}s{{end}}</span>{{end}}
+    {{with .Updated}}<span>updated {{.}}</span>{{end}}
+  </div>
+  <details class="disc-tags" hx-get="/discover/tags?model={{.Name}}" hx-trigger="toggle once" hx-target="find .disc-tags-body">
+    <summary>Tags and downloads</summary>
+    <div class="disc-tags-body"><p class="muted">Loading…</p></div>
+  </details>
+</article>
+{{end}}
+
+{{define "discover_hf_card"}}
+<article class="disc-card">
+  <div class="row between">
+    <h3 class="disc-name">{{.Repo}}</h3>
+    <span class="row disc-top">
+      {{template "discover_status" .}}
+      <a class="hint-link" href="https://huggingface.co/{{.Repo}}" target="_blank" rel="noopener noreferrer" aria-label="{{.Repo}} on huggingface.co">huggingface.co ↗</a>
+    </span>
+  </div>
+  {{with .BaseModel}}<p class="disc-desc">A quantisation of <strong>{{.}}</strong></p>{{end}}
+  <div class="caps">
+    {{with .Pipeline}}<span class="badge cap">{{.}}</span>{{end}}
+    {{with .Arch}}<span class="badge info">{{.}}</span>{{end}}
+    {{if .Gated}}<span class="badge warn" title="Accept the model's terms on Hugging Face, and give Ollama a token, before downloading.">gated</span>{{end}}
+  </div>
+  {{with .Size}}
+  <div class="disc-sizes" aria-label="Size">
+    <span class="badge {{.Fit.Badge}}" title="{{.Fit.Detail}}">{{.Fit.Symbol}} {{.Label}} parameters</span>
+  </div>
+  {{end}}
+  <div class="disc-meta muted">
+    <span>{{compact .Downloads}} downloads</span>
+    <span>{{compact .Likes}} likes</span>
+    {{with tokens .Context}}<span>{{.}} context</span>{{end}}
+    {{if not .Updated.IsZero}}<span>updated {{ago .Updated}}</span>{{end}}
+  </div>
+  <details class="disc-tags" hx-get="/discover/hf/files?repo={{.Repo}}&ctx={{.Context}}" hx-trigger="toggle once" hx-target="find .disc-tags-body">
+    <summary>Files and downloads</summary>
+    <div class="disc-tags-body"><p class="muted">Loading…</p></div>
+  </details>
+</article>
+{{end}}
+
+{{define "discover_tags"}}
+{{if .Tags}}
+<div class="table-wrap disc-tag-table">
+  <table>
+    <thead><tr><th>{{if .HF}}Quantisation{{else}}Tag{{end}}</th><th>Size</th><th>Context</th><th>On this machine</th><th></th></tr></thead>
+    <tbody>
+    {{range .Tags}}
+    <tr>
+      <td class="mono">{{.Label}}{{with .AliasOf}}<div class="muted disc-alias">same as {{.}}</div>{{end}}{{with .Input}}<div class="muted disc-alias">{{.}}</div>{{end}}</td>
+      <td>{{if .Size}}{{bytes .Size}}{{else}}—{{end}}</td>
+      <td>{{or .Context "—"}}</td>
+      <td><span class="badge {{.Fit.Badge}}" title="{{.Fit.Detail}}">{{.Fit.Label}}</span></td>
+      <td class="actions">
+        {{if .Installed}}<span class="badge completed">Installed</span>
+        {{else if .Active}}{{template "dl_status_badge" .Active}}
+        {{else if .Cloud}}
+        {{else}}{{template "discover_dl_form" .Name}}
+        {{end}}
+      </td>
+    </tr>
+    {{end}}
+    </tbody>
+  </table>
+</div>
+{{else if .HF}}
+<p class="muted">No GGUF files Ollama can pull were found in {{.Model}}.</p>
+{{else}}
+<p class="muted">ollama.com lists no tags for {{.Model}}.</p>
+{{end}}
+{{end}}
+
+{{/* Queues a download without leaving the page: the answer replaces the
+     table cell the form is in (see discover_dl_action). Without JavaScript it
+     posts normally and lands on the downloads page. */}}
+{{define "discover_dl_form"}}
+<form method="post" action="/downloads" hx-post="/downloads" hx-target="closest td" hx-swap="innerHTML" class="inline">
+  <input type="hidden" name="model" value="{{.}}">
+  <input type="hidden" name="from" value="discover">
+  <button type="submit" class="small secondary" data-busy="Checking…">Download</button>
+</form>
+{{end}}
+
+{{/* The Download cell after posting: the new download's status, or the
+     button again with what went wrong, or with a "download anyway?" dialog. */}}
+{{define "discover_dl_action"}}
+{{with .Queued}}
+{{template "dl_status_badge" .}}
+{{with $.Warning}}<div class="disc-dl-note warn">{{.}}</div>{{end}}
+{{else}}
+{{template "discover_dl_form" .Name}}
+{{with .Error}}<div class="disc-dl-note error">{{.}}</div>{{end}}
+{{with .Confirm}}
+<dialog data-dialog-autoopen aria-label="Download {{.Name}} anyway?">
+  <form hx-post="/downloads" hx-target="closest td" hx-swap="innerHTML">
+    <h2>Download {{.Name}} anyway?</h2>
+    <input type="hidden" name="model" value="{{.Name}}">
+    <input type="hidden" name="from" value="discover">
+    <input type="hidden" name="confirm" value="1">
+    <p>It's a <strong>{{bytes .Size}}</strong> download.</p>
+    <ul class="concerns">{{range .Concerns}}<li>{{.}}</li>{{end}}</ul>
+    <p class="muted" style="font-size:13px">Checked against the machine running this app. If Ollama runs somewhere else, its hardware may differ.</p>
+    <div class="dialog-actions">
+      <button type="button" class="secondary" data-dialog-close>Cancel</button>
+      <button type="submit" data-busy="Queuing…">Download anyway</button>
+    </div>
+  </form>
+</dialog>
+{{end}}
+{{end}}
+{{if .User}}{{template "nav_dl_badge" .}}{{end}}
+{{end}}

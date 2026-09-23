@@ -43,6 +43,8 @@ var templateFuncs = template.FuncMap{
 	"canchat":    canChat,
 	"pickeritem": func(m ollama.Model, loaded bool) map[string]any { return map[string]any{"Model": m, "Loaded": loaded} },
 	"add":        func(a, b int) int { return a + b },
+	"compact":    formatCompact,
+	"tokens":     formatTokens,
 	"sub":        func(a, b int) int { return a - b },
 }
 

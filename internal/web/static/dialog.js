@@ -12,9 +12,10 @@
 // A submit button with data-busy="Loading…" is disabled and relabelled, with a
 // spinner, while its form submits, for actions that take a while.
 //
-// A <dialog data-dialog-autoopen> is opened as soon as the page loads: used when
-// a form inside it posts, fails server-side, and the page re-renders with the
-// error, so the user sees it without reopening the dialog.
+// A <dialog data-dialog-autoopen> is opened as soon as the page (or the htmx
+// swap bringing it) loads: used when a form inside it posts, fails server-side,
+// and the page re-renders with the error, so the user sees it without
+// reopening the dialog.
 
 document.addEventListener("click", function (e) {
   var opener = e.target.closest("[data-dialog-open]");
@@ -71,10 +72,23 @@ document.addEventListener("DOMContentLoaded", function () {
     } catch (e) {}
   });
 
-  document.querySelectorAll("dialog[data-dialog-autoopen]").forEach(function (d) {
+  autoOpen(document);
+});
+
+// Content htmx swaps in can bring an autoopen dialog too (e.g. the discover
+// page's "download anyway?" confirmation).
+document.addEventListener("htmx:load", function (e) {
+  autoOpen(e.detail.elt);
+});
+
+function autoOpen(root) {
+  if (!root.querySelectorAll) return;
+  var found = Array.prototype.slice.call(root.querySelectorAll("dialog[data-dialog-autoopen]"));
+  if (root.matches && root.matches("dialog[data-dialog-autoopen]")) found.push(root);
+  found.forEach(function (d) {
     if (!d.open && typeof d.showModal === "function") d.showModal();
   });
-});
+}
 
 document.addEventListener("submit", function (e) {
   var btn = e.submitter && e.submitter.matches("[data-busy]") ? e.submitter : e.target.querySelector("button[data-busy]");

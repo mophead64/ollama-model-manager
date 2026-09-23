@@ -89,11 +89,13 @@ func fakeOllama(t *testing.T, n int) *httptest.Server {
 // signed-in user. Set by newTestServer.
 var testSession *http.Cookie
 
-// testManager and testStore are the download manager and store behind the
-// last newTestServer; the manager isn't running unless a test starts it.
+// testManager, testStore and testSampler are the download manager, store and
+// hardware sampler behind the last newTestServer; the manager isn't running
+// unless a test starts it, and the sampler never runs (set its snapshot).
 var (
 	testManager *downloads.Manager
 	testStore   *store.Store
+	testSampler *sysinfo.Sampler
 )
 
 // fakeRegistry answers model manifest checks: 404 for "missing*", a 1 PiB
@@ -121,7 +123,9 @@ func newTestStore(t *testing.T) *store.Store {
 	return st
 }
 
-func newTestServer(t *testing.T, base string) http.Handler {
+// newTestServer serves the app against a fake Ollama at base. opts can adjust
+// its config; the ollama.com library is unreachable unless one sets it.
+func newTestServer(t *testing.T, base string, opts ...func(*Config)) http.Handler {
 	t.Helper()
 	st := newTestStore(t)
 	u, err := st.CreateUser(context.Background(), "admin", "test-password")
@@ -135,7 +139,12 @@ func newTestServer(t *testing.T, base string) http.Handler {
 	testManager = downloads.New(st, ollama.New(base), log)
 	testManager.SetRegistryClient(&http.Client{Transport: fakeRegistry{}})
 	testStore = st
-	s, err := NewServer(ollama.New(base), st, testManager, sysinfo.New(time.Second, time.Minute, log), Config{ModelsDir: t.TempDir(), AllowDelete: true}, log)
+	cfg := Config{ModelsDir: t.TempDir(), AllowDelete: true, LibraryURL: "http://127.0.0.1:1"}
+	for _, o := range opts {
+		o(&cfg)
+	}
+	testSampler = sysinfo.New(time.Second, time.Minute, log)
+	s, err := NewServer(ollama.New(base), st, testManager, testSampler, cfg, log)
 	if err != nil {
 		t.Fatal(err)
 	}

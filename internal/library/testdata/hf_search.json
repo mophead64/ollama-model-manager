@@ -1,0 +1,89 @@
+[
+ {
+  "_id": "688b451a53e70a07b0669a7c",
+  "id": "unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF",
+  "gated": false,
+  "lastModified": "2026-01-30T06:29:38.000Z",
+  "likes": 1058,
+  "downloads": 12450427,
+  "gguf": {
+   "total": 30532122624,
+   "architecture": "qwen3moe",
+   "context_length": 262144,
+   "quantize_imatrix_file": "Qwen3-Coder-30B-A3B-Instruct-GGUF/imatrix_unsloth.gguf",
+   "eos_token": "<|im_end|>",
+   "totalFileSize": 17310784672
+  },
+  "tags": [
+   "transformers",
+   "gguf",
+   "unsloth",
+   "qwen3",
+   "qwen",
+   "text-generation",
+   "arxiv:2505.09388",
+   "base_model:Qwen/Qwen3-Coder-30B-A3B-Instruct",
+   "base_model:quantized:Qwen/Qwen3-Coder-30B-A3B-Instruct",
+   "license:apache-2.0",
+   "endpoints_compatible",
+   "region:us",
+   "imatrix",
+   "conversational"
+  ],
+  "pipeline_tag": "text-generation"
+ },
+ {
+  "_id": "6a7d8038d813eea1a14a8db4",
+  "id": "unsloth/Qwen3.8-27B-GGUF",
+  "gated": false,
+  "lastModified": "2026-08-20T12:04:25.000Z",
+  "likes": 4554,
+  "downloads": 7134167,
+  "gguf": {
+   "total": 27320697856,
+   "architecture": "qwen35",
+   "context_length": 262144,
+   "quantize_imatrix_file": "Qwen3.8-27B-GGUF/imatrix_unsloth.gguf",
+   "bos_token": "<|endoftext|>",
+   "eos_token": "<|im_end|>",
+   "totalFileSize": 16056478688
+  },
+  "tags": [
+   "gguf",
+   "qwen3_5",
+   "unsloth",
+   "base_model:Qwen/Qwen3.8-27B",
+   "base_model:quantized:Qwen/Qwen3.8-27B",
+   "license:apache-2.0",
+   "endpoints_compatible",
+   "region:us",
+   "imatrix",
+   "conversational"
+  ]
+ },
+ {
+  "_id": "6a84f2a4e3b80a40c641b592",
+  "id": "ornith-ai/Ornith-1.5-9B-GGUF",
+  "gated": "manual",
+  "lastModified": "2026-08-24T02:45:24.000Z",
+  "likes": 439,
+  "downloads": 5308464,
+  "gguf": {
+   "total": 9197093888,
+   "architecture": "qwen35",
+   "context_length": 262144,
+   "eos_token": "<|im_end|>",
+   "totalFileSize": 18407321184
+  },
+  "tags": [
+   "transformers",
+   "gguf",
+   "text-generation",
+   "license:mit",
+   "endpoints_compatible",
+   "region:us",
+   "conversational"
+  ],
+  "pipeline_tag": "text-generation"
+ }
+]

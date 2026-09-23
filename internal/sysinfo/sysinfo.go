@@ -205,6 +205,13 @@ func (s *Sampler) Latest() Snapshot {
 	return s.latest
 }
 
+// SetLatest replaces the latest snapshot, for tests of code that reads it.
+func (s *Sampler) SetLatest(snap Snapshot) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.latest = snap
+}
+
 // History returns the retained samples, oldest first.
 func (s *Sampler) History() []Sample {
 	s.mu.RLock()

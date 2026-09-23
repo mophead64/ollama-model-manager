@@ -1,4 +1,6 @@
 {{define "style"}}
+<link rel="icon" type="image/png" href="/static/logo.png">
+<link rel="apple-touch-icon" href="/static/logo.png">
 <style>
   :root {
     --bg: #f7f8fa; --panel: #ffffff; --border: #e2e5ea; --text: #1f2430;
@@ -60,7 +62,8 @@
   .theme-switch button + button { border-left: 1px solid var(--border); }
   .theme-switch button:hover { background: var(--hover); }
   .theme-switch button[aria-pressed="true"] { background: var(--accent); color: white; }
-  nav .brand { font-weight: 700; font-size: 17px; }
+  nav .brand { font-weight: 700; font-size: 17px; display: inline-flex; align-items: center; gap: 8px; }
+  nav .brand img { display: block; margin: -4px 0; }
   nav a { color: var(--muted); text-decoration: none; font-weight: 500; }
   nav a:hover, nav a.active { color: var(--text); }
   nav a.active { text-decoration: underline 2px var(--accent); text-underline-offset: 6px; }
@@ -286,6 +289,35 @@
   a.sort-link:hover, a.sort-link.active { color: var(--text); }
   a.sort-link .arrow { font-size: 10px; opacity: .45; }
   a.sort-link.active .arrow { opacity: 1; color: var(--accent); }
+  /* Discover page: ollama.com library search results as cards. */
+  .disc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); gap: 16px; margin-bottom: 20px; align-items: start; }
+  .disc-card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .disc-name { margin: 0; font-size: 16px; overflow-wrap: anywhere; }
+  .disc-top { gap: 10px; }
+  .disc-top a.hint-link { display: inline; margin: 0; }
+  .disc-desc { margin: 0; font-size: 14px; line-height: 1.5; }
+  .disc-sizes { display: flex; flex-wrap: wrap; gap: 4px; }
+  .disc-sizes .badge { cursor: help; font-variant-numeric: tabular-nums; }
+  .disc-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; }
+  .disc-tags summary { font-size: 14px; color: var(--accent); }
+  .disc-tags[open] summary { margin-bottom: 8px; }
+  .disc-tag-table { max-height: 360px; overflow-y: auto; }
+  .disc-tag-table td { vertical-align: top; }
+  .disc-tag-table .badge { cursor: help; white-space: nowrap; }
+  .disc-alias { font-family: inherit; font-size: 12px; }
+  .disc-more { grid-column: 1 / -1; text-align: center; padding: 8px 0; }
+  .disc-legend { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+  .disc-note { font-size: 13px; margin: 0; }
+  .disc-sep { margin: 0 2px; }
+  .disc-tabs { display: flex; gap: 4px; margin: 4px 0 14px; border-bottom: 1px solid var(--border); }
+  .disc-tab { padding: 8px 14px; color: var(--muted); text-decoration: none; font-weight: 500; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .disc-tab:hover { color: var(--text); }
+  .disc-tab[aria-current] { color: var(--text); border-bottom-color: var(--accent); }
+  a.badge { text-decoration: none; }
+  a.badge:hover { filter: brightness(.95); text-decoration: underline; }
+  .disc-dl-note { font-size: 12px; white-space: normal; text-align: left; max-width: 280px; margin: 4px 0 0 auto; }
+  .disc-dl-note.error { color: var(--err-text); }
+  .disc-dl-note.warn { color: var(--b-amber); }
   /* System load: the models page's tile, GPU table meters and live graphs. */
   .progress-bar .fill.warn { background: var(--warn); }
   a.load-tile { display: flex; flex-direction: column; gap: 6px; color: inherit; text-decoration: none; }
@@ -342,8 +374,9 @@
 
 {{define "nav"}}
 <nav>
-  <span class="brand">Ollama Model Manager</span>
+  <span class="brand"><img src="/static/logo.png" alt="" width="33" height="32">Ollama Model Manager</span>
   {{if .User}}<a href="/models"{{template "nav_current" (eq .Nav "models")}}>Models</a>
+  <a href="/discover"{{template "nav_current" (eq .Nav "discover")}}>Discover</a>
   <a href="/chat"{{template "nav_current" (eq .Nav "chat")}}>Chat</a>
   <a href="/downloads"{{template "nav_current" (eq .Nav "downloads")}}>Downloads {{template "nav_dl_badge" .}}</a>
   <a href="/system"{{template "nav_current" (eq .Nav "system")}}>System</a>{{end}}

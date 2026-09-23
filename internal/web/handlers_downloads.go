@@ -107,6 +107,10 @@ func (s *Server) handleDownloads(w http.ResponseWriter, r *http.Request) {
 // big for this machine, the page comes back with a confirmation dialog
 // instead; confirming re-posts with confirm=1.
 func (s *Server) handleQueueDownload(w http.ResponseWriter, r *http.Request) {
+	if r.FormValue("from") == "discover" && r.Header.Get("HX-Request") == "true" {
+		s.queueFromDiscover(w, r)
+		return
+	}
 	input := r.FormValue("model")
 	c, err := s.dl.Check(r.Context(), input)
 	name, warning := c.Name, c.Warning
