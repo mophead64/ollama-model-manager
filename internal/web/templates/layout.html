@@ -1,0 +1,206 @@
+{{define "style"}}
+<style>
+  :root {
+    --bg: #f7f8fa; --panel: #ffffff; --border: #e2e5ea; --text: #1f2430;
+    --muted: #6b7280; --accent: #2563eb; --accent-dark: #1d4ed8;
+    --danger: #dc2626; --good: #16a34a; --radius: 8px;
+    --code-bg: #eef0f4; --hover: #f0f1f3; --danger-bg: #fef2f2; --track: #e5e7eb;
+    --err-border: #fecaca; --err-text: #991b1b;
+    --b-green-bg: #dcfce7; --b-green: #166534; --b-gray-bg: #f3f4f6; --b-gray: #6b7280;
+    --b-blue-bg: #dbeafe; --b-blue: #1e40af; --b-red-bg: #fee2e2; --b-red: #991b1b;
+    --b-amber-bg: #fef3c7; --b-amber: #92400e; --b-purple-bg: #ede9fe; --b-purple: #5b21b6;
+    --b-manual: #374151;
+    color-scheme: light;
+  }
+  /* Dark palette. Applied for an explicit choice, or for "auto" (no data-theme)
+     when the OS prefers dark. CSS can't share one block across both selectors. */
+  :root[data-theme="dark"] {
+    --bg: #0f1218; --panel: #181c25; --border: #2a303c; --text: #e6e8ee;
+    --muted: #9aa3b2; --accent: #3b82f6; --accent-dark: #2563eb;
+    --danger: #f87171; --good: #4ade80;
+    --code-bg: #262c39; --hover: #232936; --danger-bg: #2a1618; --track: #2a303c;
+    --err-border: #7f1d1d; --err-text: #fca5a5;
+    --b-green-bg: #14532d; --b-green: #bbf7d0; --b-gray-bg: #2a303c; --b-gray: #9aa3b2;
+    --b-blue-bg: #1e3a8a; --b-blue: #bfdbfe; --b-red-bg: #7f1d1d; --b-red: #fecaca;
+    --b-amber-bg: #78350f; --b-amber: #fde68a; --b-purple-bg: #4c1d95; --b-purple: #ddd6fe;
+    --b-manual: #d1d5db;
+    color-scheme: dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme]) {
+      --bg: #0f1218; --panel: #181c25; --border: #2a303c; --text: #e6e8ee;
+      --muted: #9aa3b2; --accent: #3b82f6; --accent-dark: #2563eb;
+      --danger: #f87171; --good: #4ade80;
+      --code-bg: #262c39; --hover: #232936; --danger-bg: #2a1618; --track: #2a303c;
+      --err-border: #7f1d1d; --err-text: #fca5a5;
+      --b-green-bg: #14532d; --b-green: #bbf7d0; --b-gray-bg: #2a303c; --b-gray: #9aa3b2;
+      --b-blue-bg: #1e3a8a; --b-blue: #bfdbfe; --b-red-bg: #7f1d1d; --b-red: #fecaca;
+      --b-amber-bg: #78350f; --b-amber: #fde68a; --b-purple-bg: #4c1d95; --b-purple: #ddd6fe;
+      --b-manual: #d1d5db;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg); color: var(--text); font-size: 15px;
+  }
+  nav {
+    display: flex; align-items: center; gap: 24px; padding: 14px 24px;
+    background: var(--panel); border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 10;
+  }
+  .theme-switch { margin-left: auto; display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .theme-switch button {
+    background: var(--panel); color: var(--muted); border: none; border-radius: 0;
+    padding: 4px 10px; font-size: 13px;
+  }
+  .theme-switch button + button { border-left: 1px solid var(--border); }
+  .theme-switch button:hover { background: var(--hover); }
+  .theme-switch button[aria-pressed="true"] { background: var(--accent); color: white; }
+  nav .brand { font-weight: 700; font-size: 17px; }
+  nav a { color: var(--muted); text-decoration: none; font-weight: 500; }
+  nav a:hover, nav a.active { color: var(--text); }
+  /* Wide enough for the models table to breathe, capped so lines stay readable on big monitors. */
+  main { max-width: 1600px; margin: 0 auto; padding: 24px clamp(24px, 4vw, 48px); }
+  .panel {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 20px; margin-bottom: 20px;
+  }
+  .panel h2 { margin-top: 0; font-size: 16px; }
+  .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
+  .stat { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+  .stat .value { font-size: 22px; font-weight: 700; }
+  .stat .label { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; }
+  tr:last-child td { border-bottom: none; }
+  code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; font-size: 13px; }
+  form.inline { display: inline; }
+  input[type=text], input[type=number], select {
+    padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px;
+    background: var(--panel); color: var(--text);
+  }
+  button, .btn {
+    padding: 7px 14px; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent);
+    color: white; font-size: 14px; cursor: pointer; font-weight: 500;
+  }
+  button:hover { background: var(--accent-dark); }
+  button.secondary { background: var(--panel); color: var(--text); border-color: var(--border); }
+  button.secondary:hover { background: var(--hover); }
+  button.danger { background: var(--panel); color: var(--danger); border-color: var(--danger); }
+  button.danger:hover { background: var(--danger-bg); }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .badge.on { background: var(--b-green-bg); color: var(--b-green); }
+  .badge.off { background: var(--b-gray-bg); color: var(--b-gray); }
+  .badge.running { background: var(--b-blue-bg); color: var(--b-blue); }
+  .badge.completed { background: var(--b-green-bg); color: var(--b-green); }
+  .badge.failed { background: var(--b-red-bg); color: var(--b-red); }
+  .badge.interrupted { background: var(--b-amber-bg); color: var(--b-amber); }
+  .badge.update { background: var(--b-amber-bg); color: var(--b-amber); text-decoration: none; }
+  .badge.auto { background: var(--b-purple-bg); color: var(--b-purple); }
+  .badge.manual { background: var(--b-gray-bg); color: var(--b-manual); }
+  .muted { color: var(--muted); }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .row.between { justify-content: space-between; }
+  .progress-bar { height: 8px; background: var(--track); border-radius: 999px; overflow: hidden; margin: 10px 0; }
+  .progress-bar .fill { height: 100%; background: var(--accent); width: 0%; transition: width .3s; }
+  .progress-bar .fill.low { background: var(--danger); }
+  .stat .progress-bar { height: 6px; margin: 10px 0 0; }
+  .path-line { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .error-box { background: var(--danger-bg); border: 1px solid var(--err-border); color: var(--err-text); padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; }
+  .pagination { display: flex; gap: 8px; align-items: center; margin-top: 12px; }
+  footer.hint { color: var(--muted); font-size: 12px; margin-top: 8px; }
+  footer.hint button.link { background: none; border: none; color: var(--accent); padding: 0; font-size: 12px; font-weight: 400; }
+  footer.hint button.link:hover { text-decoration: underline; }
+  dl.kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 20px; margin: 0; font-size: 14px; }
+  dl.kv dt { color: var(--muted); }
+  dl.kv dd { margin: 0; word-break: break-all; }
+  pre { background: var(--code-bg); padding: 12px; border-radius: 6px; font-size: 12px; overflow-x: auto; white-space: pre-wrap; word-break: break-word; max-height: 480px; margin: 10px 0 0; }
+  details > summary { cursor: pointer; font-weight: 600; }
+  details + details { margin-top: 14px; }
+  td.mono, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; word-break: break-all; }
+  a.model-link { color: var(--text); font-weight: 600; text-decoration: none; }
+  a.model-link:hover { color: var(--accent); }
+  .badge.cap { background: var(--b-blue-bg); color: var(--b-blue); }
+  .caps { display: flex; flex-wrap: wrap; gap: 4px; }
+  .cap-filter { margin-top: 12px; gap: 6px; }
+  .cap-chip {
+    display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px;
+    border: 1px solid var(--border); font-size: 13px; cursor: pointer; user-select: none;
+  }
+  .cap-chip:hover { background: var(--hover); }
+  .cap-chip:has(input:checked) { background: var(--b-blue-bg); color: var(--b-blue); border-color: transparent; }
+  .cap-chip input { margin: 0; accent-color: var(--accent); }
+  a.sort-link { color: inherit; text-decoration: none; display: inline-flex; gap: 4px; align-items: center; white-space: nowrap; }
+  a.sort-link:hover, a.sort-link.active { color: var(--text); }
+  a.sort-link .arrow { font-size: 10px; opacity: .45; }
+  a.sort-link.active .arrow { opacity: 1; color: var(--accent); }
+  @media (max-width: 720px) {
+    nav { flex-wrap: wrap; gap: 12px; padding: 12px 16px; }
+    main { padding: 16px; }
+    .stat-grid { grid-template-columns: repeat(2, 1fr); }
+    .table-wrap { overflow-x: auto; }
+  }
+</style>
+<script>
+  // Runs in <head> so the saved choice applies before first paint (no flash).
+  // No saved value = "auto": leave data-theme unset and follow the OS.
+  (function () {
+    try {
+      var t = localStorage.getItem("omm-theme");
+      if (t === "dark" || t === "light") document.documentElement.setAttribute("data-theme", t);
+    } catch (e) {}
+  })();
+</script>
+{{end}}
+
+{{define "nav"}}
+<nav>
+  <span class="brand">Ollama Model Manager</span>
+  <a href="/models">Models</a>
+  <div class="theme-switch" role="group" aria-label="Colour theme">
+    <button type="button" class="secondary" data-theme-choice="auto">Auto</button>
+    <button type="button" class="secondary" data-theme-choice="dark">Dark</button>
+    <button type="button" class="secondary" data-theme-choice="light">Light</button>
+  </div>
+  <script>
+    (function () {
+      var root = document.documentElement;
+      var buttons = document.querySelectorAll("[data-theme-choice]");
+      function current() {
+        var t = root.getAttribute("data-theme");
+        return t === "dark" || t === "light" ? t : "auto";
+      }
+      function mark() {
+        buttons.forEach(function (b) {
+          b.setAttribute("aria-pressed", String(b.dataset.themeChoice === current()));
+        });
+      }
+      buttons.forEach(function (b) {
+        b.addEventListener("click", function () {
+          var c = b.dataset.themeChoice;
+          if (c === "auto") root.removeAttribute("data-theme");
+          else root.setAttribute("data-theme", c);
+          try {
+            if (c === "auto") localStorage.removeItem("omm-theme");
+            else localStorage.setItem("omm-theme", c);
+          } catch (e) {}
+          mark();
+        });
+      });
+      mark();
+    })();
+  </script>
+</nav>
+{{end}}
+
+{{define "footer"}}
+<footer class="hint">
+  Ollama Model Manager <a href="https://github.com/mophead64/ollama-model-manager/releases" target="_blank" rel="noopener noreferrer">{{.Version}}</a>
+  <span hx-get="/version/check" hx-trigger="load, every 360m" hx-swap="innerHTML"></span>
+</footer>
+{{end}}
+
+{{define "htmx_script"}}<script src="/static/htmx.min.js"></script>{{end}}

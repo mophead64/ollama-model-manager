@@ -1,0 +1,59 @@
+{{define "models.html"}}
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ollama Model Manager — Models</title>
+  {{template "style" .}}
+  {{template "htmx_script" .}}
+</head>
+<body>
+  {{template "nav" .}}
+  <main>
+    {{if not .Error}}
+    <div class="stat-grid">
+      <div class="stat"><div class="value">{{.Count}}</div><div class="label">models installed</div></div>
+      <div class="stat"><div class="value">{{bytes .TotalBytes}}</div><div class="label">total size on disk</div></div>
+      {{with .Disk}}
+      <div class="stat">
+        <div class="value">{{bytes (int64 .Free)}}</div>
+        <div class="label">free of {{bytes (int64 .Total)}} on the models disk</div>
+        <div class="progress-bar" title="{{printf "%.0f" .UsedPercent}}% used"><div class="fill{{if gt .UsedPercent 90.0}} low{{end}}" style="width: {{printf "%.1f" .UsedPercent}}%"></div></div>
+      </div>
+      {{else}}
+      <div class="stat">
+        <div class="value muted">—</div>
+        <div class="label">free space unknown: mount Ollama's models folder at <code>/models</code></div>
+      </div>
+      {{end}}
+    </div>
+    {{end}}
+    <div class="panel">
+      <div class="row between">
+        <h2>Models</h2>
+        <span class="muted">Ollama at <code>{{.OllamaURL}}</code></span>
+      </div>
+      <form hx-get="/models" hx-target="#model-results" hx-swap="outerHTML" hx-push-url="true"
+            hx-trigger="submit, change from:.cap-filter" hx-include="#sort-state">
+        <div class="row">
+          <label for="f-q" class="muted">Name, family or capability contains</label>
+          <input id="f-q" type="text" name="q" value="{{.Query}}" placeholder="e.g. llama, vision">
+          <button type="submit">Filter</button>
+        </div>
+        {{with .AllCaps}}
+        <div class="row cap-filter" role="group" aria-label="Capabilities">
+          <span class="muted">Has capabilities</span>
+          {{range .}}
+          <label class="cap-chip"><input type="checkbox" name="cap" value="{{.Name}}" {{if .Selected}}checked{{end}}> {{.Name}}</label>
+          {{end}}
+        </div>
+        {{end}}
+      </form>
+    </div>
+    {{template "models_results.html" .}}
+    {{template "footer" .}}
+  </main>
+</body>
+</html>
+{{end}}

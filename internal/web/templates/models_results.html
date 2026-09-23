@@ -1,0 +1,59 @@
+{{define "models_results.html"}}
+<div class="panel" id="model-results">
+  {{/* Read by the filter form (hx-include) so filtering keeps the sort. */}}
+  <div id="sort-state" hidden>
+    {{if .Sort}}<input type="hidden" name="sort" value="{{.Sort}}"><input type="hidden" name="dir" value="{{.Dir}}">{{end}}
+  </div>
+  {{if .Error}}
+    <div class="error-box">Couldn't list models from Ollama: {{.Error}}</div>
+  {{else}}
+  <div class="row between">
+    <span class="muted">{{.Total}} model(s){{if .Query}} matching “{{.Query}}”{{end}}{{with .Caps}} with {{range $i, $c := .}}{{if $i}} + {{end}}{{$c}}{{end}}{{end}}</span>
+    <span class="muted">Page {{.Page}} of {{.TotalPages}}</span>
+  </div>
+  {{if not .Models}}
+    <p class="muted">{{if or .Query .Caps}}No models match that filter.{{else}}No models on this Ollama server yet.{{end}}</p>
+  {{else}}
+  <div class="table-wrap">
+  <table>
+    <thead><tr>
+      {{template "sort_th" (sortcol "Name" .Headers.name)}}
+      <th>Family</th>
+      {{template "sort_th" (sortcol "Params" .Headers.params)}}
+      <th>Quant</th>
+      {{template "sort_th" (sortcol "Context" .Headers.context)}}
+      {{template "sort_th" (sortcol "Size" .Headers.size)}}
+      <th>Modified</th><th>Capabilities</th>
+    </tr></thead>
+    <tbody>
+    {{range .Models}}
+      <tr>
+        <td><a class="model-link" href="/models/{{.Name}}">{{.Name}}</a></td>
+        <td>{{or .Details.Family "-"}}</td>
+        <td>{{or .Details.ParameterSize "-"}}</td>
+        <td>{{or .Details.QuantizationLevel "-"}}</td>
+        <td>{{if .Details.ContextLength}}{{count .Details.ContextLength}}{{else}}-{{end}}</td>
+        <td>{{bytes .Size}}</td>
+        <td>{{time .ModifiedAt}}</td>
+        <td>{{with .Capabilities}}<div class="caps">{{range .}}<span class="badge cap">{{.}}</span>{{end}}</div>{{else}}<span class="muted">-</span>{{end}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  <div class="pagination">
+    {{with .PrevURL}}
+      <a class="btn secondary" hx-get="{{.}}" hx-target="#model-results" hx-swap="outerHTML" hx-push-url="true">← Prev</a>
+    {{end}}
+    {{with .NextURL}}
+      <a class="btn secondary" hx-get="{{.}}" hx-target="#model-results" hx-swap="outerHTML" hx-push-url="true">Next →</a>
+    {{end}}
+  </div>
+  {{end}}
+  {{end}}
+</div>
+{{end}}
+
+{{define "sort_th"}}
+<th aria-sort="{{.H.Aria}}"><a class="sort-link{{if .H.Arrow}} active{{end}}" href="{{.H.URL}}" hx-get="{{.H.URL}}" hx-target="#model-results" hx-swap="outerHTML" hx-push-url="true">{{.Label}}<span class="arrow">{{or .H.Arrow "↕"}}</span></a></th>
+{{end}}

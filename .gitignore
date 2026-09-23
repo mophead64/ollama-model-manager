@@ -30,3 +30,9 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+notes.txt
+/ollama-model-manager
+
+# suppressing github workflows for now, not ready to create a release yet
+.github/*

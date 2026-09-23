@@ -1,0 +1,12 @@
+{{define "version_status.html"}}
+<span id="version-status" class="muted">
+  {{- if .Update.Available}}
+  <a href="{{.Update.URL}}" target="_blank" rel="noopener noreferrer" class="badge update">Update available: {{.Update.Latest}}</a>
+  {{- else if .Update.Checked}}
+  up to date
+  {{- else}}
+  update check unavailable
+  {{- end}}
+  · <button type="button" class="link" hx-get="/version/check?force=1" hx-target="closest span[hx-trigger]" hx-swap="innerHTML">check now</button>
+</span>
+{{end}}

@@ -1,0 +1,23 @@
+services:
+  ollama-model-manager:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      # Ollama running on the Docker host. If Ollama is another service in this
+      # compose file, use its service name instead, e.g. http://ollama:11434.
+      OLLAMA_HOST: http://host.docker.internal:11434
+    volumes:
+      # Ollama's model folder, read-only, so the dashboard can show free disk
+      # space where models are stored. Point it at wherever yours lives:
+      #   macOS / Linux user install: ${HOME}/.ollama/models
+      #   Linux service install:      /usr/share/ollama/.ollama/models
+      #   Ollama in Docker:           the volume mounted at /root/.ollama in that container
+      - ${HOME}/.ollama/models:/models:ro
+    # Docker Desktop, Rancher Desktop, OrbStack etc. resolve host.docker.internal
+    # to the host machine out of the box. Native Docker Engine on Linux doesn't,
+    # so uncomment this there (and have Ollama listen on more than 127.0.0.1,
+    # e.g. OLLAMA_HOST=0.0.0.0 in the ollama service's environment). Don't set it
+    # on a Mac: host-gateway points at the Docker VM, not the Mac.
+    # extra_hosts:
+    #   - "host.docker.internal:host-gateway"

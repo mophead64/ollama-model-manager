@@ -1,0 +1,67 @@
+{{define "model_detail.html"}}
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ollama Model Manager — {{.Name}}</title>
+  {{template "style" .}}
+  {{template "htmx_script" .}}
+</head>
+<body>
+  {{template "nav" .}}
+  <main>
+    <p><a href="/models" class="muted">← All models</a></p>
+    {{if .Error}}
+      <div class="error-box">{{.Error}}</div>
+    {{else}}
+    {{with .Info}}
+    <div class="panel">
+      <h2 class="mono">{{$.Name}}</h2>
+      <dl class="kv">
+        <dt>Family</dt><dd>{{or .Details.Family "-"}}{{if gt (len .Details.Families) 1}} <span class="muted">({{range $i, $f := .Details.Families}}{{if $i}}, {{end}}{{$f}}{{end}})</span>{{end}}</dd>
+        <dt>Parameters</dt><dd>{{or .Details.ParameterSize "-"}}</dd>
+        <dt>Quantization</dt><dd>{{or .Details.QuantizationLevel "-"}}</dd>
+        <dt>Format</dt><dd>{{or .Details.Format "-"}}</dd>
+        {{if .Details.ParentModel}}<dt>Based on</dt><dd><a href="/models/{{.Details.ParentModel}}">{{.Details.ParentModel}}</a></dd>{{end}}
+        {{with $.Model}}
+        <dt>Size on disk</dt><dd>{{bytes .Size}}</dd>
+        {{if .Details.ContextLength}}<dt>Context length</dt><dd>{{count .Details.ContextLength}}</dd>{{end}}
+        {{if .Details.EmbeddingLength}}<dt>Embedding length</dt><dd>{{count .Details.EmbeddingLength}}</dd>{{end}}
+        <dt>Digest</dt><dd class="mono">{{.Digest}}</dd>
+        {{end}}
+        <dt>Modified</dt><dd>{{time .ModifiedAt}}</dd>
+        <dt>Capabilities</dt><dd>{{with .Capabilities}}<div class="caps">{{range .}}<span class="badge cap">{{.}}</span>{{end}}</div>{{else}}<span class="muted">not reported</span>{{end}}</dd>
+      </dl>
+    </div>
+
+    <div class="panel">
+      {{if .Parameters}}<details open><summary>Parameters</summary><pre>{{.Parameters}}</pre></details>{{end}}
+      {{if .System}}<details><summary>System prompt</summary><pre>{{.System}}</pre></details>{{end}}
+      {{if .Template}}<details><summary>Prompt template</summary><pre>{{.Template}}</pre></details>{{end}}
+      <details><summary>Modelfile</summary><pre>{{.Modelfile}}</pre></details>
+      {{if .License}}<details><summary>License</summary><pre>{{.License}}</pre></details>{{end}}
+    </div>
+    {{end}}
+
+    {{if .Meta}}
+    <div class="panel">
+      <details>
+        <summary>Model metadata ({{len .Meta}} keys)</summary>
+        <div class="table-wrap">
+        <table style="margin-top:10px">
+          <thead><tr><th>Key</th><th>Value</th></tr></thead>
+          <tbody>
+          {{range .Meta}}<tr><td class="mono">{{.Key}}</td><td class="mono">{{.Value}}</td></tr>{{end}}
+          </tbody>
+        </table>
+        </div>
+      </details>
+    </div>
+    {{end}}
+    {{end}}
+    {{template "footer" .}}
+  </main>
+</body>
+</html>
+{{end}}
