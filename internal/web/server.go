@@ -79,6 +79,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /models/load", s.handleLoadModel)
 	mux.HandleFunc("POST /models/unload", s.handleUnloadModel)
 
+	mux.HandleFunc("GET /state", s.handleState)
 	mux.HandleFunc("GET /system", s.handleSystem)
 	mux.HandleFunc("GET /system/history", s.handleSystemHistory)
 	mux.HandleFunc("GET /system/load", s.handleSystemLoad)

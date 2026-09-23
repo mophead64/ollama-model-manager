@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/mophead64/ollama-model-manager/internal/ollama"
 )
@@ -21,15 +22,21 @@ type listState struct {
 	Page  int
 }
 
-// sortKeys maps each sortable column to a comparison of the value it sorts
-// on. ok=false means the model doesn't report that value; those always sort
-// last, whichever direction is chosen.
-var sortKeys = map[string]func(m ollama.Model) (v float64, ok bool){
-	"size": func(m ollama.Model) (float64, bool) { return float64(m.Size), true },
-	"context": func(m ollama.Model) (float64, bool) {
+// sortKeys maps each sortable column to the value it sorts on. ok=false
+// means the value isn't known for that model; those always sort last,
+// whichever direction is chosen. lastUsed is when each model was last used.
+var sortKeys = map[string]func(m ollama.Model, lastUsed map[string]time.Time) (v float64, ok bool){
+	"size": func(m ollama.Model, _ map[string]time.Time) (float64, bool) { return float64(m.Size), true },
+	"context": func(m ollama.Model, _ map[string]time.Time) (float64, bool) {
 		return float64(m.Details.ContextLength), m.Details.ContextLength > 0
 	},
-	"params": func(m ollama.Model) (float64, bool) { return parseParamSize(m.Details.ParameterSize) },
+	"params": func(m ollama.Model, _ map[string]time.Time) (float64, bool) {
+		return parseParamSize(m.Details.ParameterSize)
+	},
+	"used": func(m ollama.Model, lastUsed map[string]time.Time) (float64, bool) {
+		t, ok := lastUsed[m.Name]
+		return float64(t.Unix()), ok
+	},
 }
 
 func parseListState(q url.Values) listState {
@@ -87,11 +94,11 @@ type sortHeader struct {
 
 // headers returns a link per sortable column ("name" plus sortKeys). Clicking
 // the active column flips its direction; clicking another starts it
-// descending for the numeric columns (biggest first) and ascending for name.
-// Either way it goes back to page 1.
+// descending (biggest or most recent first), or ascending for name. Either
+// way it goes back to page 1.
 func (st listState) headers() map[string]sortHeader {
 	out := map[string]sortHeader{}
-	for _, key := range []string{"name", "size", "context", "params"} {
+	for _, key := range []string{"name", "size", "context", "params", "used"} {
 		active := st.Sort == key || (key == "name" && st.Sort == "")
 		next := st
 		next.Page = 1
@@ -115,7 +122,7 @@ func (st listState) headers() map[string]sortHeader {
 	return out
 }
 
-func sortModels(models []ollama.Model, key string, desc bool) {
+func sortModels(models []ollama.Model, key string, desc bool, lastUsed map[string]time.Time) {
 	byName := func(a, b ollama.Model) int { return cmp.Compare(a.Name, b.Name) }
 	val, numeric := sortKeys[key]
 	slices.SortStableFunc(models, func(a, b ollama.Model) int {
@@ -125,8 +132,8 @@ func sortModels(models []ollama.Model, key string, desc bool) {
 			}
 			return byName(a, b)
 		}
-		av, aok := val(a)
-		bv, bok := val(b)
+		av, aok := val(a, lastUsed)
+		bv, bok := val(b, lastUsed)
 		switch {
 		case aok != bok: // unknown values last
 			if aok {

@@ -71,7 +71,7 @@ func TestLoadUnloadButtons(t *testing.T) {
 	}
 
 	detail := get(h, "/models/user/custom:v1", false).Body.String()
-	for _, want := range []string{`action="/models/unload"`, "50%/50% CPU/GPU", "Unloads", `id="load-model-modal"`, `value="-1"`} {
+	for _, want := range []string{`action="/models/unload"`, "50%/50% CPU/GPU", "unloads in", `id="load-model-modal"`, `value="-1"`} {
 		if !strings.Contains(detail, want) {
 			t.Errorf("detail page missing %q", want)
 		}

@@ -22,6 +22,7 @@ import (
 	"github.com/mophead64/ollama-model-manager/internal/ollama"
 	"github.com/mophead64/ollama-model-manager/internal/store"
 	"github.com/mophead64/ollama-model-manager/internal/sysinfo"
+	"github.com/mophead64/ollama-model-manager/internal/usage"
 	"github.com/mophead64/ollama-model-manager/internal/version"
 	"github.com/mophead64/ollama-model-manager/internal/web"
 )
@@ -106,6 +107,9 @@ func main() {
 	// tile, sampled in the background so the graphs have history.
 	sys := sysinfo.New(2*time.Second, 5*time.Minute, log)
 	go sys.Run(ctx)
+
+	// Notes when each model was last used, from what Ollama has loaded.
+	go usage.New(ol, st, 15*time.Second, log).Run(ctx)
 
 	srv, err := web.NewServer(ol, st, dl, sys, web.Config{ModelsDir: modelsDir, AllowDelete: allowDelete}, log)
 	if err != nil {

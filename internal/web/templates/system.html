@@ -106,7 +106,7 @@
      stays out of the way when nothing's loaded; on the system page it's part
      of the polled live section. */}}
 {{define "running_panel"}}
-<div id="running-panel"{{if .Compact}} hx-get="/system/running" hx-trigger="every 5s [document.visibilityState === 'visible']" hx-swap="outerHTML"{{end}}>
+<div id="running-panel"{{if .Compact}} hx-get="/system/running" hx-trigger="every 5s [document.visibilityState === 'visible'], state-changed from:body" hx-swap="outerHTML"{{end}}>
   {{if or .Running (not .Compact)}}
   <div class="panel">
     <div class="row between">

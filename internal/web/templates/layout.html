@@ -204,6 +204,12 @@
   dialog .form-grid { max-width: none; }
   ul.concerns { margin: 0 0 14px; padding-left: 20px; font-size: 14px; line-height: 1.5; color: var(--b-amber); }
   ul.concerns li + li { margin-top: 6px; }
+  .memory-strip {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+    margin: 14px 0 16px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px;
+  }
+  .memory-facts { display: flex; flex-wrap: wrap; gap: 6px 24px; }
+  .memory-facts > span > .muted:first-child { margin-right: 6px; }
   .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
   footer.app-footer button.link { background: none; border: none; color: var(--accent); padding: 0; font-size: 12px; font-weight: 400; }
   footer.app-footer button.link:hover { text-decoration: underline; }
@@ -344,9 +350,16 @@
 {{define "footer"}}
 <footer class="app-footer">
   Ollama Model Manager <a href="https://github.com/mophead64/ollama-model-manager/releases" target="_blank" rel="noopener noreferrer">{{.Version}}</a>
-  {{if .User}}<span hx-get="/version/check" hx-trigger="load, every 360m" hx-swap="innerHTML"></span>{{end}}
+  {{if .User}}<span hx-get="/version/check" hx-trigger="load, every 360m" hx-swap="innerHTML"></span>
+  {{template "state_watch" .}}{{end}}
 </footer>
 {{end}}
+
+{{/* Polls /state (handlers_state.go), which fires "state-changed" on the page
+     when loaded models or usage change. Its first poll, on load, only takes
+     stock. Seen is empty until then. */}}
+{{define "state_watch"}}<span id="state-watch" hidden hx-get="/state?seen={{.Seen}}"
+  hx-trigger="{{if .Seen}}every 3s [document.visibilityState === 'visible']{{else}}load{{end}}" hx-swap="outerHTML"></span>{{end}}
 
 {{define "htmx_script"}}<script src="/static/htmx.min.js"></script>{{end}}
 {{define "dialog_script"}}<script src="/static/dialog.js"></script>{{end}}

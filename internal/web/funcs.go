@@ -35,6 +35,8 @@ var templateFuncs = template.FuncMap{
 	"sev":        severity,
 	"keepalives": func() []keepAliveOption { return keepAliveOptions },
 	"until":      formatUntil,
+	"ago":        timeAgo,
+	"lastused":   lastUsedOf,
 	"add":        func(a, b int) int { return a + b },
 	"sub":        func(a, b int) int { return a - b },
 }
@@ -105,6 +107,41 @@ func formatUntil(t time.Time) string {
 		return "now"
 	}
 	return "in " + humanDuration(d)
+}
+
+// timeAgo is a rough relative time, "just now" to "3 months ago": model usage
+// is only known to within a poll, so more precision would mislead.
+func timeAgo(t time.Time) string {
+	d := time.Since(t)
+	unit := func(n int, name string) string {
+		if n == 1 {
+			return "1 " + name + " ago"
+		}
+		return fmt.Sprintf("%d %ss ago", n, name)
+	}
+	switch {
+	case d < time.Minute:
+		return "just now"
+	case d < time.Hour:
+		return unit(int(d/time.Minute), "minute")
+	case d < 24*time.Hour:
+		return unit(int(d/time.Hour), "hour")
+	case d < 30*24*time.Hour:
+		return unit(int(d/(24*time.Hour)), "day")
+	case d < 365*24*time.Hour:
+		return unit(int(d/(30*24*time.Hour)), "month")
+	}
+	return unit(int(d/(365*24*time.Hour)), "year")
+}
+
+// lastUsedOf looks a model up in the last-used times, nil if never seen used
+// (a missing map key would otherwise be a zero time, which templates treat as set).
+func lastUsedOf(lastUsed map[string]time.Time, name string) *time.Time {
+	t, ok := lastUsed[name]
+	if !ok {
+		return nil
+	}
+	return &t
 }
 
 func formatSpeed(bps float64) string {

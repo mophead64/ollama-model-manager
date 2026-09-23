@@ -55,7 +55,7 @@ func TestSortModels(t *testing.T) {
 	}
 	for _, c := range cases {
 		ms := models()
-		sortModels(ms, c.key, c.desc)
+		sortModels(ms, c.key, c.desc, nil)
 		if got := names(ms); got != c.want {
 			t.Errorf("sort %q desc=%v = %s, want %s", c.key, c.desc, got, c.want)
 		}

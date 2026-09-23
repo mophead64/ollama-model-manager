@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/mophead64/ollama-model-manager/internal/disk"
 	"github.com/mophead64/ollama-model-manager/internal/ollama"
@@ -38,8 +39,10 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 		s.log.Error("list models failed", "error", err)
 		data["Error"] = err.Error()
 	} else {
+		lastUsed := s.lastUsed(r)
 		models := filterModels(all, st.Query, st.Caps)
-		sortModels(models, st.Sort, st.Desc)
+		sortModels(models, st.Sort, st.Desc, lastUsed)
+		data["LastUsed"] = lastUsed
 
 		var totalBytes int64
 		for _, m := range all {
@@ -87,6 +90,16 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.render(w, r, "models.html", data)
+}
+
+// lastUsed is when each model was last seen in use (see package usage). A
+// failure only costs the column, so it's logged rather than shown.
+func (s *Server) lastUsed(r *http.Request) map[string]time.Time {
+	m, err := s.st.ModelsLastUsed(r.Context())
+	if err != nil {
+		s.log.Warn("read model usage failed", "error", err)
+	}
+	return m
 }
 
 // diskUsage reports free space where Ollama keeps its models, or nil when that
@@ -206,6 +219,12 @@ func (s *Server) handleModelDetail(w http.ResponseWriter, r *http.Request) {
 		s.badRequest(w, r, errMsg("model name required"))
 		return
 	}
+	if r.Header.Get("HX-Target") == "model-memory" {
+		data := map[string]any{"Name": name}
+		s.addMemoryState(r, name, data)
+		s.render(w, r, "model_memory", data)
+		return
+	}
 
 	data := map[string]any{"Name": name}
 
@@ -221,14 +240,7 @@ func (s *Server) handleModelDetail(w http.ResponseWriter, r *http.Request) {
 	default:
 		data["Info"] = info
 		data["Meta"] = flattenModelInfo(info.ModelInfo)
-		if running, err := s.ol.Running(r.Context()); err == nil {
-			for _, m := range running {
-				if m.Name == name || m.Model == name {
-					data["Loaded"] = m
-					break
-				}
-			}
-		}
+		s.addMemoryState(r, name, data)
 		// /api/show doesn't report size or digest; pick them up from the list.
 		if all, err := s.ol.List(r.Context()); err == nil {
 			for _, m := range all {
@@ -240,6 +252,22 @@ func (s *Server) handleModelDetail(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s.render(w, r, "model_detail.html", data)
+}
+
+// addMemoryState adds whether a model is loaded ("Loaded") and when it was
+// last used ("LastUsedAt") to a detail page's data.
+func (s *Server) addMemoryState(r *http.Request, name string, data map[string]any) {
+	if running, err := s.ol.Running(r.Context()); err == nil {
+		for _, m := range running {
+			if m.Name == name || m.Model == name {
+				data["Loaded"] = m
+				break
+			}
+		}
+	}
+	if t, ok := s.lastUsed(r)[name]; ok {
+		data["LastUsedAt"] = t
+	}
 }
 
 type metaEntry struct {

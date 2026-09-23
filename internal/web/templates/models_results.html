@@ -1,5 +1,5 @@
 {{define "models_results.html"}}
-<div class="panel" id="model-results">
+<div class="panel" id="model-results"{{with .ListURL}} hx-get="{{.}}" hx-trigger="state-changed from:body" hx-swap="outerHTML"{{end}}>
   {{/* Read by the filter form (hx-include) so filtering keeps the sort. */}}
   <div id="sort-state" hidden>
     {{if .Sort}}<input type="hidden" name="sort" value="{{.Sort}}"><input type="hidden" name="dir" value="{{.Dir}}">{{end}}
@@ -23,7 +23,9 @@
       <th>Quant</th>
       {{template "sort_th" (sortcol "Context" .Headers.context)}}
       {{template "sort_th" (sortcol "Size" .Headers.size)}}
-      <th>Modified</th><th>Capabilities</th><th></th>
+      <th>Modified</th>
+      {{template "sort_th" (sortcol "Last used" .Headers.used)}}
+      <th>Capabilities</th><th></th>
     </tr></thead>
     <tbody>
     {{range .Models}}
@@ -35,6 +37,7 @@
         <td>{{if .Details.ContextLength}}{{count .Details.ContextLength}}{{else}}-{{end}}</td>
         <td>{{bytes .Size}}</td>
         <td>{{time .ModifiedAt}}</td>
+        <td>{{with lastused $.LastUsed .Name}}<span title="{{time .}}">{{ago .}}</span>{{else}}<span class="muted" title="Not seen in use since this app started tracking">—</span>{{end}}</td>
         <td>{{with .Capabilities}}<div class="caps">{{range .}}<span class="badge cap">{{.}}</span>{{end}}</div>{{else}}<span class="muted">-</span>{{end}}</td>
         <td class="actions">
           {{if index $.LoadedNames .Name}}{{template "unload_button" .Name}}{{else}}{{template "load_button" .Name}}{{end}}
