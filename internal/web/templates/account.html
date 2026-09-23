@@ -38,8 +38,8 @@
         </div>
       </dl>
     </div>
-    {{template "footer" .}}
   </main>
+  {{template "footer" .}}
 
   {{/* Reopened automatically when its form fails server-side, to show the error. */}}
   <dialog id="change-username-modal" aria-labelledby="change-username-title" {{if eq .ErrorForm "username"}}data-dialog-autoopen{{end}}>

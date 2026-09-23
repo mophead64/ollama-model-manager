@@ -71,8 +71,8 @@
     </div>
     {{end}}
     {{end}}
-    {{template "footer" .}}
   </main>
+  {{template "footer" .}}
   {{if .Info}}{{template "load_dialog" .}}{{end}}
   {{if and .AllowDelete .Info}}
   <dialog id="delete-model-modal" aria-labelledby="delete-model-title">

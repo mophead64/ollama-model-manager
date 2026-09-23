@@ -6,11 +6,14 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"time"
 
+	"github.com/mophead64/ollama-model-manager/internal/disk"
 	"github.com/mophead64/ollama-model-manager/internal/downloads"
 	"github.com/mophead64/ollama-model-manager/internal/store"
+	"github.com/mophead64/ollama-model-manager/internal/sysinfo"
 )
 
 const historyPageSize = 25
@@ -100,9 +103,29 @@ func (s *Server) handleDownloads(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, "downloads.html", data)
 }
 
+// handleQueueDownload vets a requested model and queues it. If it looks too
+// big for this machine, the page comes back with a confirmation dialog
+// instead; confirming re-posts with confirm=1.
 func (s *Server) handleQueueDownload(w http.ResponseWriter, r *http.Request) {
 	input := r.FormValue("model")
-	_, name, warning, err := s.dl.Enqueue(r.Context(), input, currentUser(r).Username)
+	c, err := s.dl.Check(r.Context(), input)
+	name, warning := c.Name, c.Warning
+	if err == nil && r.FormValue("confirm") == "" {
+		if concerns := s.resourceConcerns(c); len(concerns) > 0 {
+			data, derr := s.downloadsData(r)
+			if derr != nil {
+				s.serverError(w, r, derr)
+				return
+			}
+			data["Confirm"] = map[string]any{"Name": c.Name, "Size": c.Size, "Concerns": concerns}
+			data["FormValue"] = input
+			s.render(w, r, "downloads.html", data)
+			return
+		}
+	}
+	if err == nil {
+		_, err = s.dl.EnqueueChecked(r.Context(), c, currentUser(r).Username)
+	}
 	if err != nil {
 		data, derr := s.downloadsData(r)
 		if derr != nil {
@@ -280,4 +303,56 @@ func (s *Server) serverError(w http.ResponseWriter, r *http.Request, err error) 
 	s.log.Error("request failed", "path", r.URL.Path, "error", err)
 	w.WriteHeader(http.StatusInternalServerError)
 	s.render(w, r, "error_fragment.html", map[string]any{"Error": "Something went wrong; see the app log."})
+}
+
+// resourceConcerns lists the ways a model looks too big for this machine: disk
+// space where Ollama keeps models, then memory. A model's file size is the
+// least it needs in memory (context takes more on top). Nothing is flagged
+// when the size or the hardware is unknown, or for a model that's already
+// installed, where pulling only updates it.
+func (s *Server) resourceConcerns(c downloads.Checked) []string {
+	return resourceConcerns(c, s.diskUsage(), s.sys.Latest())
+}
+
+// resourceConcerns is the check itself; d is nil when the models disk isn't visible.
+func resourceConcerns(c downloads.Checked, d *disk.Usage, snap sysinfo.Snapshot) []string {
+	if c.Size <= 0 || c.Installed {
+		return nil
+	}
+	size := uint64(c.Size)
+	var out []string
+	if d != nil && size > d.Free {
+		out = append(out, fmt.Sprintf("It needs %s of disk space, but only %s is free where Ollama stores models.",
+			formatBytes(c.Size), formatBytes(int64(d.Free))))
+	}
+
+	if snap.Time.IsZero() || snap.MemTotal == 0 {
+		return out // hardware not sampled yet
+	}
+	ram := formatBytes(int64(snap.MemTotal))
+	_, vram, hasVRAM := snap.VRAM()
+	unified := slices.ContainsFunc(snap.GPUs, func(g sysinfo.GPU) bool { return g.Unified })
+	switch {
+	case unified || !hasVRAM:
+		if size > snap.MemTotal {
+			what := "memory"
+			if unified {
+				what = "memory, which the CPU and GPU share"
+			} else if len(snap.GPUs) == 0 {
+				what = "memory, and no GPU was detected"
+			}
+			out = append(out, fmt.Sprintf("It's bigger than this machine's %s of %s, so it probably won't load.", ram, what))
+		}
+	case size > vram+snap.MemTotal:
+		out = append(out, fmt.Sprintf("It's bigger than this machine's VRAM and system memory combined (%s + %s), so it probably won't load.",
+			formatBytes(int64(vram)), ram))
+	case size > vram:
+		gpus := "the GPU"
+		if n := len(snap.GPUs); n > 1 {
+			gpus = fmt.Sprintf("%d GPUs", n)
+		}
+		out = append(out, fmt.Sprintf("It exceeds this machine's total VRAM (%s across %s), so Ollama will run part of it on the CPU, which is much slower.",
+			formatBytes(int64(vram)), gpus))
+	}
+	return out
 }

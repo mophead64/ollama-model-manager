@@ -1,0 +1,49 @@
+# Deploys the published image on a Linux server running Ollama natively
+# (the standard install script / systemd service).
+#
+#   docker compose -f docker-compose-deploy-linux.yml up -d
+#   docker compose -f docker-compose-deploy-linux.yml logs   # first start prints the admin password
+#
+# Update to the newest release by running the same "up -d" again: the image is
+# re-pulled on every start.
+services:
+  ollama-model-manager:
+    image: ghcr.io/mophead64/ollama-model-manager:latest
+    pull_policy: always
+    container_name: ollama-model-manager
+    restart: unless-stopped
+    # Shares the host's network, so the app reaches Ollama on localhost even
+    # though Ollama only listens on 127.0.0.1 by default. The UI is served on
+    # the host at PORT below; there's no ports: mapping with host networking.
+    network_mode: host
+    environment:
+      # Port the web UI listens on (http://<server>:8080).
+      PORT: "8080"
+      # Ollama on this server. Point it elsewhere to manage a remote Ollama,
+      # but the System page's hardware stats are always for this machine.
+      OLLAMA_HOST: http://localhost:11434
+      # Login details and the download queue, kept in the omm-data volume.
+      DB_PATH: /data/omm.db
+      # Where the models folder below is mounted inside the container, for the free disk space tile.
+      MODELS_DIR: /models
+      # Set to "false" to hide the Delete buttons and refuse deletions.
+      ALLOW_MODEL_DELETE: "true"
+    volumes:
+      - omm-data:/data
+      # Ollama's model folder, read-only. /usr/share/ollama/.ollama/models is
+      # where the Linux install script's systemd service keeps them; if you've
+      # set OLLAMA_MODELS for Ollama, use that path instead.
+      - /usr/share/ollama/.ollama/models:/models:ro
+    # NVIDIA GPU stats on the System page. Needs the NVIDIA Container Toolkit
+    # on the host (docker fails to start the container without it)
+    # comment out to disable. AMD and Intel GPUs are read from /sys and need nothing extra.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [utility]
+
+volumes:
+  omm-data:

@@ -41,9 +41,11 @@
     }
   }
   * { box-sizing: border-box; }
+  /* A column so main can grow and keep the footer at the bottom on short pages. */
   body {
     margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     background: var(--bg); color: var(--text); font-size: 15px;
+    min-height: 100vh; display: flex; flex-direction: column;
   }
   nav {
     display: flex; align-items: center; gap: 24px; padding: 14px 24px;
@@ -63,7 +65,7 @@
   nav a:hover, nav a.active { color: var(--text); }
   nav a.active { text-decoration: underline 2px var(--accent); text-underline-offset: 6px; }
   /* Wide enough for the models table to breathe, capped so lines stay readable on big monitors. */
-  main { max-width: 1600px; margin: 0 auto; padding: 24px clamp(24px, 4vw, 48px); }
+  main { flex: 1 0 auto; width: 100%; max-width: 1600px; margin: 0 auto; padding: 24px clamp(24px, 4vw, 48px); }
   .panel {
     background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
     padding: 20px; margin-bottom: 20px;
@@ -161,7 +163,14 @@
   .path-line { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .error-box { background: var(--danger-bg); border: 1px solid var(--err-border); color: var(--err-text); padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; }
   .pagination { display: flex; gap: 8px; align-items: center; margin-top: 12px; }
-  footer.hint { color: var(--muted); font-size: 12px; margin-top: 8px; }
+  /* The version bar: pinned to the bottom of the window, like the nav is to the top. */
+  footer.app-footer {
+    position: sticky; bottom: 0; z-index: 10;
+    background: var(--panel); border-top: 1px solid var(--border);
+    color: var(--muted); font-size: 12px; padding: 8px clamp(24px, 4vw, 48px);
+  }
+  footer.app-footer a { color: var(--accent); text-decoration: none; }
+  footer.app-footer a:hover { text-decoration: underline; }
   .nav-user { display: flex; align-items: center; gap: 12px; }
   button.small { padding: 4px 10px; font-size: 13px; }
   .auth-box { max-width: 380px; margin: 8vh auto 0; }
@@ -193,9 +202,11 @@
   dialog form { padding: 22px; }
   dialog h2 { margin: 0 0 14px; font-size: 16px; }
   dialog .form-grid { max-width: none; }
+  ul.concerns { margin: 0 0 14px; padding-left: 20px; font-size: 14px; line-height: 1.5; color: var(--b-amber); }
+  ul.concerns li + li { margin-top: 6px; }
   .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
-  footer.hint button.link { background: none; border: none; color: var(--accent); padding: 0; font-size: 12px; font-weight: 400; }
-  footer.hint button.link:hover { text-decoration: underline; }
+  footer.app-footer button.link { background: none; border: none; color: var(--accent); padding: 0; font-size: 12px; font-weight: 400; }
+  footer.app-footer button.link:hover { text-decoration: underline; }
   dl.kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 20px; margin: 0; font-size: 14px; }
   dl.kv dt { color: var(--muted); }
   dl.kv dd { margin: 0; word-break: break-all; }
@@ -256,6 +267,7 @@
   @media (max-width: 720px) {
     nav { flex-wrap: wrap; gap: 12px; padding: 12px 16px; }
     main { padding: 16px; }
+    footer.app-footer { padding: 8px 16px; }
     .stat-grid { grid-template-columns: repeat(2, 1fr); }
     .table-wrap { overflow-x: auto; }
   }
@@ -327,10 +339,12 @@
      out-of-band on each poll so it stays current there. */}}
 {{define "nav_dl_badge"}}<span id="nav-dl-badge" class="nav-badge"{{if .Fragment}} hx-swap-oob="true"{{end}}{{if not .ActiveDownloads}} hidden{{end}}>{{.ActiveDownloads}}</span>{{end}}
 
+{{/* Goes right after </main>, outside it. The update check needs a
+     session, so it's left off when signed out (the login page). */}}
 {{define "footer"}}
-<footer class="hint">
+<footer class="app-footer">
   Ollama Model Manager <a href="https://github.com/mophead64/ollama-model-manager/releases" target="_blank" rel="noopener noreferrer">{{.Version}}</a>
-  <span hx-get="/version/check" hx-trigger="load, every 360m" hx-swap="innerHTML"></span>
+  {{if .User}}<span hx-get="/version/check" hx-trigger="load, every 360m" hx-swap="innerHTML"></span>{{end}}
 </footer>
 {{end}}
 

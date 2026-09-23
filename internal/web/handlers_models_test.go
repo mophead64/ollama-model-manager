@@ -96,15 +96,19 @@ var (
 	testStore   *store.Store
 )
 
-// fakeRegistry answers model manifest checks: 404 for "missing*", 200 otherwise.
+// fakeRegistry answers model manifest checks: 404 for "missing*", a 1 PiB
+// manifest for "huge*", 200 otherwise.
 type fakeRegistry struct{}
 
 func (fakeRegistry) RoundTrip(r *http.Request) (*http.Response, error) {
-	code := http.StatusOK
+	code, body := http.StatusOK, ""
 	if strings.Contains(r.URL.Path, "/missing") {
 		code = http.StatusNotFound
 	}
-	return &http.Response{StatusCode: code, Status: http.StatusText(code), Body: io.NopCloser(strings.NewReader(""))}, nil
+	if strings.Contains(r.URL.Path, "/huge") {
+		body = `{"config":{"size":0},"layers":[{"size":1125899906842624}]}` // 1 PiB: bigger than any test disk
+	}
+	return &http.Response{StatusCode: code, Status: http.StatusText(code), Body: io.NopCloser(strings.NewReader(body))}, nil
 }
 
 func newTestStore(t *testing.T) *store.Store {

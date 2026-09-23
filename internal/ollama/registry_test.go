@@ -56,7 +56,7 @@ func (hfTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	case "huggingface.co/api/models/bartowski/Public-GGUF":
 		return resp(200, `{"gated":false}`)
 	case "hf.co/v2/bartowski/Public-GGUF/manifests/Q4_K_M":
-		return resp(200, "")
+		return resp(200, `{"config":{"size":551},"layers":[{"size":807694464},{"size":1481},{"size":65}]}`)
 	case "hf.co/v2/bartowski/Public-GGUF/manifests/Q9_X":
 		return resp(400, "") // what Hugging Face actually sends for an unknown quant
 	}
@@ -73,8 +73,19 @@ func TestCheckRegistryHF(t *testing.T) {
 	}
 	for name, want := range cases {
 		r, _ := ParseName(name)
-		if got := CheckRegistry(context.Background(), c, r); !errors.Is(got, want) && got != want {
+		if _, got := CheckRegistry(context.Background(), c, r); !errors.Is(got, want) && got != want {
 			t.Errorf("CheckRegistry(%s) = %v, want %v", name, got, want)
 		}
+	}
+
+	r, _ := ParseName("hf.co/bartowski/Public-GGUF:Q4_K_M")
+	if size, _ := CheckRegistry(context.Background(), c, r); size != 807696561 {
+		t.Errorf("size = %d, want the manifest's layers + config (807696561)", size)
+	}
+}
+
+func TestManifestSize(t *testing.T) {
+	if got := manifestSize(strings.NewReader("not json")); got != 0 {
+		t.Errorf("unreadable manifest size = %d, want 0", got)
 	}
 }

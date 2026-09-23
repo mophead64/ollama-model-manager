@@ -24,7 +24,7 @@
       {{with .FormError}}<div class="error-box">{{.}}</div>{{end}}
       <form method="post" action="/downloads" class="dl-form">
         <input type="text" name="model" value="{{.FormValue}}" placeholder="e.g. llama3.2, qwen3:8b, hf.co/user/repo:Q4_K_M" aria-label="Model name" required autofocus>
-        <button type="submit">Queue download</button>
+        <button type="submit" data-busy="Checking…">Queue download</button>
       </form>
       <p class="muted" style="font-size:13px; margin-bottom:0">
         Any name <code>ollama pull</code> accepts: models from ollama.com (<code>gemma3:4b</code>, <code>user/model</code>) or
@@ -33,9 +33,26 @@
       </p>
     </div>
     {{template "downloads_panel.html" .}}
-    {{template "footer" .}}
   </main>
+  {{template "footer" .}}
   {{template "retry_dialog" .}}
+  {{with .Confirm}}
+  {{/* Pre-flight check: the model looks too big for this machine. */}}
+  <dialog id="confirm-download-modal" data-dialog-autoopen aria-labelledby="confirm-download-title">
+    <form method="post" action="/downloads">
+      <h2 id="confirm-download-title">Download {{.Name}} anyway?</h2>
+      <input type="hidden" name="model" value="{{.Name}}">
+      <input type="hidden" name="confirm" value="1">
+      <p>It's a <strong>{{bytes .Size}}</strong> download.</p>
+      <ul class="concerns">{{range .Concerns}}<li>{{.}}</li>{{end}}</ul>
+      <p class="muted" style="font-size:13px">Checked against the machine running this app. If Ollama runs somewhere else, its hardware may differ.</p>
+      <div class="dialog-actions">
+        <button type="button" class="secondary" data-dialog-close>Cancel</button>
+        <button type="submit" data-busy="Queuing…">Download anyway</button>
+      </div>
+    </form>
+  </dialog>
+  {{end}}
 </body>
 </html>
 {{end}}

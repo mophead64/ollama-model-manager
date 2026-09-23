@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"regexp"
 	"strings"
@@ -111,12 +112,13 @@ var (
 	ErrPrivateOrMissing = errors.New("Hugging Face repo doesn't exist or is private")
 )
 
-// CheckRegistry asks the model's registry whether its manifest exists, so a
-// typo is caught when it's queued rather than when the queue reaches it. A
-// nil error means it exists; ErrModelNotFound means it doesn't; any other
-// error means the registry couldn't be asked (offline, blocked...), which the
-// caller can treat as "unknown".
-func CheckRegistry(ctx context.Context, client *http.Client, r Ref) error {
+// CheckRegistry asks the model's registry for its manifest, so a typo is
+// caught when it's queued rather than when the queue reaches it, and returns
+// the download size the manifest lists (0 if it can't be read). A nil error
+// means it exists; ErrModelNotFound means it doesn't; any other error means
+// the registry couldn't be asked (offline, blocked...), which the caller can
+// treat as "unknown".
+func CheckRegistry(ctx context.Context, client *http.Client, r Ref) (size int64, err error) {
 	if client == nil {
 		client = &http.Client{Timeout: 10 * time.Second}
 	}
@@ -125,31 +127,53 @@ func CheckRegistry(ctx context.Context, client *http.Client, r Ref) error {
 		// missing repo, so ask the model API first: it describes gated repos
 		// publicly.
 		if err := checkHFRepo(ctx, client, r); err != nil {
-			return err
+			return 0, err
 		}
 	}
 	url := fmt.Sprintf("https://%s/v2/%s/%s/manifests/%s", r.Host, r.Namespace, r.Model, r.Tag)
-	req, err := http.NewRequestWithContext(ctx, http.MethodHead, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	req.Header.Set("Accept", "application/vnd.docker.distribution.manifest.v2+json")
 	resp, err := client.Do(req)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	resp.Body.Close()
+	defer resp.Body.Close()
 	switch {
 	case resp.StatusCode == http.StatusOK:
-		return nil
+		return manifestSize(resp.Body), nil
 	// The repo is known to exist and be public by now, so a 400 or 401 from
 	// Hugging Face means the tag (quantisation) doesn't match a file in it.
 	case resp.StatusCode == http.StatusNotFound,
 		r.Host == "hf.co" && (resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusBadRequest):
-		return ErrModelNotFound
+		return 0, ErrModelNotFound
 	default:
-		return fmt.Errorf("registry %s returned %s", r.Host, resp.Status)
+		return 0, fmt.Errorf("registry %s returned %s", r.Host, resp.Status)
 	}
+}
+
+// manifestSize totals a model manifest's layers and config: the bytes a pull
+// downloads, and the size Ollama then lists the model as. 0 if the manifest
+// can't be read, which only means the size is unknown.
+func manifestSize(body io.Reader) int64 {
+	var m struct {
+		Config struct {
+			Size int64 `json:"size"`
+		} `json:"config"`
+		Layers []struct {
+			Size int64 `json:"size"`
+		} `json:"layers"`
+	}
+	if json.NewDecoder(io.LimitReader(body, 1<<20)).Decode(&m) != nil {
+		return 0
+	}
+	total := m.Config.Size
+	for _, l := range m.Layers {
+		total += l.Size
+	}
+	return total
 }
 
 // checkHFRepo asks Hugging Face's model API about a repo: nil for a public

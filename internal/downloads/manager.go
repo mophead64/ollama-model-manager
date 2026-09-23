@@ -77,63 +77,85 @@ var (
 // Enqueue checks a requested model and adds it to the queue. The returned
 // warning is non-empty when it was queued but couldn't be fully checked.
 func (m *Manager) Enqueue(ctx context.Context, input, requestedBy string) (id int64, name, warning string, err error) {
-	c, err := m.check(ctx, input)
+	c, err := m.Check(ctx, input)
 	if err != nil {
-		return 0, c.name, "", err
+		return 0, c.Name, "", err
 	}
-	id, err = m.st.EnqueueDownload(ctx, c.name, requestedBy)
+	id, err = m.EnqueueChecked(ctx, c, requestedBy)
+	return id, c.Name, c.Warning, err
+}
+
+// EnqueueChecked adds a model that Check has already vetted to the queue, so
+// a caller can look at the check (e.g. the download size) before committing.
+func (m *Manager) EnqueueChecked(ctx context.Context, c Checked, requestedBy string) (int64, error) {
+	id, err := m.st.EnqueueDownload(ctx, c.Name, requestedBy)
 	if err != nil {
-		return 0, c.name, "", err
+		return 0, err
 	}
 	m.logf(id, "info", "Queued by %s", requestedBy)
-	m.logCheck(ctx, id, c)
+	m.logCheck(id, c)
 	m.Wake()
-	return id, c.name, c.warning, nil
+	return id, nil
 }
 
-// checked is the outcome of vetting a requested model name.
-type checked struct {
-	name    string // normalised, e.g. "qwen3:8b"
-	warning string // for the user, when the registry couldn't be asked
-	note    string // for the download's log
+// Checked is the outcome of vetting a requested model name.
+type Checked struct {
+	Name      string // normalised, e.g. "qwen3:8b"
+	Size      int64  // download size from the registry's manifest; 0 if unknown
+	Installed bool   // already downloaded, so pulling only fetches updates
+	Warning   string // for the user, when the registry couldn't be asked
+	note      string // for the download's log
 }
 
-// check normalises a requested name and asks its registry whether it exists.
-// A registry that can't be reached isn't an error (the name might be fine),
-// just a warning.
-func (m *Manager) check(ctx context.Context, input string) (checked, error) {
+// Check normalises a requested name, asks its registry whether it exists
+// (and how big it is), and whether it's installed already. A registry that
+// can't be reached isn't an error (the name might be fine), just a warning.
+func (m *Manager) Check(ctx context.Context, input string) (Checked, error) {
+	c, err := m.check(ctx, input)
+	if err == nil {
+		c.Installed, _ = m.installed(ctx, c.Name)
+	}
+	return c, err
+}
+
+func (m *Manager) check(ctx context.Context, input string) (Checked, error) {
 	ref, err := ollama.NormalizeName(input)
 	if err != nil {
-		return checked{}, err
+		return Checked{}, err
 	}
-	c := checked{name: ref.String()}
+	c := Checked{Name: ref.String()}
 	checkCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	switch err := ollama.CheckRegistry(checkCtx, m.registry, ref); {
+	size, err := ollama.CheckRegistry(checkCtx, m.registry, ref)
+	c.Size = size
+	switch {
 	case errors.Is(err, ollama.ErrModelNotFound):
-		return c, fmt.Errorf("%s wasn't found on %s. Check the name and tag.", c.name, ref.Host)
+		return c, fmt.Errorf("%s wasn't found on %s. Check the name and tag.", c.Name, ref.Host)
 	case errors.Is(err, ollama.ErrGated):
-		c.warning = fmt.Sprintf("%s is a gated Hugging Face model: it only downloads once you've been granted access and Ollama is authorised. See the download's page for how.", c.name)
+		c.Warning = fmt.Sprintf("%s is a gated Hugging Face model: it only downloads once you've been granted access and Ollama is authorised. See the download's page for how.", c.Name)
 		c.note = "Gated Hugging Face model: access has to be granted before Ollama can pull it"
 	case errors.Is(err, ollama.ErrPrivateOrMissing):
-		c.warning = fmt.Sprintf("Hugging Face says %s doesn't exist or is private; queued in case it's private and Ollama has access. If the name is wrong the download will fail.", c.name)
+		c.Warning = fmt.Sprintf("Hugging Face says %s doesn't exist or is private; queued in case it's private and Ollama has access. If the name is wrong the download will fail.", c.Name)
 		c.note = "Hugging Face says this repo doesn't exist or is private"
 	case err != nil:
-		c.warning = fmt.Sprintf("Couldn't check %s exists (%v); queued anyway. If the name is wrong the download will fail.", c.name, err)
+		c.Warning = fmt.Sprintf("Couldn't check %s exists (%v); queued anyway. If the name is wrong the download will fail.", c.Name, err)
 		c.note = "Couldn't verify the model with its registry: " + err.Error()
 	default:
-		c.note = "Found " + c.name + " on " + ref.Host
+		c.note = "Found " + c.Name + " on " + ref.Host
 	}
 	return c, nil
 }
 
-func (m *Manager) logCheck(ctx context.Context, id int64, c checked) {
-	if c.warning != "" {
+func (m *Manager) logCheck(id int64, c Checked) {
+	if c.Warning != "" {
 		m.logf(id, "warn", "%s", c.note)
 	} else {
 		m.logf(id, "info", "%s", c.note)
 	}
-	if installed, _ := m.installed(ctx, c.name); installed {
+	if c.Size > 0 {
+		m.logf(id, "info", "Download size %s", fmtBytes(c.Size))
+	}
+	if c.Installed {
 		m.logf(id, "info", "Already installed; pulling again fetches any newer version")
 	}
 }
@@ -206,14 +228,14 @@ func (m *Manager) Retry(ctx context.Context, id int64, by, newInput string) (nam
 		return "", "", err
 	}
 	name = d.Model
-	var c *checked
+	var c *Checked
 	if strings.TrimSpace(newInput) != "" {
-		chk, err := m.check(ctx, newInput)
+		chk, err := m.Check(ctx, newInput)
 		if err != nil {
-			return chk.name, "", err
+			return chk.Name, "", err
 		}
-		if !strings.EqualFold(chk.name, d.Model) {
-			c, name, warning = &chk, chk.name, chk.warning
+		if !strings.EqualFold(chk.Name, d.Model) {
+			c, name, warning = &chk, chk.Name, chk.Warning
 		}
 	}
 
@@ -229,7 +251,7 @@ func (m *Manager) Retry(ctx context.Context, id int64, by, newInput string) (nam
 	}
 
 	if c != nil {
-		if err := m.st.SetDownloadModel(ctx, id, c.name); err != nil {
+		if err := m.st.SetDownloadModel(ctx, id, c.Name); err != nil {
 			return name, "", err
 		}
 	}
@@ -237,8 +259,8 @@ func (m *Manager) Retry(ctx context.Context, id int64, by, newInput string) (nam
 		return name, "", err
 	}
 	if c != nil {
-		m.logf(id, "info", "Retry requested by %s, changing the model from %s to %s", by, d.Model, c.name)
-		m.logCheck(ctx, id, *c)
+		m.logf(id, "info", "Retry requested by %s, changing the model from %s to %s", by, d.Model, c.Name)
+		m.logCheck(id, *c)
 	} else {
 		m.logf(id, "info", "Retry requested by %s", by)
 	}
