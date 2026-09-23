@@ -9,6 +9,10 @@ services:
       OLLAMA_HOST: http://host.docker.internal:11434
       # Set to false to hide the Delete buttons and refuse deletions.
       # ALLOW_MODEL_DELETE: "false"
+      # Optional Hugging Face read token, so Discover lists private repos and
+      # downloads are checked with it. Ollama's own access for pulling gated or
+      # private models is set up from the admin's Account page instead.
+      # HF_TOKEN: hf_...
     volumes:
       # The app's SQLite database (login details and sessions).
       - omm-data:/data

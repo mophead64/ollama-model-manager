@@ -45,7 +45,7 @@ func TestSuggest(t *testing.T) {
 		t.Errorf("update hint = %+v", up)
 	}
 	gated := Suggest("hf.co/meta-llama/Llama-3.2-1B:latest", "401 unauthorized", nil, "")[0]
-	if !strings.Contains(strings.Join(gated.Commands, "\n"), "hf auth login") || gated.Links[0].URL != "https://huggingface.co/meta-llama/Llama-3.2-1B" {
+	if !strings.Contains(strings.Join(gated.Commands, "\n"), "id_ed25519.pub") || gated.Links[0].URL != "https://huggingface.co/meta-llama/Llama-3.2-1B" {
 		t.Errorf("gated hint = %+v", gated)
 	}
 	nf := Suggest("gemma3:typo", "file does not exist", nil, "")[0]

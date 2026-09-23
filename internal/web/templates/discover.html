@@ -68,7 +68,7 @@
       <p class="muted disc-note">
         {{if .State.HF}}
         Sizes on each result are estimates for a 4-bit quantisation. Open <em>Files</em> for each quantisation's real size.
-        Gated repos need their terms accepted on Hugging Face, and a token set up in Ollama, before they'll download.
+        Gated repos need their terms accepted on Hugging Face, and Ollama linked to that account, before they'll download.
         {{else}}
         Sizes on each result are estimates for the default 4-bit download. Open <em>Tags</em> for each download's real size.
         {{end}}
@@ -163,7 +163,7 @@
   <div class="caps">
     {{with .Pipeline}}<span class="badge cap">{{.}}</span>{{end}}
     {{with .Arch}}<span class="badge info">{{.}}</span>{{end}}
-    {{if .Gated}}<span class="badge warn" title="Accept the model's terms on Hugging Face, and give Ollama a token, before downloading.">gated</span>{{end}}
+    {{if .Gated}}{{if .CanLink}}<a class="badge warn" href="/account#huggingface" title="Accept the model's terms on Hugging Face, and link Ollama to your account, before downloading. Click for how.">gated</a>{{else}}<span class="badge warn" title="Accept the model's terms on Hugging Face, and link Ollama to an account with access, before downloading. The admin can do this from their Account page.">gated</span>{{end}}{{end}}
   </div>
   {{with .Size}}
   <div class="disc-sizes" aria-label="Size">

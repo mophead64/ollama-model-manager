@@ -123,6 +123,18 @@ func (s *Store) EnsureAdmin(ctx context.Context) (created bool, password string,
 	return true, password, nil
 }
 
+// IsAdmin reports whether a user administers the app: may change settings
+// that affect everyone, such as Ollama's Hugging Face access. There are no
+// roles yet, so it's the first account, the one EnsureAdmin creates; the app
+// has no way to add others.
+func (s *Store) IsAdmin(ctx context.Context, userID int64) (bool, error) {
+	var first int64
+	if err := s.db.QueryRowContext(ctx, `SELECT MIN(id) FROM users`).Scan(&first); err != nil {
+		return false, err
+	}
+	return userID == first, nil
+}
+
 // Authenticate checks a username/password pair.
 func (s *Store) Authenticate(ctx context.Context, username, password string) (*User, error) {
 	var (

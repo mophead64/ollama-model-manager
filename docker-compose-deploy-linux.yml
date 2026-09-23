@@ -28,6 +28,10 @@ services:
       MODELS_DIR: /models
       # Set to "false" to hide the Delete buttons and refuse deletions.
       ALLOW_MODEL_DELETE: "true"
+      # Optional Hugging Face read token, so Discover lists private repos and
+      # downloads are checked with it. Ollama's own access for pulling gated or
+      # private models is set up from the admin's Account page instead.
+      # HF_TOKEN: hf_...
     volumes:
       - omm-data:/data
       # Ollama's model folder, read-only. /usr/share/ollama/.ollama/models is

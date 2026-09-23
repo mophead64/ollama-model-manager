@@ -136,7 +136,7 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAccount(w http.ResponseWriter, r *http.Request) {
-	data := map[string]any{"ErrorForm": ""}
+	data := map[string]any{"ErrorForm": "", "IsAdmin": s.isAdmin(r)}
 	switch r.URL.Query().Get("done") {
 	case "username":
 		data["Notice"] = "Username updated."

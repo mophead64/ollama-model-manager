@@ -12,6 +12,8 @@
 // A submit button with data-busy="Loading…" is disabled and relabelled, with a
 // spinner, while its form submits, for actions that take a while.
 //
+// A button with data-copy="<id>" copies that input's value to the clipboard.
+//
 // A <dialog data-dialog-autoopen> is opened as soon as the page (or the htmx
 // swap bringing it) loads: used when a form inside it posts, fails server-side,
 // and the page re-renders with the error, so the user sees it without
@@ -25,6 +27,12 @@ document.addEventListener("click", function (e) {
       fill(dialog, opener);
       dialog.showModal();
     }
+    return;
+  }
+
+  var copier = e.target.closest("[data-copy]");
+  if (copier) {
+    copy(copier);
     return;
   }
 
@@ -112,3 +120,24 @@ window.addEventListener("pageshow", function (e) {
     btn.disabled = false;
   });
 });
+
+function copy(btn) {
+  var input = document.getElementById(btn.dataset.copy);
+  if (!input) return;
+  function done(ok) {
+    var label = btn.dataset.idleText || btn.textContent;
+    btn.dataset.idleText = label;
+    btn.textContent = ok ? "Copied" : "Select and copy it";
+    setTimeout(function () { btn.textContent = label; }, 2000);
+  }
+  // The async clipboard API only exists on HTTPS pages (or localhost); the
+  // app is often served over plain HTTP, where the old way still works.
+  input.select();
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(input.value).then(function () { done(true); }, function () { done(false); });
+    return;
+  }
+  var ok = false;
+  try { ok = document.execCommand("copy"); } catch (e) {}
+  done(ok);
+}

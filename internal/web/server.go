@@ -29,6 +29,7 @@ type Config struct {
 	AllowDelete bool   // whether users may delete models (ALLOW_MODEL_DELETE)
 	LibraryURL  string // the ollama.com model library; "" for the real one
 	HFURL       string // Hugging Face; "" for the real one
+	HFToken     string // optional Hugging Face access token (HF_TOKEN)
 }
 
 type Server struct {
@@ -51,7 +52,7 @@ func NewServer(ol *ollama.Client, st *store.Store, dl *downloads.Manager, sys *s
 		return nil, fmt.Errorf("parse templates: %w", err)
 	}
 	return &Server{
-		ol: ol, st: st, dl: dl, sys: sys, lib: library.New(cfg.LibraryURL, cfg.HFURL), cfg: cfg, log: log,
+		ol: ol, st: st, dl: dl, sys: sys, lib: library.New(cfg.LibraryURL, cfg.HFURL, cfg.HFToken), cfg: cfg, log: log,
 		tmpl: tmpl, updates: newUpdateChecker(), logins: newLoginLimiter(),
 	}, nil
 }
@@ -67,6 +68,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /account", s.handleAccount)
 	mux.HandleFunc("POST /account/username", s.handleChangeUsername)
 	mux.HandleFunc("POST /account/password", s.handleChangePassword)
+	mux.HandleFunc("GET /account/huggingface", s.handleHuggingFace)
 
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/models", http.StatusFound)

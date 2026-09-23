@@ -91,6 +91,14 @@ func main() {
 	// The download queue runs in the background for the life of the process,
 	// independent of any browser session.
 	dl := downloads.New(st, ol, log)
+	// An optional Hugging Face token lets the app see private repos when
+	// checking and browsing them. Ollama's own access (for the pulls
+	// themselves) is separate: see the Account page.
+	hfToken := strings.TrimSpace(os.Getenv("HF_TOKEN"))
+	if hfToken != "" {
+		dl.SetRegistryClient(&http.Client{Timeout: 10 * time.Second, Transport: ollama.HFTokenTransport{Token: hfToken}})
+		log.Info("using a Hugging Face token", "var", "HF_TOKEN")
+	}
 	dlDone := make(chan struct{})
 	go func() { dl.Run(ctx); close(dlDone) }()
 	defer func() {
@@ -111,7 +119,7 @@ func main() {
 	// Notes when each model was last used, from what Ollama has loaded.
 	go usage.New(ol, st, 15*time.Second, log).Run(ctx)
 
-	srv, err := web.NewServer(ol, st, dl, sys, web.Config{ModelsDir: modelsDir, AllowDelete: allowDelete}, log)
+	srv, err := web.NewServer(ol, st, dl, sys, web.Config{ModelsDir: modelsDir, AllowDelete: allowDelete, HFToken: hfToken}, log)
 	if err != nil {
 		log.Error("failed to initialize web server", "error", err)
 		os.Exit(1)

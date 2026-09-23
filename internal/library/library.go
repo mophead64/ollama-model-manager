@@ -90,6 +90,7 @@ type response struct {
 // hammer ollama.com or Hugging Face.
 type Client struct {
 	base, hfBase string
+	hfToken      string // sent to Hugging Face, if set
 	hc           *http.Client
 
 	mu    sync.Mutex
@@ -97,8 +98,10 @@ type Client struct {
 }
 
 // New returns a client for the ollama.com library at base and Hugging Face at
-// hfBase (DefaultBase and DefaultHFBase if empty).
-func New(base, hfBase string) *Client {
+// hfBase (DefaultBase and DefaultHFBase if empty). hfToken, a Hugging Face
+// access token, is optional: with it, searches include the private repos it
+// can see, and the file lists of gated repos it has access to.
+func New(base, hfBase, hfToken string) *Client {
 	if base == "" {
 		base = DefaultBase
 	}
@@ -106,10 +109,11 @@ func New(base, hfBase string) *Client {
 		hfBase = DefaultHFBase
 	}
 	return &Client{
-		base:   strings.TrimRight(base, "/"),
-		hfBase: strings.TrimRight(hfBase, "/"),
-		hc:     &http.Client{Timeout: 15 * time.Second},
-		cache:  map[string]response{},
+		base:    strings.TrimRight(base, "/"),
+		hfBase:  strings.TrimRight(hfBase, "/"),
+		hfToken: hfToken,
+		hc:      &http.Client{Timeout: 15 * time.Second},
+		cache:   map[string]response{},
 	}
 }
 
@@ -170,6 +174,9 @@ func (c *Client) fetch(ctx context.Context, url, site string, ttl time.Duration)
 		return response{}, err
 	}
 	req.Header.Set("User-Agent", "ollama-model-manager/"+version.Version)
+	if c.hfToken != "" && strings.HasPrefix(url, c.hfBase+"/") {
+		req.Header.Set("Authorization", "Bearer "+c.hfToken)
+	}
 	resp, err := c.hc.Do(req)
 	if err != nil {
 		return response{}, fmt.Errorf("couldn't reach %s: %w", site, err)

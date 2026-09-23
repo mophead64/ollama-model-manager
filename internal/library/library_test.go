@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"reflect"
+	"strings"
 	"sync/atomic"
 	"testing"
 )
@@ -85,7 +86,7 @@ func TestClientSearchQueryAndCache(t *testing.T) {
 		w.Write(page)
 	}))
 	defer srv.Close()
-	c := New(srv.URL, "")
+	c := New(srv.URL, "", "")
 
 	q := Query{Text: " qwen ", Caps: []string{"vision", "tools"}, Order: "newest", Page: 2}
 	p, err := c.Search(context.Background(), q)
@@ -183,7 +184,7 @@ func TestHFSearchPaging(t *testing.T) {
 		w.Write(page)
 	}))
 	defer srv.Close()
-	c := New("", srv.URL)
+	c := New("", srv.URL, "")
 
 	p, err := c.HFSearch(context.Background(), HFQuery{Text: "qwen", Sort: "trending"})
 	if err != nil {
@@ -217,5 +218,38 @@ func TestParamsFromName(t *testing.T) {
 		if got := paramsFromName(repo); got != want {
 			t.Errorf("paramsFromName(%q) = %d, want %d", repo, got, want)
 		}
+	}
+}
+
+func TestHFToken(t *testing.T) {
+	var auth []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		auth = append(auth, r.URL.Path+" "+r.Header.Get("Authorization"))
+		switch {
+		case r.URL.Path == "/api/whoami-v2" && r.Header.Get("Authorization") == "Bearer hf_good":
+			w.Write([]byte(`{"name":"josh","type":"user"}`))
+		case r.URL.Path == "/api/whoami-v2":
+			w.WriteHeader(http.StatusUnauthorized)
+		default:
+			w.Write([]byte(`[]`))
+		}
+	}))
+	defer srv.Close()
+
+	c := New("", srv.URL, "hf_good")
+	if name, err := c.HFWhoAmI(context.Background()); name != "josh" || err != nil {
+		t.Errorf("whoami = %q, %v", name, err)
+	}
+	if _, err := c.HFSearch(context.Background(), HFQuery{}); err != nil {
+		t.Fatal(err)
+	}
+	if auth[1] != "/api/models Bearer hf_good" {
+		t.Errorf("search sent %q", auth[1])
+	}
+	if _, err := New("", srv.URL, "hf_bad").HFWhoAmI(context.Background()); err == nil || !strings.Contains(err.Error(), "rejected") {
+		t.Errorf("bad token: %v", err)
+	}
+	if _, err := New("", srv.URL, "").HFWhoAmI(context.Background()); err == nil {
+		t.Error("no token: want an error")
 	}
 }

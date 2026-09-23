@@ -38,6 +38,13 @@
         </div>
       </dl>
     </div>
+    {{if .IsAdmin}}
+    {{/* Filled in after the page loads: it asks Ollama and Hugging Face. */}}
+    <div class="panel account-panel" id="huggingface">
+      <h2>Hugging Face</h2>
+      <div hx-get="/account/huggingface" hx-trigger="load" hx-swap="outerHTML"><p class="muted">Asking Ollama for its key…</p></div>
+    </div>
+    {{end}}
   </main>
   {{template "footer" .}}
 
@@ -73,4 +80,56 @@
   </dialog>
 </body>
 </html>
+{{end}}
+
+{{/* The Hugging Face section (handlers_huggingface.go). */}}
+{{define "hf_connect"}}
+<div class="hf-connect">
+  <p>Ollama downloads models from Hugging Face itself. To pull <strong>gated</strong> or <strong>private</strong> repos, Ollama needs
+    linking to a Hugging Face account with access to them. This links Ollama, not you: everyone using this Ollama can then
+    pull what that account can.</p>
+
+  <h3>1. Add Ollama's key to Hugging Face</h3>
+  {{if .Key}}
+  <div class="copy-row">
+    <input type="text" id="ollama-key" class="mono" value="{{.Key}}" readonly aria-label="Ollama's public key">
+    <button type="button" class="secondary small" data-copy="ollama-key">Copy</button>
+  </div>
+  <p class="muted hf-small">The public half of the key Ollama at <code>{{.OllamaURL}}</code> signs its requests with.
+    It's safe to share: it can only check Ollama's signature, not make one.</p>
+  {{else if .KeyUnavailable}}
+  <p>Ollama didn't report its key: it only does while it isn't signed in to ollama.com. Print it on the machine running Ollama:</p>
+  <pre class="cmd">cat ~/.ollama/id_ed25519.pub</pre>
+  <p class="muted hf-small">For Ollama's Linux service, <code>sudo cat /usr/share/ollama/.ollama/id_ed25519.pub</code>;
+    for Ollama in Docker, <code>docker exec &lt;container&gt; cat /root/.ollama/id_ed25519.pub</code>.</p>
+  {{else}}
+  <div class="error-box">Couldn't ask Ollama for its key: {{.KeyErr}}</div>
+  {{end}}
+  <p>Then, signed in to Hugging Face, open <a class="hint-link inline" href="https://huggingface.co/settings/keys" target="_blank" rel="noopener noreferrer">Settings → SSH and GPG Keys ↗</a>,
+    choose <em>Add SSH key</em> and paste it in. Any title will do, such as “Ollama”.</p>
+
+  <h3>2. Accept gated models' terms</h3>
+  <p>Gated repos, marked <span class="badge warn">gated</span> on <a class="hint-link inline" href="/discover?src=hf">Discover</a>, also need their terms
+    accepted once, on the model's Hugging Face page, by the same account. Some are approved straight away; others take a while.</p>
+
+  <h3>3. Download</h3>
+  <p>Downloads of those repos now work. This app can't test the link without downloading something, so if one fails with an
+    access error, its page says what to check.</p>
+
+  <h3>Browsing private repos <span class="muted">(optional)</span></h3>
+  {{if .HasToken}}
+    {{with .TokenUser}}
+    <p><span class="badge on">Token set</span> This app uses a Hugging Face token for <strong>{{.}}</strong>: Discover includes
+      the private repos it can see, and downloads are checked with it. Everyone using this app sees what the token can.</p>
+    {{else}}
+    <div class="error-box"><code>HF_TOKEN</code> is set, but it doesn't work: {{.TokenErr}}</div>
+    {{end}}
+  {{else}}
+  <p class="muted">This app talks to Hugging Face anonymously, so Discover can't list private repos, and download checks can't
+    see into them. To change that, create a <em>read</em> access token under
+    <a class="hint-link inline" href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener noreferrer">Settings → Access Tokens ↗</a>,
+    set it as <code>HF_TOKEN</code> in this app's environment, and restart it. Everyone using this app will see what the token can.
+    Ollama's downloads don't need it: they use the key above.</p>
+  {{end}}
+</div>
 {{end}}

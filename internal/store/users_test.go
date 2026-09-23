@@ -136,3 +136,16 @@ func TestResetFirstUser(t *testing.T) {
 		t.Error("reset should sign out every session")
 	}
 }
+
+func TestIsAdmin(t *testing.T) {
+	st := openTest(t)
+	ctx := context.Background()
+	first, _ := st.CreateUser(ctx, "first", "password-1")
+	second, _ := st.CreateUser(ctx, "second", "password-2")
+	if ok, err := st.IsAdmin(ctx, first.ID); !ok || err != nil {
+		t.Errorf("first user: %v, %v", ok, err)
+	}
+	if ok, _ := st.IsAdmin(ctx, second.ID); ok {
+		t.Error("second user is admin")
+	}
+}

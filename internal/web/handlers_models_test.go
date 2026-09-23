@@ -53,6 +53,9 @@ func fakeOllama(t *testing.T, n int) *httptest.Server {
 			}
 			generateCalls = append(generateCalls, string(body))
 			w.Write([]byte(`{"done":true}`))
+		case "/api/me": // signed out of ollama.com: offers a link carrying Ollama's key
+			w.WriteHeader(http.StatusUnauthorized)
+			w.Write([]byte(`{"error":"unauthorized","signin_url":"https://ollama.com/connect?name=test\u0026key=c3NoLWVkMjU1MTkgQUFBQXRlc3RrZXk"}`))
 		case "/api/version":
 			w.Write([]byte(`{"version":"0.12.3"}`))
 		case "/api/pull":

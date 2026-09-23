@@ -4,7 +4,10 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"net/url"
 	"path"
 	"regexp"
@@ -67,6 +70,39 @@ var (
 	// The quantisation at the end of a file name, e.g. "…-UD-Q4_K_XL".
 	hfQuantRE = regexp.MustCompile(`(?i)(?:^|[-_.])((?:UD-)?(?:I?Q\d(?:_[A-Z0-9]+)*|BF16|F16|F32|MXFP4(?:_MOE)?|TQ\d_\d))$`)
 )
+
+// HasHFToken reports whether requests to Hugging Face carry an access token.
+func (c *Client) HasHFToken() bool { return c.hfToken != "" }
+
+// HFWhoAmI returns the Hugging Face account the access token belongs to.
+func (c *Client) HFWhoAmI(ctx context.Context) (string, error) {
+	if c.hfToken == "" {
+		return "", errors.New("no Hugging Face token is set")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.hfBase+"/api/whoami-v2", nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.hfToken)
+	resp, err := c.hc.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("couldn't reach Hugging Face: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusUnauthorized {
+		return "", errors.New("Hugging Face rejected the token: it may have been revoked or mistyped")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("Hugging Face returned %s", resp.Status)
+	}
+	var who struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&who); err != nil || who.Name == "" {
+		return "", errors.New("unexpected answer from Hugging Face")
+	}
+	return who.Name, nil
+}
 
 // ValidHFRepo reports whether repo looks like "owner/name".
 func ValidHFRepo(repo string) bool { return hfRepoRE.MatchString(repo) }

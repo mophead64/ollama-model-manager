@@ -111,6 +111,7 @@ type hfCard struct {
 	Size      *sizeChip // estimated from the parameter count; nil if unknown
 	Installed bool
 	Active    *activeDL
+	CanLink   bool // the viewer is the admin, who can link Ollama to Hugging Face for gated repos
 }
 
 // activeDL is a queued or running download, for a status badge.
@@ -197,10 +198,11 @@ func (s *Server) discoverHF(r *http.Request, st discoverState, filter bool, loca
 	if err != nil {
 		return err
 	}
+	admin := s.isAdmin(r)
 	cards := make([]hfCard, 0, len(page.Models))
 	for _, m := range page.Models {
 		key := hfKey(m.Repo)
-		c := hfCard{HFModel: m, Installed: local.installed[key], Active: local.active[key]}
+		c := hfCard{HFModel: m, Installed: local.installed[key], Active: local.active[key], CanLink: admin}
 		if m.Params > 0 {
 			f := estimateFit(int64(float64(m.Params)*bytesPerParam), snap)
 			if f.Level != "unknown" {

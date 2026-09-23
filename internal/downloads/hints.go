@@ -117,23 +117,17 @@ func hfAccessHint(ref ollama.Ref) Hint {
 	repo := "https://huggingface.co/" + ref.Namespace + "/" + ref.Model
 	return Hint{
 		Title: "Gated or private Hugging Face model",
-		Text:  "This repo needs you to have access, and the machine running Ollama to be signed in to Hugging Face, before it can be pulled.",
+		Text:  "Ollama needs to be linked to a Hugging Face account that has access to this repo before it can pull it. Ollama signs its requests with its own key, so it's that key, not a login, that Hugging Face needs to know.",
 		Steps: []string{
 			"Open the model's page on Hugging Face, sign in, and accept its terms or request access. Gated models can take a while to be approved.",
-			"On the machine running Ollama, install the Hugging Face CLI and log in with an access token (create one under Settings → Access Tokens).",
-			"Add Ollama's public key to your Hugging Face account under Settings → SSH and GPG Keys. Ollama signs its requests to Hugging Face with it.",
+			"Add Ollama's public key to that Hugging Face account under Settings → SSH and GPG Keys. The Account page here shows the key (to the admin), or print it on the machine running Ollama.",
 			"Retry this download.",
 		},
-		Commands: []string{
-			`pip install -U "huggingface_hub[cli]"`,
-			"hf auth login",
-			"cat ~/.ollama/id_ed25519.pub",
-		},
+		Commands: []string{"cat ~/.ollama/id_ed25519.pub"},
 		Links: []Link{
 			{"Model page", repo},
-			{"Access tokens", "https://huggingface.co/settings/tokens"},
-			{"SSH keys", "https://huggingface.co/settings/keys"},
-			{"Hugging Face CLI docs", "https://huggingface.co/docs/huggingface_hub/en/guides/cli"},
+			{"Show Ollama's key", "/account#huggingface"},
+			{"SSH keys on Hugging Face", "https://huggingface.co/settings/keys"},
 			{"Using Ollama with Hugging Face", "https://huggingface.co/docs/hub/en/ollama"},
 		},
 	}
