@@ -1,3 +1,7 @@
 .git
+data/
+*.db
+*.db-wal
+*.db-shm
 .github
 notes.txt

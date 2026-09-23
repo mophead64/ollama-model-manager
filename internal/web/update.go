@@ -97,7 +97,7 @@ func (u *updateChecker) fetch(ctx context.Context) (updateInfo, error) {
 // every 6 hours while a page stays open), so the network round trip to GitHub
 // never delays the page itself. ?force=1 is the footer's manual refresh.
 func (s *Server) handleVersionCheck(w http.ResponseWriter, r *http.Request) {
-	s.render(w, "version_status.html", map[string]any{
+	s.render(w, r, "version_status.html", map[string]any{
 		"Version": version.Version,
 		"Update":  s.updates.check(r.Context(), r.URL.Query().Get("force") != ""),
 	})

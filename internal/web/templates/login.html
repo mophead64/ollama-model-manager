@@ -1,0 +1,26 @@
+{{define "login.html"}}
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ollama Model Manager — Log in</title>
+  {{template "style" .}}
+</head>
+<body>
+  {{template "nav" .}}
+  <main>
+    <div class="panel auth-box">
+      <h2>Log in</h2>
+      {{with .Error}}<div class="error-box">{{.}}</div>{{end}}
+      <form method="post" action="/login" class="form-grid">
+        <input type="hidden" name="next" value="{{.Next}}">
+        <label>Username <input type="text" name="username" value="{{.Username}}" autocomplete="username" autofocus required></label>
+        <label>Password <input type="password" name="password" autocomplete="current-password" required></label>
+        <button type="submit">Log in</button>
+      </form>
+    </div>
+  </main>
+</body>
+</html>
+{{end}}

@@ -1,15 +1,18 @@
 package web
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/mophead64/ollama-model-manager/internal/ollama"
+	"github.com/mophead64/ollama-model-manager/internal/store"
 )
 
 // fakeOllama serves n models named model-000:latest... plus one namespaced
@@ -39,9 +42,31 @@ func fakeOllama(t *testing.T, n int) *httptest.Server {
 	return srv
 }
 
+// testSession is the cookie get() sends, so tests exercise pages as a
+// signed-in user. Set by newTestServer.
+var testSession *http.Cookie
+
+func newTestStore(t *testing.T) *store.Store {
+	t.Helper()
+	st, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	return st
+}
+
 func newTestServer(t *testing.T, base string) http.Handler {
 	t.Helper()
-	s, err := NewServer(ollama.New(base), t.TempDir(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	st := newTestStore(t)
+	u, err := st.CreateUser(context.Background(), "admin", "test-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, _ := st.CreateSession(context.Background(), u.ID)
+	testSession = &http.Cookie{Name: sessionCookie, Value: token}
+
+	s, err := NewServer(ollama.New(base), st, t.TempDir(), slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,6 +75,7 @@ func newTestServer(t *testing.T, base string) http.Handler {
 
 func get(h http.Handler, path string, htmx bool) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(http.MethodGet, path, nil)
+	req.AddCookie(testSession)
 	if htmx {
 		req.Header.Set("HX-Request", "true")
 	}

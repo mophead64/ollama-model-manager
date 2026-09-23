@@ -112,6 +112,36 @@
   .error-box { background: var(--danger-bg); border: 1px solid var(--err-border); color: var(--err-text); padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; }
   .pagination { display: flex; gap: 8px; align-items: center; margin-top: 12px; }
   footer.hint { color: var(--muted); font-size: 12px; margin-top: 8px; }
+  .nav-user { display: flex; align-items: center; gap: 12px; }
+  button.small { padding: 4px 10px; font-size: 13px; }
+  .auth-box { max-width: 380px; margin: 8vh auto 0; }
+  .form-grid { display: grid; gap: 12px; max-width: 380px; }
+  .form-grid label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+  .form-grid input { width: 100%; }
+  input[type=password] {
+    padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px;
+    background: var(--panel); color: var(--text);
+  }
+  .notice { background: var(--b-green-bg); color: var(--b-green); padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; }
+  .account-panel { max-width: 640px; }
+  .account-rows { margin: 0; }
+  .account-rows > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .account-rows > div:last-child { border-bottom: none; }
+  .account-rows dt { color: var(--muted); font-size: 14px; }
+  .account-rows dd { margin: 0; display: flex; align-items: center; gap: 12px; font-weight: 500; }
+  /* Modal dialogs (see static/dialog.js). No padding on the <dialog> itself:
+     a click that lands on the element rather than its content is a backdrop
+     click and closes it. */
+  dialog {
+    width: min(440px, calc(100% - 32px)); padding: 0; border: 1px solid var(--border);
+    border-radius: var(--radius); background: var(--panel); color: var(--text);
+    box-shadow: 0 20px 50px rgb(0 0 0 / .25);
+  }
+  dialog::backdrop { background: rgb(15 18 24 / .45); }
+  dialog form { padding: 22px; }
+  dialog h2 { margin: 0 0 14px; font-size: 16px; }
+  dialog .form-grid { max-width: none; }
+  .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
   footer.hint button.link { background: none; border: none; color: var(--accent); padding: 0; font-size: 12px; font-weight: 400; }
   footer.hint button.link:hover { text-decoration: underline; }
   dl.kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 20px; margin: 0; font-size: 14px; }
@@ -159,7 +189,7 @@
 {{define "nav"}}
 <nav>
   <span class="brand">Ollama Model Manager</span>
-  <a href="/models">Models</a>
+  {{if .User}}<a href="/models">Models</a>{{end}}
   <div class="theme-switch" role="group" aria-label="Colour theme">
     <button type="button" class="secondary" data-theme-choice="auto">Auto</button>
     <button type="button" class="secondary" data-theme-choice="dark">Dark</button>
@@ -193,6 +223,12 @@
       mark();
     })();
   </script>
+  {{with .User}}
+  <div class="nav-user">
+    <a href="/account" title="Account settings">{{.Username}}</a>
+    <form method="post" action="/logout" class="inline"><button type="submit" class="secondary small">Log out</button></form>
+  </div>
+  {{end}}
 </nav>
 {{end}}
 
@@ -204,3 +240,4 @@
 {{end}}
 
 {{define "htmx_script"}}<script src="/static/htmx.min.js"></script>{{end}}
+{{define "dialog_script"}}<script src="/static/dialog.js"></script>{{end}}

@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	"github.com/mophead64/ollama-model-manager/internal/ollama"
+	"github.com/mophead64/ollama-model-manager/internal/store"
 	"github.com/mophead64/ollama-model-manager/internal/version"
 )
 
@@ -20,25 +21,37 @@ var staticFS embed.FS
 
 type Server struct {
 	ol        *ollama.Client
+	st        *store.Store
 	modelsDir string // where Ollama stores models, as seen by this process; "" if unknown
 	log       *slog.Logger
 
 	tmpl    *template.Template
 	updates *updateChecker
+	logins  *loginLimiter
 }
 
-func NewServer(ol *ollama.Client, modelsDir string, log *slog.Logger) (*Server, error) {
+func NewServer(ol *ollama.Client, st *store.Store, modelsDir string, log *slog.Logger) (*Server, error) {
 	tmpl, err := template.New("").Funcs(templateFuncs).ParseFS(templateFS, "templates/*.html")
 	if err != nil {
 		return nil, fmt.Errorf("parse templates: %w", err)
 	}
-	return &Server{ol: ol, modelsDir: modelsDir, log: log, tmpl: tmpl, updates: newUpdateChecker()}, nil
+	return &Server{
+		ol: ol, st: st, modelsDir: modelsDir, log: log,
+		tmpl: tmpl, updates: newUpdateChecker(), logins: newLoginLimiter(),
+	}, nil
 }
 
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 
 	mux.Handle("GET /static/", http.FileServerFS(staticFS))
+
+	mux.HandleFunc("GET /login", s.handleLoginPage)
+	mux.HandleFunc("POST /login", s.handleLogin)
+	mux.HandleFunc("POST /logout", s.handleLogout)
+	mux.HandleFunc("GET /account", s.handleAccount)
+	mux.HandleFunc("POST /account/username", s.handleChangeUsername)
+	mux.HandleFunc("POST /account/password", s.handleChangePassword)
 
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/models", http.StatusFound)
@@ -50,15 +63,22 @@ func (s *Server) Routes() http.Handler {
 	// Model names can contain "/" (e.g. "user/model:tag"), hence the wildcard.
 	mux.HandleFunc("GET /models/{name...}", s.handleModelDetail)
 
-	return mux
+	// Rejects cross-site POSTs (via Sec-Fetch-Site/Origin), so another page
+	// can't submit forms here using the session cookie.
+	return http.NewCrossOriginProtection().Handler(s.requireAuth(mux))
 }
 
-// render executes a template, injecting the app version every page's footer
-// needs when data is a map.
-func (s *Server) render(w http.ResponseWriter, name string, data any) {
+// render executes a template. For map data it also fills in what every page's
+// chrome needs: the app version for the footer and the signed-in user for the nav.
+func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, data any) {
 	if m, ok := data.(map[string]any); ok {
 		if _, set := m["Version"]; !set {
 			m["Version"] = version.Version
+		}
+		if _, set := m["User"]; !set {
+			if u := currentUser(r); u != nil {
+				m["User"] = u
+			}
 		}
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -72,7 +92,7 @@ type errMsg string
 
 func (e errMsg) Error() string { return string(e) }
 
-func (s *Server) badRequest(w http.ResponseWriter, err error) {
+func (s *Server) badRequest(w http.ResponseWriter, r *http.Request, err error) {
 	w.WriteHeader(http.StatusBadRequest)
-	s.render(w, "error_fragment.html", map[string]any{"Error": err.Error()})
+	s.render(w, r, "error_fragment.html", map[string]any{"Error": err.Error()})
 }

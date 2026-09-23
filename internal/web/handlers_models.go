@@ -70,10 +70,10 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Header.Get("HX-Request") == "true" {
-		s.render(w, "models_results.html", data)
+		s.render(w, r, "models_results.html", data)
 		return
 	}
-	s.render(w, "models.html", data)
+	s.render(w, r, "models.html", data)
 }
 
 // diskUsage reports free space where Ollama keeps its models, or nil when that
@@ -149,7 +149,7 @@ func capabilityOptions(models []ollama.Model, selected []string) []capOption {
 func (s *Server) handleModelDetail(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	if name == "" {
-		s.badRequest(w, errMsg("model name required"))
+		s.badRequest(w, r, errMsg("model name required"))
 		return
 	}
 
@@ -177,7 +177,7 @@ func (s *Server) handleModelDetail(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	s.render(w, "model_detail.html", data)
+	s.render(w, r, "model_detail.html", data)
 }
 
 type metaEntry struct {

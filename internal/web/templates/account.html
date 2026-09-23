@@ -1,0 +1,76 @@
+{{define "account.html"}}
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ollama Model Manager — Account</title>
+  {{template "style" .}}
+  {{template "htmx_script" .}}
+  {{template "dialog_script" .}}
+</head>
+<body>
+  {{template "nav" .}}
+  <main>
+    {{with .Notice}}<div class="notice">{{.}}</div>{{end}}
+    <div class="panel account-panel">
+      <h2>Account</h2>
+      <dl class="account-rows">
+        <div>
+          <dt>Username</dt>
+          <dd>{{.User.Username}}
+            <button type="button" class="secondary small" data-dialog-open="change-username-modal">Change username</button>
+          </dd>
+        </div>
+        <div>
+          <dt>Password</dt>
+          <dd><span aria-hidden="true">••••••••</span>
+            <button type="button" class="secondary small" data-dialog-open="change-password-modal">Change password</button>
+          </dd>
+        </div>
+        <div>
+          <dt>Account created</dt>
+          <dd>{{time .User.CreatedAt}}</dd>
+        </div>
+        <div>
+          <dt>Last changed</dt>
+          <dd>{{time .User.UpdatedAt}}</dd>
+        </div>
+      </dl>
+    </div>
+    {{template "footer" .}}
+  </main>
+
+  {{/* Reopened automatically when its form fails server-side, to show the error. */}}
+  <dialog id="change-username-modal" aria-labelledby="change-username-title" {{if eq .ErrorForm "username"}}data-dialog-autoopen{{end}}>
+    <form method="post" action="/account/username" class="form-grid">
+      <h2 id="change-username-title">Change username</h2>
+      {{if eq .ErrorForm "username"}}<div class="error-box">{{.Error}}</div>{{end}}
+      <label>New username <input type="text" name="username" value="{{or .NewUsername .User.Username}}" autocomplete="username" required maxlength="64"></label>
+      <label>Current password <input type="password" name="current_password" autocomplete="current-password" required></label>
+      <div class="dialog-actions">
+        <button type="button" class="secondary" data-dialog-close>Cancel</button>
+        <button type="submit">Update username</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="change-password-modal" aria-labelledby="change-password-title" {{if eq .ErrorForm "password"}}data-dialog-autoopen{{end}}>
+    <form method="post" action="/account/password" class="form-grid">
+      <h2 id="change-password-title">Change password</h2>
+      {{if eq .ErrorForm "password"}}<div class="error-box">{{.Error}}</div>{{end}}
+      {{/* Lets password managers file the new password under the right account. */}}
+      <input type="text" name="username" value="{{.User.Username}}" autocomplete="username" hidden>
+      <label>Current password <input type="password" name="current_password" autocomplete="current-password" required></label>
+      <label>New password <input type="password" name="new_password" autocomplete="new-password" required minlength="8" maxlength="72"></label>
+      <label>Confirm new password <input type="password" name="confirm_password" autocomplete="new-password" required minlength="8" maxlength="72"></label>
+      <p class="muted" style="font-size:13px; margin:0">At least 8 characters. Other signed-in browsers will be signed out.</p>
+      <div class="dialog-actions">
+        <button type="button" class="secondary" data-dialog-close>Cancel</button>
+        <button type="submit">Update password</button>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>
+{{end}}
