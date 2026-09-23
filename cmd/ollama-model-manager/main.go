@@ -30,7 +30,7 @@ import (
 func main() {
 	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
-	dbPath := getenv("DB_PATH", "/data/omm.db")
+	dbPath := getenv("DB_PATH", defaultDBPath())
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "reset-password":
@@ -52,7 +52,8 @@ func main() {
 
 	st, err := openStore(ctx, dbPath)
 	if err != nil {
-		log.Error("failed to open database", "path", dbPath, "error", err)
+		log.Error("failed to open database", "path", dbPath, "error", err,
+			"hint", "if that folder isn't writable, set DB_PATH to a file path that is")
 		os.Exit(1)
 	}
 	defer st.Close()
@@ -145,6 +146,21 @@ func main() {
 		log.Error("server error", "error", err)
 		os.Exit(1)
 	}
+}
+
+// defaultDBPath is where the database goes when DB_PATH isn't set: next to
+// the executable (symlinks followed), so a downloaded binary keeps its data
+// beside it wherever it's run from. The container image sets DB_PATH to its
+// /data volume instead.
+func defaultDBPath() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return "omm.db" // the working directory
+	}
+	if real, err := filepath.EvalSymlinks(exe); err == nil {
+		exe = real
+	}
+	return filepath.Join(filepath.Dir(exe), "omm.db")
 }
 
 func openStore(ctx context.Context, dbPath string) (*store.Store, error) {

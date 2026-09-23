@@ -39,7 +39,5 @@ notes.txt
 *.db-wal
 *.db-shm
 
-# suppressing github workflows for now, not ready to create a release yet
-.github/*
 # Exported container images (docker save)
 /dist/

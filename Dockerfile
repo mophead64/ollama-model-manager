@@ -21,6 +21,9 @@ COPY --from=build /out/ollama-model-manager /ollama-model-manager
 # Docker creates the volume root-owned and the app can't open its db file.
 COPY --from=build --chown=nonroot:nonroot /out/data /data
 VOLUME ["/data"]
+# Outside a container the database defaults to sitting beside the binary;
+# here it belongs in the volume.
+ENV DB_PATH=/data/omm.db
 EXPOSE 8080
 USER nonroot:nonroot
 ENTRYPOINT ["/ollama-model-manager"]
