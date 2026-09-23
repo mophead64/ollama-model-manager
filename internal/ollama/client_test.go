@@ -3,8 +3,10 @@ package ollama
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -47,5 +49,30 @@ func TestListAndShow(t *testing.T) {
 	var se *StatusError
 	if !errors.As(err, &se) || se.StatusCode != http.StatusNotFound || se.Message != "model 'nope' not found" {
 		t.Fatalf("Show error = %v, want 404 StatusError with Ollama's message", err)
+	}
+}
+
+func TestDelete(t *testing.T) {
+	var gotMethod, gotBody string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		gotMethod, gotBody = r.Method, string(b)
+		if strings.Contains(gotBody, "missing") {
+			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte(`{"error":"model 'missing' not found"}`))
+		}
+	}))
+	defer srv.Close()
+	c := New(srv.URL)
+
+	if err := c.Delete(context.Background(), "llama3.2:latest"); err != nil {
+		t.Fatal(err)
+	}
+	if gotMethod != http.MethodDelete || gotBody != `{"model":"llama3.2:latest"}` {
+		t.Errorf("sent %s %s", gotMethod, gotBody)
+	}
+	var se *StatusError
+	if err := c.Delete(context.Background(), "missing"); !errors.As(err, &se) || se.StatusCode != 404 {
+		t.Errorf("missing model err = %v", err)
 	}
 }

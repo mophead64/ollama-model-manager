@@ -7,6 +7,8 @@ services:
       # Ollama running on the Docker host. If Ollama is another service in this
       # compose file, use its service name instead, e.g. http://ollama:11434.
       OLLAMA_HOST: http://host.docker.internal:11434
+      # Set to false to hide the Delete buttons and refuse deletions.
+      # ALLOW_MODEL_DELETE: "false"
     volumes:
       # The app's SQLite database (login details and sessions).
       - omm-data:/data

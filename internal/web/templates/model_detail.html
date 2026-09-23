@@ -7,6 +7,7 @@
   <title>Ollama Model Manager — {{.Name}}</title>
   {{template "style" .}}
   {{template "htmx_script" .}}
+  {{template "dialog_script" .}}
 </head>
 <body>
   {{template "nav" .}}
@@ -17,7 +18,11 @@
     {{else}}
     {{with .Info}}
     <div class="panel">
-      <h2 class="mono">{{$.Name}}</h2>
+      <div class="row between">
+        <h2 class="mono" style="margin:0">{{$.Name}}</h2>
+        {{if $.AllowDelete}}<button type="button" class="danger small" data-dialog-open="delete-model-modal">Delete model</button>{{end}}
+      </div>
+      <div style="height:14px"></div>
       <dl class="kv">
         <dt>Family</dt><dd>{{or .Details.Family "-"}}{{if gt (len .Details.Families) 1}} <span class="muted">({{range $i, $f := .Details.Families}}{{if $i}}, {{end}}{{$f}}{{end}})</span>{{end}}</dd>
         <dt>Parameters</dt><dd>{{or .Details.ParameterSize "-"}}</dd>
@@ -62,6 +67,19 @@
     {{end}}
     {{template "footer" .}}
   </main>
+  {{if and .AllowDelete .Info}}
+  <dialog id="delete-model-modal" aria-labelledby="delete-model-title">
+    <form method="post" action="/models/delete">
+      <h2 id="delete-model-title">Delete model?</h2>
+      <input type="hidden" name="name" value="{{.Name}}">
+      <p><code>{{.Name}}</code> will be removed from Ollama{{with .Model}}, freeing up to <strong>{{bytes .Size}}</strong>{{end}}. You'd have to pull it again to use it.</p>
+      <div class="dialog-actions">
+        <button type="button" class="secondary" data-dialog-close>Cancel</button>
+        <button type="submit" class="danger-solid">Delete</button>
+      </div>
+    </form>
+  </dialog>
+  {{end}}
 </body>
 </html>
 {{end}}

@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -79,7 +80,12 @@ func main() {
 		log.Info("reporting disk space for models directory", "dir", modelsDir)
 	}
 
-	srv, err := web.NewServer(ol, st, modelsDir, log)
+	allowDelete := getenvBool(log, "ALLOW_MODEL_DELETE", true)
+	if !allowDelete {
+		log.Info("model deletion disabled", "var", "ALLOW_MODEL_DELETE")
+	}
+
+	srv, err := web.NewServer(ol, st, web.Config{ModelsDir: modelsDir, AllowDelete: allowDelete}, log)
 	if err != nil {
 		log.Error("failed to initialize web server", "error", err)
 		os.Exit(1)
@@ -172,6 +178,22 @@ func findModelsDir() string {
 		}
 	}
 	return ""
+}
+
+// getenvBool reads a true/false env var (1/0, true/false, yes/no...),
+// warning and using fallback if it's set to something else.
+func getenvBool(log *slog.Logger, key string, fallback bool) bool {
+	v := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
+	switch v {
+	case "":
+		return fallback
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	}
+	log.Warn("ignoring invalid boolean", "var", key, "value", v, "using", fallback)
+	return fallback
 }
 
 func getenv(key, fallback string) string {

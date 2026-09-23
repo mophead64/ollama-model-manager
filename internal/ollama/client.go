@@ -100,6 +100,11 @@ func (c *Client) Show(ctx context.Context, name string) (*ModelInfo, error) {
 	return &out, nil
 }
 
+// Delete removes a local model and the blobs no other model uses.
+func (c *Client) Delete(ctx context.Context, name string) error {
+	return c.do(ctx, http.MethodDelete, "/api/delete", map[string]string{"model": name}, nil)
+}
+
 // StatusError is returned when Ollama answers with a non-2xx status.
 type StatusError struct {
 	StatusCode int
@@ -141,6 +146,9 @@ func (c *Client) do(ctx context.Context, method, path string, body, out any) err
 			msg = e.Error
 		}
 		return &StatusError{StatusCode: resp.StatusCode, Message: msg}
+	}
+	if out == nil {
+		return nil
 	}
 	return json.NewDecoder(resp.Body).Decode(out)
 }

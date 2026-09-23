@@ -17,8 +17,12 @@ import (
 
 // fakeOllama serves n models named model-000:latest... plus one namespaced
 // model, and a /api/show that knows only "user/custom:v1".
+// deletedModels records the /api/delete bodies fakeOllama received.
+var deletedModels []string
+
 func fakeOllama(t *testing.T, n int) *httptest.Server {
 	t.Helper()
+	deletedModels = nil
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/tags":
@@ -28,6 +32,14 @@ func fakeOllama(t *testing.T, n int) *httptest.Server {
 			}
 			parts = append(parts, `{"name":"user/custom:v1","size":2048,"digest":"abc123","details":{"family":"qwen"},"capabilities":["completion","vision"]}`)
 			fmt.Fprintf(w, `{"models":[%s]}`, strings.Join(parts, ","))
+		case "/api/delete":
+			body, _ := io.ReadAll(r.Body)
+			if strings.Contains(string(body), "fail-me") {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(`{"error":"disk on fire"}`))
+				return
+			}
+			deletedModels = append(deletedModels, string(body))
 		case "/api/show":
 			body, _ := io.ReadAll(r.Body)
 			if !strings.Contains(string(body), "user/custom:v1") {
@@ -66,7 +78,7 @@ func newTestServer(t *testing.T, base string) http.Handler {
 	token, _ := st.CreateSession(context.Background(), u.ID)
 	testSession = &http.Cookie{Name: sessionCookie, Value: token}
 
-	s, err := NewServer(ollama.New(base), st, t.TempDir(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	s, err := NewServer(ollama.New(base), st, Config{ModelsDir: t.TempDir(), AllowDelete: true}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -23,7 +23,7 @@
       <th>Quant</th>
       {{template "sort_th" (sortcol "Context" .Headers.context)}}
       {{template "sort_th" (sortcol "Size" .Headers.size)}}
-      <th>Modified</th><th>Capabilities</th>
+      <th>Modified</th><th>Capabilities</th>{{if .AllowDelete}}<th></th>{{end}}
     </tr></thead>
     <tbody>
     {{range .Models}}
@@ -36,6 +36,10 @@
         <td>{{bytes .Size}}</td>
         <td>{{time .ModifiedAt}}</td>
         <td>{{with .Capabilities}}<div class="caps">{{range .}}<span class="badge cap">{{.}}</span>{{end}}</div>{{else}}<span class="muted">-</span>{{end}}</td>
+        {{if $.AllowDelete}}
+        <td class="actions"><button type="button" class="danger small" data-dialog-open="delete-model-modal"
+            data-fill-name="{{.Name}}" data-fill-size="{{bytes .Size}}" data-fill-return="{{$.ListURL}}">Delete</button></td>
+        {{end}}
       </tr>
     {{end}}
     </tbody>

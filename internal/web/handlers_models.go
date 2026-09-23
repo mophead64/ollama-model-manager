@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"slices"
 	"sort"
 	"strconv"
@@ -29,6 +30,7 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 		"Page":       st.Page,
 		"TotalPages": 1,
 		"OllamaURL":  s.ol.BaseURL(),
+		"Deleted":    r.URL.Query().Get("deleted"),
 	}
 
 	all, err := s.ol.List(r.Context())
@@ -56,6 +58,7 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 		data["TotalPages"] = totalPages
 		data["AllCaps"] = capabilityOptions(all, st.Caps)
 		data["Headers"] = st.headers()
+		data["ListURL"] = st.URL()
 		data["Disk"] = s.diskUsage()
 		if st.Page > 1 {
 			prev := st
@@ -79,12 +82,12 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 // diskUsage reports free space where Ollama keeps its models, or nil when that
 // directory isn't visible to this process (e.g. not mounted into the container).
 func (s *Server) diskUsage() *disk.Usage {
-	if s.modelsDir == "" {
+	if s.cfg.ModelsDir == "" {
 		return nil
 	}
-	u, err := disk.Stat(s.modelsDir)
+	u, err := disk.Stat(s.cfg.ModelsDir)
 	if err != nil {
-		s.log.Warn("disk usage unavailable", "dir", s.modelsDir, "error", err)
+		s.log.Warn("disk usage unavailable", "dir", s.cfg.ModelsDir, "error", err)
 		return nil
 	}
 	return &u
@@ -144,6 +147,47 @@ func capabilityOptions(models []ollama.Model, selected []string) []capOption {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out
+}
+
+// handleDeleteModel removes a model from Ollama, then goes back to the list
+// (with the filters/sort/page it was deleted from, if it came from there).
+func (s *Server) handleDeleteModel(w http.ResponseWriter, r *http.Request) {
+	if !s.cfg.AllowDelete {
+		w.WriteHeader(http.StatusForbidden)
+		s.render(w, r, "error_fragment.html", map[string]any{"Error": "Deleting models is disabled on this server (ALLOW_MODEL_DELETE=false)."})
+		return
+	}
+	name := strings.TrimSpace(r.FormValue("name"))
+	if name == "" {
+		s.badRequest(w, r, errMsg("model name required"))
+		return
+	}
+
+	err := s.ol.Delete(r.Context(), name)
+	var se *ollama.StatusError
+	if errors.As(err, &se) && se.StatusCode == http.StatusNotFound {
+		err = nil // already gone; the outcome the user wanted
+	}
+	if err != nil {
+		s.log.Error("delete model failed", "model", name, "error", err)
+		w.WriteHeader(http.StatusBadGateway)
+		s.render(w, r, "model_detail.html", map[string]any{
+			"Name":  name,
+			"Error": fmt.Sprintf("Couldn't delete %s: %v", name, err),
+		})
+		return
+	}
+	s.log.Info("model deleted", "model", name, "by", currentUser(r).Username)
+
+	back := parseListState(nil)
+	if ret, err := url.Parse(r.FormValue("return")); err == nil && ret.Path == "/models" {
+		back = parseListState(ret.Query())
+	}
+	target, _ := url.Parse(back.URL())
+	q := target.Query()
+	q.Set("deleted", name)
+	target.RawQuery = q.Encode()
+	http.Redirect(w, r, target.String(), http.StatusSeeOther)
 }
 
 func (s *Server) handleModelDetail(w http.ResponseWriter, r *http.Request) {

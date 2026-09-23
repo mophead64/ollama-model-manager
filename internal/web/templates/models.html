@@ -7,10 +7,12 @@
   <title>Ollama Model Manager — Models</title>
   {{template "style" .}}
   {{template "htmx_script" .}}
+  {{template "dialog_script" .}}
 </head>
 <body>
   {{template "nav" .}}
   <main>
+    {{with .Deleted}}<div class="notice">Deleted <strong>{{.}}</strong>.</div>{{end}}
     {{if not .Error}}
     <div class="stat-grid">
       <div class="stat"><div class="value">{{.Count}}</div><div class="label">models installed</div></div>
@@ -54,6 +56,21 @@
     {{template "models_results.html" .}}
     {{template "footer" .}}
   </main>
+  {{if .AllowDelete}}
+  {{/* Shared by every row's Delete button, which fills in the model (dialog.js). */}}
+  <dialog id="delete-model-modal" aria-labelledby="delete-model-title">
+    <form method="post" action="/models/delete">
+      <h2 id="delete-model-title">Delete model?</h2>
+      <input type="hidden" name="name" data-fill="name">
+      <input type="hidden" name="return" data-fill="return">
+      <p><code data-fill="name"></code> will be removed from Ollama, freeing up to <strong data-fill="size"></strong>. You'd have to pull it again to use it.</p>
+      <div class="dialog-actions">
+        <button type="button" class="secondary" data-dialog-close>Cancel</button>
+        <button type="submit" class="danger-solid">Delete</button>
+      </div>
+    </form>
+  </dialog>
+  {{end}}
 </body>
 </html>
 {{end}}

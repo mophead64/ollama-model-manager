@@ -19,24 +19,30 @@ var templateFS embed.FS
 //go:embed static/*
 var staticFS embed.FS
 
+// Config holds the deployment settings the web layer needs.
+type Config struct {
+	ModelsDir   string // where Ollama stores models, as seen by this process; "" if unknown
+	AllowDelete bool   // whether users may delete models (ALLOW_MODEL_DELETE)
+}
+
 type Server struct {
-	ol        *ollama.Client
-	st        *store.Store
-	modelsDir string // where Ollama stores models, as seen by this process; "" if unknown
-	log       *slog.Logger
+	ol  *ollama.Client
+	st  *store.Store
+	cfg Config
+	log *slog.Logger
 
 	tmpl    *template.Template
 	updates *updateChecker
 	logins  *loginLimiter
 }
 
-func NewServer(ol *ollama.Client, st *store.Store, modelsDir string, log *slog.Logger) (*Server, error) {
+func NewServer(ol *ollama.Client, st *store.Store, cfg Config, log *slog.Logger) (*Server, error) {
 	tmpl, err := template.New("").Funcs(templateFuncs).ParseFS(templateFS, "templates/*.html")
 	if err != nil {
 		return nil, fmt.Errorf("parse templates: %w", err)
 	}
 	return &Server{
-		ol: ol, st: st, modelsDir: modelsDir, log: log,
+		ol: ol, st: st, cfg: cfg, log: log,
 		tmpl: tmpl, updates: newUpdateChecker(), logins: newLoginLimiter(),
 	}, nil
 }
@@ -62,6 +68,9 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /models", s.handleModels)
 	// Model names can contain "/" (e.g. "user/model:tag"), hence the wildcard.
 	mux.HandleFunc("GET /models/{name...}", s.handleModelDetail)
+	// The name goes in the form body: {name...} has to be the last path segment,
+	// so it can't be followed by /delete.
+	mux.HandleFunc("POST /models/delete", s.handleDeleteModel)
 
 	// Rejects cross-site POSTs (via Sec-Fetch-Site/Origin), so another page
 	// can't submit forms here using the session cookie.
@@ -74,6 +83,9 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 	if m, ok := data.(map[string]any); ok {
 		if _, set := m["Version"]; !set {
 			m["Version"] = version.Version
+		}
+		if _, set := m["AllowDelete"]; !set {
+			m["AllowDelete"] = s.cfg.AllowDelete
 		}
 		if _, set := m["User"]; !set {
 			if u := currentUser(r); u != nil {
