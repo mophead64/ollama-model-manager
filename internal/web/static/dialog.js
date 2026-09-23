@@ -6,6 +6,8 @@
 // is copied into the dialog's [data-fill="<key>"] elements (an input's value,
 // anything else's text), e.g. the model name in a shared delete confirmation.
 //
+// A [data-dismiss] button removes the .notice it's in.
+//
 // A <dialog data-dialog-autoopen> is opened as soon as the page loads: used when
 // a form inside it posts, fails server-side, and the page re-renders with the
 // error, so the user sees it without reopening the dialog.
@@ -18,6 +20,13 @@ document.addEventListener("click", function (e) {
       fill(dialog, opener);
       dialog.showModal();
     }
+    return;
+  }
+
+  var dismiss = e.target.closest("[data-dismiss]");
+  if (dismiss) {
+    var box = dismiss.closest(".notice");
+    if (box) box.remove();
     return;
   }
 
@@ -46,6 +55,16 @@ function fill(dialog, opener) {
 }
 
 document.addEventListener("DOMContentLoaded", function () {
+  // A one-off notice (e.g. ?deleted=x) is shown once: drop its query param so
+  // a refresh or bookmark doesn't bring it back.
+  document.querySelectorAll(".notice[data-clear-param]").forEach(function (n) {
+    try {
+      var url = new URL(window.location.href);
+      url.searchParams.delete(n.dataset.clearParam);
+      history.replaceState(history.state, "", url.pathname + url.search + url.hash);
+    } catch (e) {}
+  });
+
   document.querySelectorAll("dialog[data-dialog-autoopen]").forEach(function (d) {
     if (!d.open && typeof d.showModal === "function") d.showModal();
   });

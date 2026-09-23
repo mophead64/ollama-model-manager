@@ -12,7 +12,7 @@
 <body>
   {{template "nav" .}}
   <main>
-    {{with .Deleted}}<div class="notice">Deleted <strong>{{.}}</strong>.</div>{{end}}
+    {{with .Deleted}}<div class="notice" role="status" data-clear-param="deleted"><span>Deleted <strong>{{.}}</strong>.</span><button type="button" class="notice-close" data-dismiss aria-label="Dismiss">×</button></div>{{end}}
     {{if not .Error}}
     <div class="stat-grid">
       <div class="stat"><div class="value">{{.Count}}</div><div class="label">models installed</div></div>

@@ -126,7 +126,9 @@
     padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px;
     background: var(--panel); color: var(--text);
   }
-  .notice { background: var(--b-green-bg); color: var(--b-green); padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; }
+  .notice { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--b-green-bg); color: var(--b-green); padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; }
+  button.notice-close { background: none; border: none; color: inherit; font-size: 20px; line-height: 1; padding: 0 4px; opacity: .7; }
+  button.notice-close:hover { background: none; opacity: 1; }
   .account-panel { max-width: 640px; }
   .account-rows { margin: 0; }
   .account-rows > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }

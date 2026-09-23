@@ -12,7 +12,7 @@
 <body>
   {{template "nav" .}}
   <main>
-    {{with .Notice}}<div class="notice">{{.}}</div>{{end}}
+    {{with .Notice}}<div class="notice" role="status" data-clear-param="done"><span>{{.}}</span><button type="button" class="notice-close" data-dismiss aria-label="Dismiss">×</button></div>{{end}}
     <div class="panel account-panel">
       <h2>Account</h2>
       <dl class="account-rows">
