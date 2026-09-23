@@ -33,6 +33,7 @@ go.work.sum
 
 notes.txt
 /ollama-model-manager
+/bin/
 /data/
 *.db
 *.db-wal
@@ -40,3 +41,5 @@ notes.txt
 
 # suppressing github workflows for now, not ready to create a release yet
 .github/*
+# Exported container images (docker save)
+/dist/

@@ -28,8 +28,14 @@ var templateFuncs = template.FuncMap{
 		}
 		return min(100, 100*float64(completed)/float64(total))
 	},
-	"add": func(a, b int) int { return a + b },
-	"sub": func(a, b int) int { return a - b },
+	"metric": func(label string, v *float64) map[string]any { return map[string]any{"Label": label, "V": v} },
+	"chartcard": func(key, label, sub string) map[string]string {
+		return map[string]string{"Key": key, "Label": label, "Sub": sub}
+	},
+	"sev":   severity,
+	"until": formatUntil,
+	"add":   func(a, b int) int { return a + b },
+	"sub":   func(a, b int) int { return a - b },
 }
 
 func formatBytes(n int64) string {
@@ -71,6 +77,33 @@ func formatCount(n int) string {
 		s = s[:i] + "," + s[i:]
 	}
 	return s
+}
+
+// severity is the meter fill class for a usage percentage: amber when it's
+// getting full, red when it nearly is.
+func severity(pct float64) string {
+	switch {
+	case pct >= 90:
+		return "low"
+	case pct >= 75:
+		return "warn"
+	}
+	return ""
+}
+
+// formatUntil describes when a loaded model will be unloaded. Ollama reports
+// a date centuries away for models kept loaded indefinitely (keep_alive -1).
+func formatUntil(t time.Time) string {
+	d := time.Until(t)
+	switch {
+	case t.IsZero():
+		return "-"
+	case d > 100*365*24*time.Hour:
+		return "never (kept loaded)"
+	case d <= 0:
+		return "now"
+	}
+	return "in " + humanDuration(d)
 }
 
 func formatSpeed(bps float64) string {

@@ -25,5 +25,17 @@ services:
     # on a Mac: host-gateway points at the Docker VM, not the Mac.
     # extra_hosts:
     #   - "host.docker.internal:host-gateway"
+    # GPU stats on the System page. CPU and memory work everywhere. AMD (and
+    # Intel) GPUs are read from /sys with no extra setup. NVIDIA GPUs need the
+    # NVIDIA Container Toolkit on the host and this block, which mounts
+    # nvidia-smi into the container. Docker on a Mac can't see the GPU at all:
+    # run the binary natively there to get Apple silicon stats.
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [utility]
 volumes:
   omm-data:

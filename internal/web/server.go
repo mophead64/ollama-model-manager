@@ -11,6 +11,7 @@ import (
 	"github.com/mophead64/ollama-model-manager/internal/downloads"
 	"github.com/mophead64/ollama-model-manager/internal/ollama"
 	"github.com/mophead64/ollama-model-manager/internal/store"
+	"github.com/mophead64/ollama-model-manager/internal/sysinfo"
 	"github.com/mophead64/ollama-model-manager/internal/version"
 )
 
@@ -30,6 +31,7 @@ type Server struct {
 	ol  *ollama.Client
 	st  *store.Store
 	dl  *downloads.Manager
+	sys *sysinfo.Sampler
 	cfg Config
 	log *slog.Logger
 
@@ -38,13 +40,13 @@ type Server struct {
 	logins  *loginLimiter
 }
 
-func NewServer(ol *ollama.Client, st *store.Store, dl *downloads.Manager, cfg Config, log *slog.Logger) (*Server, error) {
+func NewServer(ol *ollama.Client, st *store.Store, dl *downloads.Manager, sys *sysinfo.Sampler, cfg Config, log *slog.Logger) (*Server, error) {
 	tmpl, err := template.New("").Funcs(templateFuncs).ParseFS(templateFS, "templates/*.html")
 	if err != nil {
 		return nil, fmt.Errorf("parse templates: %w", err)
 	}
 	return &Server{
-		ol: ol, st: st, dl: dl, cfg: cfg, log: log,
+		ol: ol, st: st, dl: dl, sys: sys, cfg: cfg, log: log,
 		tmpl: tmpl, updates: newUpdateChecker(), logins: newLoginLimiter(),
 	}, nil
 }
@@ -73,6 +75,11 @@ func (s *Server) Routes() http.Handler {
 	// The name goes in the form body: {name...} has to be the last path segment,
 	// so it can't be followed by /delete.
 	mux.HandleFunc("POST /models/delete", s.handleDeleteModel)
+
+	mux.HandleFunc("GET /system", s.handleSystem)
+	mux.HandleFunc("GET /system/history", s.handleSystemHistory)
+	mux.HandleFunc("GET /system/load", s.handleSystemLoad)
+	mux.HandleFunc("GET /system/running", s.handleRunningModels)
 
 	mux.HandleFunc("GET /downloads", s.handleDownloads)
 	mux.HandleFunc("POST /downloads", s.handleQueueDownload)

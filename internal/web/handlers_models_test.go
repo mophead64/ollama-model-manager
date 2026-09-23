@@ -10,10 +10,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mophead64/ollama-model-manager/internal/downloads"
 	"github.com/mophead64/ollama-model-manager/internal/ollama"
 	"github.com/mophead64/ollama-model-manager/internal/store"
+	"github.com/mophead64/ollama-model-manager/internal/sysinfo"
 )
 
 // fakeOllama serves n models named model-000:latest... plus one namespaced
@@ -33,6 +35,13 @@ func fakeOllama(t *testing.T, n int) *httptest.Server {
 			}
 			parts = append(parts, `{"name":"user/custom:v1","size":2048,"digest":"abc123","details":{"family":"qwen"},"capabilities":["completion","vision"]}`)
 			fmt.Fprintf(w, `{"models":[%s]}`, strings.Join(parts, ","))
+		case "/api/ps":
+			// One model split across CPU and GPU, one kept loaded indefinitely.
+			w.Write([]byte(`{"models":[` +
+				`{"name":"user/custom:v1","size":4000,"size_vram":2000,"context_length":8192,"expires_at":"2099-01-01T00:00:00Z"},` +
+				`{"name":"model-000:latest","size":1000,"size_vram":1000,"expires_at":"2318-01-01T00:00:00Z"}]}`))
+		case "/api/version":
+			w.Write([]byte(`{"version":"0.12.3"}`))
 		case "/api/pull":
 			for _, line := range []string{
 				`{"status":"pulling manifest"}`,
@@ -109,7 +118,7 @@ func newTestServer(t *testing.T, base string) http.Handler {
 	testManager = downloads.New(st, ollama.New(base), log)
 	testManager.SetRegistryClient(&http.Client{Transport: fakeRegistry{}})
 	testStore = st
-	s, err := NewServer(ollama.New(base), st, testManager, Config{ModelsDir: t.TempDir(), AllowDelete: true}, log)
+	s, err := NewServer(ollama.New(base), st, testManager, sysinfo.New(time.Second, time.Minute, log), Config{ModelsDir: t.TempDir(), AllowDelete: true}, log)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +145,8 @@ func TestModelsPagination(t *testing.T) {
 			t.Errorf("page 1 missing %q", want)
 		}
 	}
-	if strings.Contains(body, "user/custom:v1") {
+	// (The full page also lists it in the "loaded in memory" panel.)
+	if strings.Contains(get(h, "/models", true).Body.String(), "user/custom:v1") {
 		t.Error("page 1 should not include the last model")
 	}
 

@@ -5,3 +5,5 @@ data/
 *.db-shm
 .github
 notes.txt
+dist/
+bin/

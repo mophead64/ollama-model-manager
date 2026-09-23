@@ -1,0 +1,3 @@
+# Keep script line endings right whatever the checkout platform.
+*.sh  text eol=lf
+*.bat text eol=crlf

@@ -29,7 +29,9 @@
         <div class="label">free space unknown: mount Ollama's models folder at <code>/models</code></div>
       </div>
       {{end}}
+      {{template "load_tile" .}}
     </div>
+    {{template "running_panel" .}}
     {{end}}
     <div class="panel">
       <div class="row between">

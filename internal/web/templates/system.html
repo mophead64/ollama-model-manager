@@ -1,0 +1,160 @@
+{{define "system.html"}}
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ollama Model Manager — System</title>
+  {{template "style" .}}
+  {{template "htmx_script" .}}
+</head>
+<body>
+  {{template "nav" .}}
+  <main>
+    <div class="panel">
+      <div class="row between">
+        <h2>System</h2>
+        <span class="muted">Ollama at <code>{{.OllamaURL}}</code>{{with .OllamaVersion}} · version {{.}}{{end}}</span>
+      </div>
+      <dl class="kv">
+        <dt>Host</dt><dd>{{or .Snap.Host "-"}}</dd>
+        <dt>Platform</dt><dd>{{or .Snap.Platform "-"}}</dd>
+        <dt>CPU</dt><dd>{{or .Snap.CPUModel "-"}}{{with .Snap.CPUCores}} · {{.}} logical cores{{end}}</dd>
+        <dt>Memory</dt><dd>{{if .Snap.MemTotal}}{{bytes (int64 .Snap.MemTotal)}}{{else}}-{{end}}</dd>
+        <dt>GPUs</dt><dd>{{len .Snap.GPUs}}</dd>
+      </dl>
+      <p class="muted" style="font-size:13px; margin:14px 0 0">
+        Hardware figures are for the machine running this app. If Ollama runs somewhere else, they won't reflect its load;
+        the loaded models list always comes from Ollama itself.
+      </p>
+    </div>
+
+    {{/* Drawn and kept live by static/charts.js from /system/history. */}}
+    <div class="chart-grid" data-charts="/system/history">
+      {{template "chart_card" (chartcard "cpu" "CPU" "Busy time across all cores")}}
+      {{template "chart_card" (chartcard "mem" "Memory" "System RAM in use")}}
+      {{template "chart_card" (chartcard "gpu" "GPU" "Average utilisation across GPUs")}}
+      {{template "chart_card" (chartcard "vram" "VRAM" "Memory in use across all GPUs")}}
+    </div>
+
+    {{template "system_live.html" .}}
+    {{template "footer" .}}
+  </main>
+  <script src="/static/charts.js"></script>
+</body>
+</html>
+{{end}}
+
+{{define "chart_card"}}
+<section class="panel chart-card" data-metric="{{.Key}}" data-label="{{.Label}}">
+  <div class="row between">
+    <div><h2>{{.Label}}</h2><div class="muted chart-sub">{{.Sub}}</div></div>
+    <span class="chart-now" data-now>—</span>
+  </div>
+  <div class="chart" data-plot></div>
+  <p class="muted chart-empty" data-empty hidden>Not reported on this machine.</p>
+</section>
+{{end}}
+
+{{define "system_live.html"}}
+<div id="system-live" hx-get="/system" hx-trigger="every {{.PollEvery}} [document.visibilityState === 'visible']" hx-swap="outerHTML">
+  <div class="panel">
+    <div class="row between">
+      <h2>GPUs</h2>
+      {{if .HasVRAM}}<span class="muted">{{bytes (int64 .VRAMUsed)}} of {{bytes (int64 .VRAMTotal)}} VRAM in use</span>{{end}}
+    </div>
+    {{if .Snap.Time.IsZero}}
+      <p class="muted" style="margin:0">Collecting the first sample…</p>
+    {{else if not .Snap.GPUs}}
+      <p class="muted" style="margin:0">{{.Snap.GPUNote}}</p>
+    {{else}}
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>#</th><th>GPU</th><th>Driver</th><th>VRAM</th><th>Utilisation</th></tr></thead>
+      <tbody>
+      {{range .Snap.GPUs}}
+        <tr>
+          <td>{{.Index}}</td>
+          <td><strong>{{.Name}}</strong><div class="muted" style="font-size:12px">{{.Vendor}}{{with .Cores}} · {{.}} cores{{end}}</div></td>
+          <td>{{or .Driver "-"}}</td>
+          <td class="meter-cell">
+            {{if .HasMem}}
+            <div class="row between"><span>{{bytes (int64 .MemUsed)}} / {{bytes (int64 .MemTotal)}}{{if .Unified}} <span class="muted">(unified)</span>{{end}}</span><strong>{{pct .MemPercent}}%</strong></div>
+            <div class="progress-bar"><div class="fill {{sev .MemPercent}}" style="width: {{pct .MemPercent}}%"></div></div>
+            {{else}}<span class="muted">not reported</span>{{end}}
+          </td>
+          <td class="meter-cell">
+            {{if .HasUtil}}
+            <div class="row between"><span></span><strong>{{pct .Util}}%</strong></div>
+            <div class="progress-bar"><div class="fill {{sev .Util}}" style="width: {{pct .Util}}%"></div></div>
+            {{else}}<span class="muted">not reported</span>{{end}}
+          </td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table>
+    </div>
+    {{end}}
+  </div>
+  {{template "running_panel" .}}
+</div>
+{{end}}
+
+{{/* Models Ollama has loaded. On the models page (Compact) it polls itself and
+     stays out of the way when nothing's loaded; on the system page it's part
+     of the polled live section. */}}
+{{define "running_panel"}}
+<div id="running-panel"{{if .Compact}} hx-get="/system/running" hx-trigger="every 5s [document.visibilityState === 'visible']" hx-swap="outerHTML"{{end}}>
+  {{if or .Running (not .Compact)}}
+  <div class="panel">
+    <div class="row between">
+      <h2>Loaded in memory</h2>
+      {{if .Running}}<span class="muted">{{len .Running}} model(s) in use</span>{{end}}
+    </div>
+    {{if .RunningErr}}
+      <div class="error-box" style="margin:0">Couldn't ask Ollama which models are loaded: {{.RunningErr}}</div>
+    {{else if not .Running}}
+      <p class="muted" style="margin:0">No models are loaded right now. Ollama loads a model when it's first used and unloads it once it's been idle for a while (5 minutes by default).</p>
+    {{else}}
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Model</th><th>Size in memory</th><th>Processor</th><th>Context</th><th>Unloads</th></tr></thead>
+      <tbody>
+      {{range .Running}}
+        <tr>
+          <td><a class="model-link" href="/models/{{.Name}}">{{.Name}}</a></td>
+          <td>{{bytes .Size}}{{if .SizeVRAM}} <span class="muted">({{bytes .SizeVRAM}} VRAM)</span>{{end}}</td>
+          <td>{{.Processor}}</td>
+          <td>{{if .ContextLength}}{{count .ContextLength}}{{else}}-{{end}}</td>
+          <td>{{until .ExpiresAt}}</td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table>
+    </div>
+    {{end}}
+  </div>
+  {{end}}
+</div>
+{{end}}
+
+{{/* The models page's fourth tile: current load, polled. GPU and VRAM are
+     across every GPU in the machine. */}}
+{{define "load_tile"}}
+<a class="stat load-tile" id="load-tile" href="/system" title="System details and live graphs"
+   hx-get="/system/load" hx-trigger="every {{.PollEvery}} [document.visibilityState === 'visible']" hx-swap="outerHTML">
+  {{template "meter" (metric "CPU" .Load.CPU)}}
+  {{template "meter" (metric "Mem" .Load.Mem)}}
+  {{template "meter" (metric "GPU" .Load.GPU)}}
+  {{template "meter" (metric "VRAM" .Load.VRAM)}}
+  <div class="label">system load (all GPUs) →</div>
+</a>
+{{end}}
+
+{{define "meter"}}
+<div class="meter-row">
+  <span class="muted">{{.Label}}</span>
+  <div class="progress-bar">{{with .V}}<div class="fill {{sev .}}" style="width: {{pct .}}%"></div>{{end}}</div>
+  <span class="m-val">{{with .V}}{{pct .}}%{{else}}<span class="muted" title="Not reported on this machine">—</span>{{end}}</span>
+</div>
+{{end}}

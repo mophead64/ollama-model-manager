@@ -101,6 +101,52 @@ func (c *Client) Show(ctx context.Context, name string) (*ModelInfo, error) {
 	return &out, nil
 }
 
+// RunningModel is one entry from GET /api/ps: a model currently loaded into
+// memory. SizeVRAM is the part of Size that's on the GPU; the rest is in
+// system RAM.
+type RunningModel struct {
+	Name          string    `json:"name"`
+	Model         string    `json:"model"`
+	Size          int64     `json:"size"`
+	SizeVRAM      int64     `json:"size_vram"`
+	Digest        string    `json:"digest"`
+	Details       Details   `json:"details"`
+	ExpiresAt     time.Time `json:"expires_at"`
+	ContextLength int       `json:"context_length"` // only reported by newer Ollama versions
+}
+
+// GPUPercent is how much of the model sits in VRAM, 0-100.
+func (m RunningModel) GPUPercent() float64 {
+	if m.Size <= 0 {
+		return 0
+	}
+	return min(100, 100*float64(m.SizeVRAM)/float64(m.Size))
+}
+
+// Processor says where the model is loaded, as "ollama ps" does: "100% GPU",
+// "100% CPU", or a split like "48%/52% CPU/GPU".
+func (m RunningModel) Processor() string {
+	gpu := int(m.GPUPercent() + 0.5)
+	switch gpu {
+	case 100:
+		return "100% GPU"
+	case 0:
+		return "100% CPU"
+	}
+	return fmt.Sprintf("%d%%/%d%% CPU/GPU", 100-gpu, gpu)
+}
+
+// Running returns the models Ollama currently has loaded.
+func (c *Client) Running(ctx context.Context) ([]RunningModel, error) {
+	var out struct {
+		Models []RunningModel `json:"models"`
+	}
+	if err := c.do(ctx, http.MethodGet, "/api/ps", nil, &out); err != nil {
+		return nil, err
+	}
+	return out.Models, nil
+}
+
 // Delete removes a local model and the blobs no other model uses.
 func (c *Client) Delete(ctx context.Context, name string) error {
 	return c.do(ctx, http.MethodDelete, "/api/delete", map[string]string{"model": name}, nil)

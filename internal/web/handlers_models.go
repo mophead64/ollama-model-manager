@@ -60,6 +60,10 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 		data["Headers"] = st.headers()
 		data["ListURL"] = st.URL()
 		data["Disk"] = s.diskUsage()
+		data["Load"] = s.sys.Latest().Sample()
+		data["PollEvery"] = pollEvery(s.sys.Interval())
+		data["Running"], data["RunningErr"] = s.runningModels(r)
+		data["Compact"] = true
 		if st.Page > 1 {
 			prev := st
 			prev.Page--
