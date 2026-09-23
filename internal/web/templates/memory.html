@@ -1,0 +1,35 @@
+{{/* Loading models into memory and unloading them (handlers_memory.go). */}}
+
+{{/* The outcome of a load/unload, on the page it was done from. */}}
+{{define "flash"}}{{with .Flash}}
+  {{with .Loaded}}<div class="notice" role="status" data-clear-param="loaded"><span>Loaded <strong>{{.}}</strong> into memory.</span><button type="button" class="notice-close" data-dismiss aria-label="Dismiss">×</button></div>{{end}}
+  {{with .Unloaded}}<div class="notice" role="status" data-clear-param="unloaded"><span>Unloaded <strong>{{.}}</strong> from memory.</span><button type="button" class="notice-close" data-dismiss aria-label="Dismiss">×</button></div>{{end}}
+  {{with .Error}}<div class="notice error" role="alert" data-clear-param="memerror"><span>{{.}}</span><button type="button" class="notice-close" data-dismiss aria-label="Dismiss">×</button></div>{{end}}
+{{end}}{{end}}
+
+{{/* Shared by every Load button, which fills in the model (dialog.js). */}}
+{{define "load_dialog"}}
+<dialog id="load-model-modal" aria-labelledby="load-model-title">
+  <form method="post" action="/models/load">
+    <h2 id="load-model-title">Load model into memory</h2>
+    <input type="hidden" name="name" data-fill="name">
+    <p><code data-fill="name"></code> will be loaded now, so its next request starts straight away. Large models can take a minute or more.</p>
+    <div class="form-grid" style="margin-bottom:16px">
+      <label>Keep it loaded after its last use for
+        <select name="keep_alive">
+          {{range keepalives}}<option value="{{.Value}}">{{.Label}}</option>{{end}}
+        </select>
+      </label>
+    </div>
+    <div class="dialog-actions">
+      <button type="button" class="secondary" data-dialog-close>Cancel</button>
+      <button type="submit" data-busy="Loading…">Load</button>
+    </div>
+  </form>
+</dialog>
+{{end}}
+
+{{define "load_button"}}<button type="button" class="secondary small" data-dialog-open="load-model-modal" data-fill-name="{{.}}">Load</button>{{end}}
+
+{{/* Takes the model name. */}}
+{{define "unload_button"}}<form method="post" action="/models/unload" class="inline"><input type="hidden" name="name" value="{{.}}"><button type="submit" class="secondary small" data-busy="Unloading…">Unload</button></form>{{end}}

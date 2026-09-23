@@ -7,10 +7,12 @@
   <title>Ollama Model Manager — System</title>
   {{template "style" .}}
   {{template "htmx_script" .}}
+  {{template "dialog_script" .}}
 </head>
 <body>
   {{template "nav" .}}
   <main>
+    {{template "flash" .}}
     <div class="panel">
       <div class="row between">
         <h2>System</h2>
@@ -118,7 +120,7 @@
     {{else}}
     <div class="table-wrap">
     <table>
-      <thead><tr><th>Model</th><th>Size in memory</th><th>Processor</th><th>Context</th><th>Unloads</th></tr></thead>
+      <thead><tr><th>Model</th><th>Size in memory</th><th>Processor</th><th>Context</th><th>Unloads</th><th></th></tr></thead>
       <tbody>
       {{range .Running}}
         <tr>
@@ -127,6 +129,7 @@
           <td>{{.Processor}}</td>
           <td>{{if .ContextLength}}{{count .ContextLength}}{{else}}-{{end}}</td>
           <td>{{until .ExpiresAt}}</td>
+          <td class="actions">{{template "unload_button" .Name}}</td>
         </tr>
       {{end}}
       </tbody>

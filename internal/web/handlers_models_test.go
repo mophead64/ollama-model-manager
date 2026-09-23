@@ -23,9 +23,13 @@ import (
 // deletedModels records the /api/delete bodies fakeOllama received.
 var deletedModels []string
 
+// generateCalls records the /api/generate (load/unload) bodies fakeOllama received.
+var generateCalls []string
+
 func fakeOllama(t *testing.T, n int) *httptest.Server {
 	t.Helper()
 	deletedModels = nil
+	generateCalls = nil
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/tags":
@@ -40,6 +44,15 @@ func fakeOllama(t *testing.T, n int) *httptest.Server {
 			w.Write([]byte(`{"models":[` +
 				`{"name":"user/custom:v1","size":4000,"size_vram":2000,"context_length":8192,"expires_at":"2099-01-01T00:00:00Z"},` +
 				`{"name":"model-000:latest","size":1000,"size_vram":1000,"expires_at":"2318-01-01T00:00:00Z"}]}`))
+		case "/api/generate":
+			body, _ := io.ReadAll(r.Body)
+			if strings.Contains(string(body), "fail-me") {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(`{"error":"model requires more system memory (12 GiB) than is available (4 GiB)"}`))
+				return
+			}
+			generateCalls = append(generateCalls, string(body))
+			w.Write([]byte(`{"done":true}`))
 		case "/api/version":
 			w.Write([]byte(`{"version":"0.12.3"}`))
 		case "/api/pull":

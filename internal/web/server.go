@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/mophead64/ollama-model-manager/internal/downloads"
 	"github.com/mophead64/ollama-model-manager/internal/ollama"
@@ -75,6 +76,8 @@ func (s *Server) Routes() http.Handler {
 	// The name goes in the form body: {name...} has to be the last path segment,
 	// so it can't be followed by /delete.
 	mux.HandleFunc("POST /models/delete", s.handleDeleteModel)
+	mux.HandleFunc("POST /models/load", s.handleLoadModel)
+	mux.HandleFunc("POST /models/unload", s.handleUnloadModel)
 
 	mux.HandleFunc("GET /system", s.handleSystem)
 	mux.HandleFunc("GET /system/history", s.handleSystemHistory)
@@ -101,6 +104,12 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 		if _, set := m["Version"]; !set {
 			m["Version"] = version.Version
 		}
+		if _, set := m["Flash"]; !set && r.Method == http.MethodGet {
+			m["Flash"] = readFlash(r.URL.Query())
+		}
+		if _, set := m["Nav"]; !set {
+			m["Nav"] = navSection(r.URL.Path)
+		}
 		if _, set := m["AllowDelete"]; !set {
 			m["AllowDelete"] = s.cfg.AllowDelete
 		}
@@ -119,6 +128,13 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 		s.log.Error("template render failed", "template", name, "error", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 	}
+}
+
+// navSection is the nav link to highlight for a page: the first path segment,
+// so detail pages (/models/x, /downloads/7) light up their section.
+func navSection(path string) string {
+	section, _, _ := strings.Cut(strings.TrimPrefix(path, "/"), "/")
+	return section
 }
 
 type errMsg string

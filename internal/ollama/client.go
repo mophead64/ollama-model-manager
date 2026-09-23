@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -147,6 +148,40 @@ func (c *Client) Running(ctx context.Context) ([]RunningModel, error) {
 	return out.Models, nil
 }
 
+// Load loads a model into memory without running it. keepAlive is how long
+// Ollama keeps it loaded once idle: a duration like "30m", "-1" for until
+// it's unloaded, or "" for the server's default (OLLAMA_KEEP_ALIVE, 5m unless
+// set). Big models can take minutes to load, so this has no timeout of its
+// own; ctx should carry one.
+func (c *Client) Load(ctx context.Context, name, keepAlive string) error {
+	body := map[string]any{"model": name}
+	switch keepAlive {
+	case "":
+	case "-1":
+		body["keep_alive"] = -1
+	default:
+		body["keep_alive"] = keepAlive
+	}
+	return c.generateOrEmbed(ctx, body)
+}
+
+// Unload evicts a model from memory straight away.
+func (c *Client) Unload(ctx context.Context, name string) error {
+	return c.generateOrEmbed(ctx, map[string]any{"model": name, "keep_alive": 0})
+}
+
+// generateOrEmbed sends an empty request, which only loads/unloads the model
+// (per keep_alive), to /api/generate, or to /api/embed for embedding models,
+// which refuse generate requests.
+func (c *Client) generateOrEmbed(ctx context.Context, body map[string]any) error {
+	err := c.doWith(ctx, c.stream, http.MethodPost, "/api/generate", body, nil)
+	var se *StatusError
+	if errors.As(err, &se) && se.StatusCode == http.StatusBadRequest && strings.Contains(se.Message, "does not support generate") {
+		err = c.doWith(ctx, c.stream, http.MethodPost, "/api/embed", body, nil)
+	}
+	return err
+}
+
 // Delete removes a local model and the blobs no other model uses.
 func (c *Client) Delete(ctx context.Context, name string) error {
 	return c.do(ctx, http.MethodDelete, "/api/delete", map[string]string{"model": name}, nil)
@@ -163,6 +198,12 @@ func (e *StatusError) Error() string {
 }
 
 func (c *Client) do(ctx context.Context, method, path string, body, out any) error {
+	return c.doWith(ctx, c.http, method, path, body, out)
+}
+
+// doWith is do on a given HTTP client: c.stream for calls that can outlast
+// c.http's timeout.
+func (c *Client) doWith(ctx context.Context, hc *http.Client, method, path string, body, out any) error {
 	var rdr io.Reader
 	if body != nil {
 		b, err := json.Marshal(body)
@@ -178,7 +219,7 @@ func (c *Client) do(ctx context.Context, method, path string, body, out any) err
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	resp, err := c.http.Do(req)
+	resp, err := hc.Do(req)
 	if err != nil {
 		return fmt.Errorf("contact ollama at %s: %w", c.base, err)
 	}

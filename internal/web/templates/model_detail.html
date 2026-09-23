@@ -12,6 +12,7 @@
 <body>
   {{template "nav" .}}
   <main>
+    {{template "flash" .}}
     <p><a href="/models" class="muted">← All models</a></p>
     {{if .Error}}
       <div class="error-box">{{.Error}}</div>
@@ -20,7 +21,10 @@
     <div class="panel">
       <div class="row between">
         <h2 class="mono" style="margin:0">{{$.Name}}</h2>
-        {{if $.AllowDelete}}<button type="button" class="danger small" data-dialog-open="delete-model-modal">Delete model</button>{{end}}
+        <div class="row">
+          {{if $.Loaded}}{{template "unload_button" $.Name}}{{else}}{{template "load_button" $.Name}}{{end}}
+          {{if $.AllowDelete}}<button type="button" class="danger small" data-dialog-open="delete-model-modal">Delete model</button>{{end}}
+        </div>
       </div>
       <div style="height:14px"></div>
       <dl class="kv">
@@ -28,6 +32,8 @@
         <dt>Parameters</dt><dd>{{or .Details.ParameterSize "-"}}</dd>
         <dt>Quantization</dt><dd>{{or .Details.QuantizationLevel "-"}}</dd>
         <dt>Format</dt><dd>{{or .Details.Format "-"}}</dd>
+        <dt>In memory</dt><dd>{{with $.Loaded}}<span class="badge on">loaded</span> {{bytes .Size}} · {{.Processor}}{{else}}<span class="muted">not loaded</span>{{end}}</dd>
+        {{with $.Loaded}}<dt>Unloads</dt><dd>{{until .ExpiresAt}}</dd>{{end}}
         {{if .Details.ParentModel}}<dt>Based on</dt><dd><a href="/models/{{.Details.ParentModel}}">{{.Details.ParentModel}}</a></dd>{{end}}
         {{with $.Model}}
         <dt>Size on disk</dt><dd>{{bytes .Size}}</dd>
@@ -67,6 +73,7 @@
     {{end}}
     {{template "footer" .}}
   </main>
+  {{if .Info}}{{template "load_dialog" .}}{{end}}
   {{if and .AllowDelete .Info}}
   <dialog id="delete-model-modal" aria-labelledby="delete-model-title">
     <form method="post" action="/models/delete">

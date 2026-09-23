@@ -32,10 +32,11 @@ var templateFuncs = template.FuncMap{
 	"chartcard": func(key, label, sub string) map[string]string {
 		return map[string]string{"Key": key, "Label": label, "Sub": sub}
 	},
-	"sev":   severity,
-	"until": formatUntil,
-	"add":   func(a, b int) int { return a + b },
-	"sub":   func(a, b int) int { return a - b },
+	"sev":        severity,
+	"keepalives": func() []keepAliveOption { return keepAliveOptions },
+	"until":      formatUntil,
+	"add":        func(a, b int) int { return a + b },
+	"sub":        func(a, b int) int { return a - b },
 }
 
 func formatBytes(n int64) string {
@@ -125,7 +126,7 @@ func took(start, end *time.Time) string {
 	return humanDuration(e.Sub(*start))
 }
 
-// humanDuration renders 45s, 3m 12s, 2h 5m 12s, or 1d 4h 5m 12s (from Deduper).
+// humanDuration renders 45s, 3m 12s, 2h 5m 12s, or 1d 4h 5m 12s.
 func humanDuration(d time.Duration) string {
 	s := int64(d.Round(time.Second) / time.Second)
 	if s < 0 {

@@ -1,4 +1,4 @@
-// Generic <dialog> opener, ported from QA Tracker. A button with
+// Generic <dialog> opener. A button with
 // data-dialog-open="<id>" opens that dialog modally; data-dialog-close (anywhere
 // inside a dialog) closes it, as does a click on the backdrop.
 //
@@ -8,6 +8,9 @@
 // form's action), e.g. the model name in a shared delete confirmation.
 //
 // A [data-dismiss] button removes the .notice it's in.
+//
+// A submit button with data-busy="Loading…" is disabled and relabelled, with a
+// spinner, while its form submits, for actions that take a while.
 //
 // A <dialog data-dialog-autoopen> is opened as soon as the page loads: used when
 // a form inside it posts, fails server-side, and the page re-renders with the
@@ -70,5 +73,28 @@ document.addEventListener("DOMContentLoaded", function () {
 
   document.querySelectorAll("dialog[data-dialog-autoopen]").forEach(function (d) {
     if (!d.open && typeof d.showModal === "function") d.showModal();
+  });
+});
+
+document.addEventListener("submit", function (e) {
+  var btn = e.submitter && e.submitter.matches("[data-busy]") ? e.submitter : e.target.querySelector("button[data-busy]");
+  if (!btn || e.defaultPrevented) return;
+  // Disabled after this tick, so the button still counts as the submitter.
+  setTimeout(function () {
+    btn.dataset.idleText = btn.textContent;
+    btn.textContent = btn.dataset.busy;
+    btn.classList.add("busy");
+    btn.disabled = true;
+  }, 0);
+});
+
+// Coming back to a page via the back button restores it from cache as it was
+// left, busy buttons included; put them back.
+window.addEventListener("pageshow", function (e) {
+  if (!e.persisted) return;
+  document.querySelectorAll("button.busy").forEach(function (btn) {
+    btn.textContent = btn.dataset.idleText || btn.textContent;
+    btn.classList.remove("busy");
+    btn.disabled = false;
   });
 });

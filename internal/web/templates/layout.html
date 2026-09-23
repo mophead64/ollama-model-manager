@@ -61,6 +61,7 @@
   nav .brand { font-weight: 700; font-size: 17px; }
   nav a { color: var(--muted); text-decoration: none; font-weight: 500; }
   nav a:hover, nav a.active { color: var(--text); }
+  nav a.active { text-decoration: underline 2px var(--accent); text-underline-offset: 6px; }
   /* Wide enough for the models table to breathe, capped so lines stay readable on big monitors. */
   main { max-width: 1600px; margin: 0 auto; padding: 24px clamp(24px, 4vw, 48px); }
   .panel {
@@ -116,6 +117,15 @@
   .badge.info { background: var(--b-gray-bg); color: var(--b-gray); }
   .nav-badge { display: inline-block; min-width: 18px; padding: 0 6px; margin-left: 2px; border-radius: 999px; background: var(--accent); color: white; font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; }
   .notice.warning { background: var(--b-amber-bg); color: var(--b-amber); }
+  .notice.error { background: var(--b-red-bg); color: var(--b-red); }
+  button.busy { cursor: progress; opacity: .85; }
+  button.busy::before {
+    content: ""; display: inline-block; width: 11px; height: 11px; margin-right: 6px; vertical-align: -1px;
+    border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%;
+    animation: spin .7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { button.busy::before { animation-duration: 2s; } }
   .live-card { border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 14px; }
   .live-card .progress-bar { height: 10px; margin: 10px 0 8px; }
   .live-stats { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--muted); }
@@ -157,7 +167,7 @@
   .auth-box { max-width: 380px; margin: 8vh auto 0; }
   .form-grid { display: grid; gap: 12px; max-width: 380px; }
   .form-grid label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
-  .form-grid input { width: 100%; }
+  .form-grid input, .form-grid select { width: 100%; }
   input[type=password] {
     padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px;
     background: var(--panel); color: var(--text);
@@ -265,9 +275,9 @@
 {{define "nav"}}
 <nav>
   <span class="brand">Ollama Model Manager</span>
-  {{if .User}}<a href="/models">Models</a>
-  <a href="/downloads">Downloads {{template "nav_dl_badge" .}}</a>
-  <a href="/system">System</a>{{end}}
+  {{if .User}}<a href="/models"{{template "nav_current" (eq .Nav "models")}}>Models</a>
+  <a href="/downloads"{{template "nav_current" (eq .Nav "downloads")}}>Downloads {{template "nav_dl_badge" .}}</a>
+  <a href="/system"{{template "nav_current" (eq .Nav "system")}}>System</a>{{end}}
   <div class="theme-switch" role="group" aria-label="Colour theme">
     <button type="button" class="secondary" data-theme-choice="auto">Auto</button>
     <button type="button" class="secondary" data-theme-choice="dark">Dark</button>
@@ -303,12 +313,15 @@
   </script>
   {{with .User}}
   <div class="nav-user">
-    <a href="/account" title="Account settings">{{.Username}}</a>
+    <a href="/account" title="Account settings"{{template "nav_current" (eq $.Nav "account")}}>{{.Username}}</a>
     <form method="post" action="/logout" class="inline"><button type="submit" class="secondary small">Log out</button></form>
   </div>
   {{end}}
 </nav>
 {{end}}
+
+{{/* Marks a nav link as the current page when passed true. */}}
+{{define "nav_current"}}{{if .}} class="active" aria-current="page"{{end}}{{end}}
 
 {{/* Count of queued + running downloads. The downloads panel re-sends it
      out-of-band on each poll so it stays current there. */}}

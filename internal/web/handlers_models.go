@@ -62,8 +62,14 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 		data["Disk"] = s.diskUsage()
 		data["Load"] = s.sys.Latest().Sample()
 		data["PollEvery"] = pollEvery(s.sys.Interval())
-		data["Running"], data["RunningErr"] = s.runningModels(r)
+		running, runErr := s.runningModels(r)
+		data["Running"], data["RunningErr"] = running, runErr
 		data["Compact"] = true
+		loaded := make(map[string]bool, len(running))
+		for _, m := range running {
+			loaded[m.Name] = true
+		}
+		data["LoadedNames"] = loaded // rows offer Unload instead of Load
 		if st.Page > 1 {
 			prev := st
 			prev.Page--
@@ -215,6 +221,14 @@ func (s *Server) handleModelDetail(w http.ResponseWriter, r *http.Request) {
 	default:
 		data["Info"] = info
 		data["Meta"] = flattenModelInfo(info.ModelInfo)
+		if running, err := s.ol.Running(r.Context()); err == nil {
+			for _, m := range running {
+				if m.Name == name || m.Model == name {
+					data["Loaded"] = m
+					break
+				}
+			}
+		}
 		// /api/show doesn't report size or digest; pick them up from the list.
 		if all, err := s.ol.List(r.Context()); err == nil {
 			for _, m := range all {

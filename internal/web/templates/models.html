@@ -12,6 +12,7 @@
 <body>
   {{template "nav" .}}
   <main>
+    {{template "flash" .}}
     {{with .Deleted}}<div class="notice" role="status" data-clear-param="deleted"><span>Deleted <strong>{{.}}</strong>.</span><button type="button" class="notice-close" data-dismiss aria-label="Dismiss">×</button></div>{{end}}
     {{if not .Error}}
     <div class="stat-grid">
@@ -58,6 +59,7 @@
     {{template "models_results.html" .}}
     {{template "footer" .}}
   </main>
+  {{template "load_dialog" .}}
   {{if .AllowDelete}}
   {{/* Shared by every row's Delete button, which fills in the model (dialog.js). */}}
   <dialog id="delete-model-modal" aria-labelledby="delete-model-title">

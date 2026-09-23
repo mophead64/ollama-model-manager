@@ -76,3 +76,43 @@ func TestDelete(t *testing.T) {
 		t.Errorf("missing model err = %v", err)
 	}
 }
+
+func TestLoadUnload(t *testing.T) {
+	var calls []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		calls = append(calls, r.URL.Path+" "+string(b))
+		if r.URL.Path == "/api/generate" && strings.Contains(string(b), "embedder") {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(`{"error":"\"embedder\" does not support generate"}`))
+			return
+		}
+		w.Write([]byte(`{"done":true}`))
+	}))
+	defer srv.Close()
+	c := New(srv.URL)
+	ctx := context.Background()
+
+	for _, step := range []struct {
+		call func() error
+		want []string
+	}{
+		{func() error { return c.Load(ctx, "llama", "") }, []string{`/api/generate {"model":"llama"}`}},
+		{func() error { return c.Load(ctx, "llama", "30m") }, []string{`/api/generate {"keep_alive":"30m","model":"llama"}`}},
+		{func() error { return c.Load(ctx, "llama", "-1") }, []string{`/api/generate {"keep_alive":-1,"model":"llama"}`}},
+		{func() error { return c.Unload(ctx, "llama") }, []string{`/api/generate {"keep_alive":0,"model":"llama"}`}},
+		// Embedding models refuse generate, so they're sent to /api/embed.
+		{func() error { return c.Unload(ctx, "embedder") }, []string{
+			`/api/generate {"keep_alive":0,"model":"embedder"}`,
+			`/api/embed {"keep_alive":0,"model":"embedder"}`,
+		}},
+	} {
+		if err := step.call(); err != nil {
+			t.Fatal(err)
+		}
+		if strings.Join(calls, "\n") != strings.Join(step.want, "\n") {
+			t.Errorf("requests = %q, want %q", calls, step.want)
+		}
+		calls = nil
+	}
+}
