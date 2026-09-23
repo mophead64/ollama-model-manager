@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/mophead64/ollama-model-manager/internal/ollama"
 )
 
 var templateFuncs = template.FuncMap{
@@ -35,8 +37,11 @@ var templateFuncs = template.FuncMap{
 	"sev":        severity,
 	"keepalives": func() []keepAliveOption { return keepAliveOptions },
 	"until":      formatUntil,
+	"unloads":    unloadsPhrase,
 	"ago":        timeAgo,
 	"lastused":   lastUsedOf,
+	"canchat":    canChat,
+	"pickeritem": func(m ollama.Model, loaded bool) map[string]any { return map[string]any{"Model": m, "Loaded": loaded} },
 	"add":        func(a, b int) int { return a + b },
 	"sub":        func(a, b int) int { return a - b },
 }
@@ -142,6 +147,21 @@ func lastUsedOf(lastUsed map[string]time.Time, name string) *time.Time {
 		return nil
 	}
 	return &t
+}
+
+// unloadsPhrase is formatUntil for running text: "unloads in 4m 0s",
+// "stays loaded until unloaded", "unloading now".
+func unloadsPhrase(t time.Time) string {
+	switch s := formatUntil(t); s {
+	case "never (kept loaded)":
+		return "stays loaded until unloaded"
+	case "now":
+		return "unloading now"
+	case "-":
+		return ""
+	default:
+		return "unloads " + s
+	}
 }
 
 func formatSpeed(bps float64) string {

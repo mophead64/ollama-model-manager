@@ -80,6 +80,7 @@
           <td>{{with .FinishedAt}}{{time .}}{{else}}-{{end}}</td>
           <td>{{.RequestedBy}}</td>
           <td class="actions">
+            {{if eq .Status "completed"}}<a class="btn small" href="/chat?model={{.Model}}" title="Chat with it to check it works">Chat</a>{{end}}
             <a class="btn secondary small" href="/downloads/{{.ID}}">Log</a>
             {{if .Retryable}}<button type="button" class="small" data-dialog-open="retry-modal"
                 data-fill-model="{{.Model}}" data-fill-action="/downloads/{{.ID}}/retry">Retry</button>{{end}}

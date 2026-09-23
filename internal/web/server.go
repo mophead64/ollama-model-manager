@@ -78,6 +78,9 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /models/delete", s.handleDeleteModel)
 	mux.HandleFunc("POST /models/load", s.handleLoadModel)
 	mux.HandleFunc("POST /models/unload", s.handleUnloadModel)
+	mux.HandleFunc("GET /chat", s.handleChatPage)
+	mux.HandleFunc("GET /chat/model", s.handleChatModelInfo)
+	mux.HandleFunc("POST /chat", s.handleChat)
 
 	mux.HandleFunc("GET /state", s.handleState)
 	mux.HandleFunc("GET /system", s.handleSystem)

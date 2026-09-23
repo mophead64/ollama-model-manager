@@ -40,6 +40,7 @@
         <td>{{with lastused $.LastUsed .Name}}<span title="{{time .}}">{{ago .}}</span>{{else}}<span class="muted" title="Not seen in use since this app started tracking">—</span>{{end}}</td>
         <td>{{with .Capabilities}}<div class="caps">{{range .}}<span class="badge cap">{{.}}</span>{{end}}</div>{{else}}<span class="muted">-</span>{{end}}</td>
         <td class="actions">
+          {{if canchat .Capabilities}}<a class="btn secondary small" href="/chat?model={{.Name}}">Chat</a>{{end}}
           {{if index $.LoadedNames .Name}}{{template "unload_button" .Name}}{{else}}{{template "load_button" .Name}}{{end}}
           {{if $.AllowDelete}}<button type="button" class="danger small" data-dialog-open="delete-model-modal"
             data-fill-name="{{.Name}}" data-fill-size="{{bytes .Size}}" data-fill-return="{{$.ListURL}}">Delete</button>{{end}}

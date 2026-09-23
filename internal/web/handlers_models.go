@@ -241,6 +241,7 @@ func (s *Server) handleModelDetail(w http.ResponseWriter, r *http.Request) {
 		data["Info"] = info
 		data["Meta"] = flattenModelInfo(info.ModelInfo)
 		s.addMemoryState(r, name, data)
+		data["CanChat"] = canChat(info.Capabilities)
 		// /api/show doesn't report size or digest; pick them up from the list.
 		if all, err := s.ol.List(r.Context()); err == nil {
 			for _, m := range all {

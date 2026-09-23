@@ -21,7 +21,10 @@
     <div class="panel">
       <div class="row between">
         <h2 class="mono" style="margin:0">{{$.Name}}</h2>
-        {{if $.AllowDelete}}<button type="button" class="danger small" data-dialog-open="delete-model-modal">Delete model</button>{{end}}
+        <div class="row">
+          {{if $.CanChat}}<a class="btn secondary small" href="/chat?model={{$.Name}}">Chat</a>{{end}}
+          {{if $.AllowDelete}}<button type="button" class="danger small" data-dialog-open="delete-model-modal">Delete model</button>{{end}}
+        </div>
       </div>
       {{template "model_memory" $}}
       <dl class="kv">
@@ -94,10 +97,11 @@
      hx-trigger="state-changed from:body, every 15s [document.visibilityState === 'visible']" hx-swap="outerHTML">
   <div class="memory-facts">
     <span><span class="muted">In memory</span>
-      {{with .Loaded}}<span class="badge on">loaded</span> {{bytes .Size}} · {{.Processor}} · unloads {{until .ExpiresAt}}{{else}}<span class="muted">not loaded</span>{{end}}</span>
+      {{with .Loaded}}<span class="badge on">loaded</span> {{bytes .Size}} · {{.Processor}} · {{unloads .ExpiresAt}}{{else}}<span class="muted">not loaded</span>{{end}}</span>
     <span><span class="muted">Last used</span>
       {{with .LastUsedAt}}<span title="{{time .}}">{{ago .}}</span>{{else}}<span class="muted" title="Not seen in use since this app started tracking">—</span>{{end}}</span>
   </div>
   {{if .Loaded}}{{template "unload_button" .Name}}{{else}}{{template "load_button" .Name}}{{end}}
 </div>
 {{end}}
+

@@ -35,7 +35,7 @@
         {{if .Active}}<form method="post" action="/downloads/{{.ID}}/cancel" class="inline"><input type="hidden" name="from" value="detail"><button type="submit" class="danger small">Cancel</button></form>{{end}}
         {{if .Retryable}}<button type="button" class="small" data-dialog-open="retry-modal"
             data-fill-model="{{.Model}}" data-fill-action="/downloads/{{.ID}}/retry">Retry</button>{{end}}
-        {{if eq .Status "completed"}}<a class="btn secondary small" href="/models/{{.Model}}">View model</a>{{end}}
+        {{if eq .Status "completed"}}<a class="btn small" href="/chat?model={{.Model}}">Chat</a> <a class="btn secondary small" href="/models/{{.Model}}">View model</a>{{end}}
       </div>
     </div>
     {{with $.Live}}

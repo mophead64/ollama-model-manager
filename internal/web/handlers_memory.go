@@ -68,11 +68,11 @@ func (s *Server) handleLoadModel(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	if err := s.ol.Load(ctx, name, keep); err != nil {
 		s.log.Error("load model failed", "model", name, "error", err)
-		s.backTo(w, r, "memerror", fmt.Sprintf("Couldn't load %s: %s", name, describeOllamaErr(err)))
+		s.memoryDone(w, r, "memerror", fmt.Sprintf("Couldn't load %s: %s", name, describeOllamaErr(err)))
 		return
 	}
 	s.log.Info("model loaded", "model", name, "keep_alive", keep, "took", time.Since(start).Round(time.Millisecond), "by", currentUser(r).Username)
-	s.backTo(w, r, "loaded", name)
+	s.memoryDone(w, r, "loaded", name)
 }
 
 // handleUnloadModel frees the memory a loaded model is using.
@@ -86,11 +86,11 @@ func (s *Server) handleUnloadModel(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	if err := s.ol.Unload(ctx, name); err != nil {
 		s.log.Error("unload model failed", "model", name, "error", err)
-		s.backTo(w, r, "memerror", fmt.Sprintf("Couldn't unload %s: %s", name, describeOllamaErr(err)))
+		s.memoryDone(w, r, "memerror", fmt.Sprintf("Couldn't unload %s: %s", name, describeOllamaErr(err)))
 		return
 	}
 	s.log.Info("model unloaded", "model", name, "by", currentUser(r).Username)
-	s.backTo(w, r, "unloaded", name)
+	s.memoryDone(w, r, "unloaded", name)
 }
 
 // describeOllamaErr prefers Ollama's own message (e.g. "model requires more
@@ -101,6 +101,23 @@ func describeOllamaErr(err error) string {
 		return se.Message
 	}
 	return err.Error()
+}
+
+// memoryDone reports how a load/unload went. A plain form post goes back to
+// its page with a notice (backTo). An htmx one, from a page that mustn't be
+// reloaded (the chat, mid-conversation), gets nothing on success but an
+// event that refreshes the page's views, or an error box to show.
+func (s *Server) memoryDone(w http.ResponseWriter, r *http.Request, key, value string) {
+	if r.Header.Get("HX-Request") != "true" {
+		s.backTo(w, r, key, value)
+		return
+	}
+	if key == "memerror" {
+		s.render(w, r, "error_fragment.html", map[string]any{"Error": value})
+		return
+	}
+	w.Header().Set("HX-Trigger", "state-changed")
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // backTo redirects to the page the form was submitted from (its Referer,

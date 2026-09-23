@@ -1,0 +1,122 @@
+{{define "chat.html"}}
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ollama Model Manager — Chat</title>
+  {{template "style" .}}
+  {{template "htmx_script" .}}
+  {{template "dialog_script" .}}
+</head>
+<body>
+  {{template "nav" .}}
+  <main>
+    {{if .Error}}
+      <div class="error-box">Couldn't list models from Ollama: {{.Error}}</div>
+    {{else if not .Models}}
+      <div class="panel">
+        <h2>Chat</h2>
+        <p class="muted" style="margin:0">There are no models to chat with yet. <a class="hint-link" style="display:inline" href="/downloads">Download one</a> to get started.</p>
+      </div>
+    {{else}}
+    <div class="chat-layout">
+      <aside class="chat-side">
+        <div class="panel">
+          <h2 id="picker-label">Model</h2>
+          {{template "model_picker" .}}
+        </div>
+        {{if .Info}}{{template "chat_model_info" .Info}}{{else}}<div id="chat-model-info"></div>{{end}}
+      </aside>
+
+      {{/* static/chat.js; data-model follows the picker. */}}
+      <section class="panel chat" id="chat" data-model="{{with .Selected}}{{.Name}}{{end}}">
+        <div class="row between">
+          <h2 style="margin:0">Chat</h2>
+          <button type="button" class="secondary small" data-chat-clear hidden>Clear</button>
+        </div>
+        <p class="muted chat-intro">A quick way to check a model works. Nothing is saved, and you can switch models mid-conversation to compare them. The first message loads the model if it isn't loaded already.</p>
+        <div class="chat-log" data-chat-log aria-live="polite"></div>
+        <form class="chat-form" data-chat-form>
+          <textarea name="prompt" rows="2" aria-label="Message" required {{if not .Selected}}disabled{{end}}
+            placeholder="{{if .Selected}}Say something… (Enter to send, Shift+Enter for a new line){{else}}Pick a model first{{end}}"></textarea>
+          <div class="chat-buttons">
+            <button type="submit" data-chat-send {{if not .Selected}}disabled{{end}}>Send</button>
+            <button type="button" class="secondary" data-chat-stop hidden>Stop</button>
+          </div>
+        </form>
+      </section>
+    </div>
+    {{end}}
+  </main>
+  {{template "footer" .}}
+  <script src="/static/chat.js"></script>
+</body>
+</html>
+{{end}}
+
+{{/* A dropdown of the models that can chat, each with its size. Behaviour
+     (open/close, filtering, keyboard) is in static/chat.js. */}}
+{{define "model_picker"}}
+<div class="dropdown" data-picker>
+  <button type="button" class="dropdown-toggle" data-picker-toggle aria-haspopup="listbox" aria-expanded="false" aria-labelledby="picker-label picker-current">
+    <span id="picker-current" data-picker-current>
+      {{with .Selected}}{{template "picker_item_body" (pickeritem . (index $.LoadedNames .Name))}}{{else}}<span class="muted">Choose a model…</span>{{end}}
+    </span>
+    <span class="caret" aria-hidden="true"></span>
+  </button>
+  <div class="dropdown-menu" data-picker-menu hidden>
+    {{if gt (len .Models) 6}}<input type="search" class="dropdown-filter" data-picker-filter placeholder="Filter models" aria-label="Filter models" autocomplete="off">{{end}}
+    <div role="listbox" aria-labelledby="picker-label" data-picker-list>
+      {{range .Models}}
+      <div class="dropdown-item" role="option" tabindex="-1" data-value="{{.Name}}"
+           aria-selected="{{if and $.Selected (eq $.Selected.Name .Name)}}true{{else}}false{{end}}">
+        {{template "picker_item_body" (pickeritem . (index $.LoadedNames .Name))}}
+      </div>
+      {{end}}
+    </div>
+    <p class="dropdown-empty muted" data-picker-empty hidden>No models match.</p>
+  </div>
+</div>
+{{end}}
+
+{{/* One model's line in the picker: its name, then parameters and size. */}}
+{{define "picker_item_body"}}
+<span class="item-name">{{.Model.Name}}</span>
+<span class="item-meta">{{with .Model.Details.ParameterSize}}{{.}} · {{end}}{{bytes .Model.Size}}{{if .Loaded}} · <span class="badge on">loaded</span>{{end}}</span>
+{{end}}
+
+{{/* The picked model's key properties. Refreshes itself when models are
+     loaded or used (the footer's state watcher), and every 15s for the
+     unload countdown. */}}
+{{define "chat_model_info"}}
+<div class="panel" id="chat-model-info"{{with .Name}} hx-get="/chat/model?name={{.}}"
+     hx-trigger="state-changed from:body, every 15s [document.visibilityState === 'visible']" hx-swap="outerHTML"{{end}}>
+  {{if .Error}}
+    <div class="error-box" style="margin:0">{{.Error}}</div>
+  {{else}}{{with .Model}}
+  <div class="row between">
+    <h2 style="margin:0" class="mono">{{.Name}}</h2>
+    <a class="hint-link" style="display:inline; margin:0" href="/models/{{.Name}}">Details →</a>
+  </div>
+  <dl class="kv" style="margin-top:12px">
+    <dt>Family</dt><dd>{{or .Details.Family "-"}}</dd>
+    <dt>Parameters</dt><dd>{{or .Details.ParameterSize "-"}}</dd>
+    <dt>Quantization</dt><dd>{{or .Details.QuantizationLevel "-"}}</dd>
+    <dt>Context</dt><dd>{{if .Details.ContextLength}}{{count .Details.ContextLength}} tokens{{else}}-{{end}}</dd>
+    <dt>Size</dt><dd>{{bytes .Size}}</dd>
+    <dt>Capabilities</dt><dd>{{with .Capabilities}}<div class="caps">{{range .}}<span class="badge cap">{{.}}</span>{{end}}</div>{{else}}<span class="muted">not reported</span>{{end}}</dd>
+    <dt>In memory</dt><dd>{{with $.Loaded}}<span class="badge on">loaded</span> {{.Processor}} · {{unloads .ExpiresAt}}{{else}}<span class="muted">not loaded</span>{{end}}</dd>
+    <dt>Last used</dt><dd>{{with $.LastUsedAt}}<span title="{{time .}}">{{ago .}}</span>{{else}}<span class="muted">—</span>{{end}}</dd>
+  </dl>
+  {{if $.Loaded}}
+  {{/* In place (htmx), so the conversation isn't lost to a page reload. */}}
+  <form hx-post="/models/unload" hx-target="#chat-model-msg" style="margin-top:14px">
+    <input type="hidden" name="name" value="{{.Name}}">
+    <button type="submit" class="secondary small" data-busy="Unloading…">Unload from memory</button>
+  </form>
+  {{end}}
+  <div id="chat-model-msg"></div>
+  {{end}}{{end}}
+</div>
+{{end}}
