@@ -213,11 +213,40 @@
   button.notice-close { background: none; border: none; color: inherit; font-size: 20px; line-height: 1; padding: 0 4px; opacity: .7; }
   button.notice-close:hover { background: none; opacity: 1; }
   .account-panel { max-width: 640px; }
+  /* Account and configuration on the left, Hugging Face on the right. */
+  .account-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+  .account-layout .account-panel { max-width: none; }
+  .account-layout.single { grid-template-columns: minmax(0, 640px); }
+  .account-main { display: flex; flex-direction: column; gap: 16px; }
+  .account-main > .panel, .account-layout > .panel { margin: 0; }
+  @media (max-width: 1000px) { .account-layout { grid-template-columns: minmax(0, 1fr); } }
   .account-rows { margin: 0; }
   .account-rows > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
   .account-rows > div:last-child { border-bottom: none; }
   .account-rows dt { color: var(--muted); font-size: 14px; }
   .account-rows dd { margin: 0; display: flex; align-items: center; gap: 12px; font-weight: 500; }
+  .release-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-bottom: 12px; }
+  .release-head strong { font-size: 16px; }
+  .release-head .muted { font-size: 13px; }
+  .release-body button.link { background: none; border: none; color: var(--accent); padding: 0; font-size: inherit; font-weight: 400; }
+  .release-body button.link:hover { text-decoration: underline; }
+  .release-running { font-size: 14px; margin: 0 0 12px; }
+  .release-notes { font-size: 14px; line-height: 1.55; max-height: 520px; overflow-y: auto; border-top: 1px solid var(--border); padding-top: 4px; }
+  .release-notes h1, .release-notes h2, .release-notes h3 { font-size: 15px; margin: 16px 0 6px; }
+  .release-notes h4, .release-notes h5, .release-notes h6 { font-size: 14px; margin: 14px 0 6px; }
+  .release-notes p { margin: 0 0 10px; }
+  .release-notes ul, .release-notes ol { margin: 0 0 10px; padding-left: 22px; }
+  .release-notes li + li { margin-top: 3px; }
+  .release-notes code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; font-size: 12.5px; }
+  .release-notes pre code { background: none; padding: 0; }
+  .release-notes img { max-width: 100%; height: auto; }
+  .release-notes table { margin: 0 0 10px; }
+  .release-notes a { color: var(--accent); }
+  .env-intro { font-size: 13px; margin: 0 0 8px; }
+  .env-table td { vertical-align: top; }
+  .env-about { font-size: 12px; margin-top: 2px; }
+  .env-value { overflow-wrap: anywhere; font-size: 13px; }
+  .env-source { text-align: right; white-space: nowrap; }
   /* Modal dialogs (see static/dialog.js). No padding on the <dialog> itself:
      a click that lands on the element rather than its content is a backdrop
      click and closes it. */
@@ -463,7 +492,7 @@
   </script>
   {{with .User}}
   <div class="nav-user">
-    <a href="/account" title="Account settings"{{template "nav_current" (eq $.Nav "account")}}>{{.Username}}</a>
+    <a href="/account" title="Signed in as {{.Username}}"{{template "nav_current" (eq $.Nav "account")}}>Settings</a>
     <form method="post" action="/logout" class="inline"><button type="submit" class="secondary small">Log out</button></form>
   </div>
   {{end}}

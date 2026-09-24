@@ -25,11 +25,21 @@ var staticFS embed.FS
 
 // Config holds the deployment settings the web layer needs.
 type Config struct {
-	ModelsDir   string // where Ollama stores models, as seen by this process; "" if unknown
-	AllowDelete bool   // whether users may delete models (ALLOW_MODEL_DELETE)
-	LibraryURL  string // the ollama.com model library; "" for the real one
-	HFURL       string // Hugging Face; "" for the real one
-	HFToken     string // optional Hugging Face access token (HF_TOKEN)
+	ModelsDir   string   // where Ollama stores models, as seen by this process; "" if unknown
+	AllowDelete bool     // whether users may delete models (ALLOW_MODEL_DELETE)
+	LibraryURL  string   // the ollama.com model library; "" for the real one
+	HFURL       string   // Hugging Face; "" for the real one
+	HFToken     string   // optional Hugging Face access token (HF_TOKEN)
+	Env         []EnvVar // the environment settings in effect, for the Settings page
+}
+
+// EnvVar describes one environment variable the app reads, as it took effect.
+type EnvVar struct {
+	Name   string
+	Value  string // the effective value; for a secret, only whether it's set
+	Source string // "set", "default", "auto-detected", or why a set value was ignored
+	About  string
+	Secret bool
 }
 
 type Server struct {
@@ -75,6 +85,7 @@ func (s *Server) Routes() http.Handler {
 	})
 
 	mux.HandleFunc("GET /version/check", s.handleVersionCheck)
+	mux.HandleFunc("GET /version/release", s.handleRelease)
 
 	mux.HandleFunc("GET /models", s.handleModels)
 	// Model names can contain "/" (e.g. "user/model:tag"), hence the wildcard.

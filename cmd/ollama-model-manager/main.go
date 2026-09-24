@@ -120,7 +120,8 @@ func main() {
 	// Notes when each model was last used, from what Ollama has loaded.
 	go usage.New(ol, st, 15*time.Second, log).Run(ctx)
 
-	srv, err := web.NewServer(ol, st, dl, sys, web.Config{ModelsDir: modelsDir, AllowDelete: allowDelete, HFToken: hfToken}, log)
+	env := describeEnv(strings.TrimPrefix(addr, ":"), ol.BaseURL(), dbPath, modelsDir, allowDelete, hfToken != "")
+	srv, err := web.NewServer(ol, st, dl, sys, web.Config{ModelsDir: modelsDir, AllowDelete: allowDelete, HFToken: hfToken, Env: env}, log)
 	if err != nil {
 		log.Error("failed to initialize web server", "error", err)
 		os.Exit(1)
@@ -230,20 +231,74 @@ func findModelsDir() string {
 	return ""
 }
 
+// describeEnv lists the environment settings as they took effect, for the
+// Settings page. HF_TOKEN's value is never included, only whether it's set.
+func describeEnv(port, ollamaURL, dbPath, modelsDir string, allowDelete, hasHFToken bool) []web.EnvVar {
+	modelsSource := envSource("MODELS_DIR")
+	if modelsSource != "set" {
+		modelsSource = "auto-detected"
+		if modelsDir == "" {
+			modelsSource = "not found"
+		}
+	}
+	deleteSource := envSource("ALLOW_MODEL_DELETE")
+	if _, ok := parseBool(os.Getenv("ALLOW_MODEL_DELETE")); deleteSource == "set" && !ok {
+		deleteSource = "invalid, using default"
+	}
+	hfToken := ""
+	if hasHFToken {
+		hfToken = "set"
+	}
+	return []web.EnvVar{
+		{Name: "PORT", Value: port, Source: envSource("PORT"), About: "Port the web UI listens on"},
+		{Name: "OLLAMA_HOST", Value: ollamaURL, Source: envSource("OLLAMA_HOST"), About: "The Ollama server being managed"},
+		{Name: "DB_PATH", Value: dbPath, Source: envSource("DB_PATH"), About: "This app's database: accounts and download history"},
+		{Name: "MODELS_DIR", Value: modelsDir, Source: modelsSource, About: "Ollama's models folder, for the free disk space tile"},
+		{Name: "OLLAMA_MODELS", Value: os.Getenv("OLLAMA_MODELS"), Source: optionalSource("OLLAMA_MODELS"), About: "Ollama's own models folder setting; checked when finding MODELS_DIR"},
+		{Name: "ALLOW_MODEL_DELETE", Value: fmt.Sprint(allowDelete), Source: deleteSource, About: "Whether models can be deleted from this app"},
+		{Name: "HF_TOKEN", Value: hfToken, Source: optionalSource("HF_TOKEN"), About: "Hugging Face read token, for browsing private repos", Secret: true},
+	}
+}
+
+// envSource says whether a variable with a default was set or defaulted.
+func envSource(key string) string {
+	if os.Getenv(key) != "" {
+		return "set"
+	}
+	return "default"
+}
+
+// optionalSource is envSource for a variable with no default.
+func optionalSource(key string) string {
+	if os.Getenv(key) != "" {
+		return "set"
+	}
+	return "not set"
+}
+
 // getenvBool reads a true/false env var (1/0, true/false, yes/no...),
 // warning and using fallback if it's set to something else.
 func getenvBool(log *slog.Logger, key string, fallback bool) bool {
-	v := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
-	switch v {
-	case "":
+	v := os.Getenv(key)
+	if strings.TrimSpace(v) == "" {
 		return fallback
-	case "1", "true", "yes", "on":
-		return true
-	case "0", "false", "no", "off":
-		return false
+	}
+	if b, ok := parseBool(v); ok {
+		return b
 	}
 	log.Warn("ignoring invalid boolean", "var", key, "value", v, "using", fallback)
 	return fallback
+}
+
+// parseBool reads 1/0, true/false, yes/no or on/off, reporting whether v was one.
+func parseBool(v string) (b, ok bool) {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "1", "true", "yes", "on":
+		return true, true
+	case "0", "false", "no", "off":
+		return false, true
+	}
+	return false, false
 }
 
 func getenv(key, fallback string) string {

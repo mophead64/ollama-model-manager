@@ -13,6 +13,8 @@
   {{template "nav" .}}
   <main>
     {{with .Notice}}<div class="notice" role="status" data-clear-param="done"><span>{{.}}</span><button type="button" class="notice-close" data-dismiss aria-label="Dismiss">×</button></div>{{end}}
+    <div class="account-layout{{if not .IsAdmin}} single{{end}}">
+    <div class="account-main">
     <div class="panel account-panel">
       <h2>Account</h2>
       <dl class="account-rows">
@@ -38,6 +40,32 @@
         </div>
       </dl>
     </div>
+    {{if and .IsAdmin .Env}}
+    <div class="panel account-panel" id="configuration">
+      <h2>Configuration</h2>
+      <p class="muted env-intro">Set with environment variables when the app starts. Changing them needs a restart.</p>
+      <div class="table-wrap">
+      <table class="env-table">
+        <thead><tr><th>Variable</th><th>Value</th><th></th></tr></thead>
+        <tbody>
+        {{range .Env}}
+          <tr>
+            <td><code>{{.Name}}</code><div class="muted env-about">{{.About}}</div></td>
+            <td class="env-value">{{if .Secret}}{{if .Value}}<span class="badge on">Set</span>{{else}}<span class="muted">Not set</span>{{end}}{{else if .Value}}<span class="mono">{{.Value}}</span>{{else}}<span class="muted">—</span>{{end}}</td>
+            <td class="env-source"><span class="badge {{if eq .Source "set"}}cap{{else if or (eq .Source "default") (eq .Source "auto-detected") (eq .Source "not set")}}off{{else}}warn{{end}}">{{.Source}}</span></td>
+          </tr>
+        {{end}}
+        </tbody>
+      </table>
+      </div>
+    </div>
+    {{end}}
+    {{/* Filled in after the page loads: it asks GitHub. */}}
+    <div class="panel account-panel" id="release">
+      <h2>Latest release</h2>
+      <div hx-get="/version/release" hx-trigger="load" hx-swap="outerHTML"><p class="muted">Checking GitHub…</p></div>
+    </div>
+    </div>
     {{if .IsAdmin}}
     {{/* Filled in after the page loads: it asks Ollama and Hugging Face. */}}
     <div class="panel account-panel" id="huggingface">
@@ -45,6 +73,7 @@
       <div hx-get="/account/huggingface" hx-trigger="load" hx-swap="outerHTML"><p class="muted">Asking Ollama for its key…</p></div>
     </div>
     {{end}}
+    </div>
   </main>
   {{template "footer" .}}
 
@@ -131,5 +160,28 @@
     set it as <code>HF_TOKEN</code> in this app's environment, and restart it. Everyone using this app will see what the token can.
     Ollama's downloads don't need it: they use the key above.</p>
   {{end}}
+</div>
+{{end}}
+
+{{/* The release panel (update.go): the latest release's notes, flagged as
+     this release or a newer one. The notes carry the update steps (ci.yml). */}}
+{{define "release_panel"}}
+<div class="release-body">
+{{if not .Update.Checked}}
+  <p class="muted">Couldn't reach GitHub to check for releases.
+    <button type="button" class="link" hx-get="/version/release?force=1" hx-target="closest .release-body" hx-swap="outerHTML">Try again</button></p>
+{{else}}
+  <div class="release-head">
+    <strong>{{or .Update.Name .Update.Latest}}</strong>
+    {{if .Update.Current}}<span class="badge on">This release</span>{{else if .Update.Available}}<span class="badge update">New release</span>{{end}}
+    <span class="muted">{{if and .Update.Name (ne .Update.Name .Update.Latest)}}<span class="mono">{{.Update.Latest}}</span> · {{end}}{{if not .Update.Published.IsZero}}<span title="{{time .Update.Published}}">published {{ago .Update.Published}}</span> · {{end}}<a class="hint-link inline" href="{{.Update.URL}}" target="_blank" rel="noopener noreferrer">View on GitHub ↗</a></span>
+  </div>
+  {{if .Update.Available}}
+  <p class="release-running">You're running <span class="mono">{{.Version}}</span>. The notes below say how to update.</p>
+  {{else if not .Update.Current}}
+  <p class="muted release-running">You're running <span class="mono">{{.Version}}</span>.</p>
+  {{end}}
+  {{with .Update.Notes}}<div class="release-notes">{{.}}</div>{{else}}<p class="muted">This release has no notes.</p>{{end}}
+{{end}}
 </div>
 {{end}}
