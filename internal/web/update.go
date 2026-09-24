@@ -1,12 +1,21 @@
 package web
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/extension"
+	"github.com/yuin/goldmark/parser"
+	"github.com/yuin/goldmark/text"
+	"github.com/yuin/goldmark/util"
 
 	"github.com/mophead64/ollama-model-manager/internal/version"
 )
@@ -22,9 +31,13 @@ const (
 
 type updateInfo struct {
 	Available bool
+	Current   bool // the latest release is the one running
 	Latest    string
+	Name      string // the release's title, if it has one
 	URL       string
-	Checked   bool // false if the check failed (offline, rate limited, ...)
+	Published time.Time
+	Notes     template.HTML // the release notes, rendered from Markdown
+	Checked   bool          // false if the check failed (offline, rate limited, ...)
 }
 
 // updateChecker asks GitHub for the latest release, caching the answer so
@@ -79,18 +92,59 @@ func (u *updateChecker) fetch(ctx context.Context) (updateInfo, error) {
 		return updateInfo{}, fmt.Errorf("github returned %s", resp.Status)
 	}
 	var rel struct {
-		TagName string `json:"tag_name"`
-		HTMLURL string `json:"html_url"`
+		TagName     string    `json:"tag_name"`
+		Name        string    `json:"name"`
+		HTMLURL     string    `json:"html_url"`
+		Body        string    `json:"body"`
+		PublishedAt time.Time `json:"published_at"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&rel); err != nil {
 		return updateInfo{}, err
 	}
+	notes, err := renderMarkdown(rel.Body)
+	if err != nil {
+		return updateInfo{}, fmt.Errorf("render release notes: %w", err)
+	}
 	return updateInfo{
 		Checked:   true,
 		Latest:    rel.TagName,
+		Name:      rel.Name,
 		URL:       rel.HTMLURL,
+		Published: rel.PublishedAt,
+		Notes:     notes,
+		Current:   rel.TagName == version.Version,
 		Available: version.Newer(rel.TagName, version.Version),
 	}, nil
+}
+
+// releaseMarkdown renders release notes as GitHub does (tables, task lists,
+// bare URLs as links). It's goldmark's safe mode: raw HTML in the notes is
+// dropped and javascript: style links aren't linked, so what GitHub returns
+// can go on the page as is.
+var releaseMarkdown = goldmark.New(
+	goldmark.WithExtensions(extension.GFM),
+	goldmark.WithParserOptions(parser.WithASTTransformers(util.Prioritized(externalLinks{}, 100))),
+)
+
+func renderMarkdown(src string) (template.HTML, error) {
+	var buf bytes.Buffer
+	if err := releaseMarkdown.Convert([]byte(src), &buf); err != nil {
+		return "", err
+	}
+	return template.HTML(buf.String()), nil
+}
+
+// externalLinks opens the notes' links in a new tab, keeping the app open.
+type externalLinks struct{}
+
+func (externalLinks) Transform(doc *ast.Document, _ text.Reader, _ parser.Context) {
+	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		if l, ok := n.(*ast.Link); ok && entering {
+			l.SetAttributeString("target", "_blank")
+			l.SetAttributeString("rel", "noopener noreferrer")
+		}
+		return ast.WalkContinue, nil
+	})
 }
 
 // handleVersionCheck is fetched by htmx after each page renders (and again
@@ -98,6 +152,15 @@ func (u *updateChecker) fetch(ctx context.Context) (updateInfo, error) {
 // never delays the page itself. ?force=1 is the footer's manual refresh.
 func (s *Server) handleVersionCheck(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, "version_status.html", map[string]any{
+		"Version": version.Version,
+		"Update":  s.updates.check(r.Context(), r.URL.Query().Get("force") != ""),
+	})
+}
+
+// handleRelease fills in the Settings page's release panel with the latest
+// release's notes, which say how to update.
+func (s *Server) handleRelease(w http.ResponseWriter, r *http.Request) {
+	s.render(w, r, "release_panel", map[string]any{
 		"Version": version.Version,
 		"Update":  s.updates.check(r.Context(), r.URL.Query().Get("force") != ""),
 	})

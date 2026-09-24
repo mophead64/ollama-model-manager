@@ -1,6 +1,6 @@
 {{define "style"}}
-<link rel="icon" type="image/png" href="/static/logo.png">
-<link rel="apple-touch-icon" href="/static/logo.png">
+<link rel="icon" type="image/png" href="{{static "logo-64.png"}}">
+<link rel="apple-touch-icon" href="{{static "logo-180.png"}}">
 <style>
   :root {
     --bg: #f7f8fa; --panel: #ffffff; --border: #e2e5ea; --text: #1f2430;
@@ -103,6 +103,30 @@
   button.danger-solid { background: var(--danger); border-color: var(--danger); color: white; }
   button.danger-solid:hover { filter: brightness(.92); background: var(--danger); }
   td.actions { text-align: right; white-space: nowrap; }
+  /* Split button: the main action, plus a <details> dropdown of the rest
+     (dialog.js closes it on outside click, Escape, or picking an item). The
+     menu hangs from the whole split's left edge, opening rightwards. */
+  .split { position: relative; display: inline-flex; vertical-align: middle; }
+  .split > .btn { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+  .split-menu > summary { list-style: none; margin-left: -1px; padding-left: 7px; padding-right: 7px;
+    border-top-left-radius: 0; border-bottom-left-radius: 0; font-weight: 500; user-select: none; }
+  .split-menu > summary::-webkit-details-marker { display: none; }
+  .split-menu[open] > summary { background: var(--hover); }
+  .split-menu .menu {
+    position: absolute; left: 0; top: calc(100% + 4px); z-index: 30; min-width: 100%;
+    display: flex; flex-direction: column; padding: 4px; text-align: left;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 7px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  }
+  .split-menu .menu form.inline { display: block; }
+  .split-menu .menu button, .split-menu .menu a {
+    display: block; width: 100%; box-sizing: border-box; text-align: left; text-decoration: none;
+    padding: 6px 10px; border: 0; border-radius: 5px; background: none; color: var(--text);
+    font-size: 13px; font-weight: 500;
+  }
+  .split-menu .menu button:hover, .split-menu .menu a:hover { background: var(--hover); }
+  .split-menu .menu button.danger { color: var(--danger); }
+  .split-menu .menu button.danger:hover { background: var(--danger-bg); }
   dialog p { font-size: 14px; line-height: 1.5; margin: 0 0 16px; }
   .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
   .badge.on { background: var(--b-green-bg); color: var(--b-green); }
@@ -189,11 +213,40 @@
   button.notice-close { background: none; border: none; color: inherit; font-size: 20px; line-height: 1; padding: 0 4px; opacity: .7; }
   button.notice-close:hover { background: none; opacity: 1; }
   .account-panel { max-width: 640px; }
+  /* Account and configuration on the left, Hugging Face on the right. */
+  .account-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+  .account-layout .account-panel { max-width: none; }
+  .account-layout.single { grid-template-columns: minmax(0, 640px); }
+  .account-main { display: flex; flex-direction: column; gap: 16px; }
+  .account-main > .panel, .account-layout > .panel { margin: 0; }
+  @media (max-width: 1000px) { .account-layout { grid-template-columns: minmax(0, 1fr); } }
   .account-rows { margin: 0; }
   .account-rows > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
   .account-rows > div:last-child { border-bottom: none; }
   .account-rows dt { color: var(--muted); font-size: 14px; }
   .account-rows dd { margin: 0; display: flex; align-items: center; gap: 12px; font-weight: 500; }
+  .release-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-bottom: 12px; }
+  .release-head strong { font-size: 16px; }
+  .release-head .muted { font-size: 13px; }
+  .release-body button.link { background: none; border: none; color: var(--accent); padding: 0; font-size: inherit; font-weight: 400; }
+  .release-body button.link:hover { text-decoration: underline; }
+  .release-running { font-size: 14px; margin: 0 0 12px; }
+  .release-notes { font-size: 14px; line-height: 1.55; max-height: 520px; overflow-y: auto; border-top: 1px solid var(--border); padding-top: 4px; }
+  .release-notes h1, .release-notes h2, .release-notes h3 { font-size: 15px; margin: 16px 0 6px; }
+  .release-notes h4, .release-notes h5, .release-notes h6 { font-size: 14px; margin: 14px 0 6px; }
+  .release-notes p { margin: 0 0 10px; }
+  .release-notes ul, .release-notes ol { margin: 0 0 10px; padding-left: 22px; }
+  .release-notes li + li { margin-top: 3px; }
+  .release-notes code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; font-size: 12.5px; }
+  .release-notes pre code { background: none; padding: 0; }
+  .release-notes img { max-width: 100%; height: auto; }
+  .release-notes table { margin: 0 0 10px; }
+  .release-notes a { color: var(--accent); }
+  .env-intro { font-size: 13px; margin: 0 0 8px; }
+  .env-table td { vertical-align: top; }
+  .env-about { font-size: 12px; margin-top: 2px; }
+  .env-value { overflow-wrap: anywhere; font-size: 13px; }
+  .env-source { text-align: right; white-space: nowrap; }
   /* Modal dialogs (see static/dialog.js). No padding on the <dialog> itself:
      a click that lands on the element rather than its content is a backdrop
      click and closes it. */
@@ -275,6 +328,23 @@
   td.mono, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; word-break: break-all; }
   a.model-link { color: var(--text); font-weight: 600; text-decoration: none; }
   a.model-link:hover { color: var(--accent); }
+  /* Model name that copies itself on click, with a hover/focus tooltip
+     (dialog.js swaps its text to "Copied"). */
+  button.model-name { all: unset; cursor: pointer; color: var(--text); font-weight: 600; border-radius: 4px; }
+  button.model-name:hover { color: var(--accent); }
+  button.model-name:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .copy-tip-wrap { position: relative; display: inline-block; }
+  .copy-tip {
+    position: absolute; left: 0; bottom: calc(100% + 6px);
+    width: max-content; max-width: 300px; padding: 5px 9px; border-radius: 7px;
+    background: var(--panel); color: var(--muted);
+    border: 1px solid var(--border); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    font-size: 11.5px; font-weight: 400; line-height: 1.5; white-space: nowrap;
+    z-index: 70; opacity: 0; visibility: hidden; pointer-events: none;
+    transition: opacity .12s;
+  }
+  .copy-tip-wrap:hover .copy-tip, .copy-tip-wrap:focus-within .copy-tip, .copy-tip-wrap.copied .copy-tip { opacity: 1; visibility: visible; }
+  .copy-tip-wrap.copied .copy-tip { color: var(--good); }
   .badge.cap { background: var(--b-blue-bg); color: var(--b-blue); }
   .caps { display: flex; flex-wrap: wrap; gap: 4px; }
   .cap-filter { margin-top: 12px; gap: 6px; }
@@ -381,7 +451,7 @@
 
 {{define "nav"}}
 <nav>
-  <span class="brand"><img src="/static/logo.png" alt="" width="33" height="32">Ollama Model Manager</span>
+  <span class="brand"><img src="{{navlogo}}" alt="" width="33" height="32">Ollama Model Manager</span>
   {{if .User}}<a href="/models"{{template "nav_current" (eq .Nav "models")}}>Models</a>
   <a href="/discover"{{template "nav_current" (eq .Nav "discover")}}>Discover</a>
   <a href="/chat"{{template "nav_current" (eq .Nav "chat")}}>Chat</a>
@@ -422,7 +492,7 @@
   </script>
   {{with .User}}
   <div class="nav-user">
-    <a href="/account" title="Account settings"{{template "nav_current" (eq $.Nav "account")}}>{{.Username}}</a>
+    <a href="/account" title="Signed in as {{.Username}}"{{template "nav_current" (eq $.Nav "account")}}>Settings</a>
     <form method="post" action="/logout" class="inline"><button type="submit" class="secondary small">Log out</button></form>
   </div>
   {{end}}
@@ -452,5 +522,5 @@
 {{define "state_watch"}}<span id="state-watch" hidden hx-get="/state?seen={{.Seen}}"
   hx-trigger="{{if .Seen}}every 3s [document.visibilityState === 'visible']{{else}}load{{end}}" hx-swap="outerHTML"></span>{{end}}
 
-{{define "htmx_script"}}<script src="/static/htmx.min.js"></script>{{end}}
-{{define "dialog_script"}}<script src="/static/dialog.js"></script>{{end}}
+{{define "htmx_script"}}<script src="{{static "htmx.min.js"}}"></script>{{end}}
+{{define "dialog_script"}}<script src="{{static "dialog.js"}}"></script>{{end}}

@@ -46,6 +46,8 @@ var templateFuncs = template.FuncMap{
 	"compact":    formatCompact,
 	"tokens":     formatTokens,
 	"sub":        func(a, b int) int { return a - b },
+	"static":     staticURL,
+	"navlogo":    func() template.URL { return navLogo },
 }
 
 func formatBytes(n int64) string {

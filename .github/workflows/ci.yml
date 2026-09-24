@@ -165,6 +165,18 @@ jobs:
             echo "- **macOS:** Gatekeeper blocks it on first run. Run \`xattr -d com.apple.quarantine ollama-model-manager\` in the extracted folder, or allow it under System Settings → Privacy & Security."
             echo
             echo "Check a download against \`SHA256SUMS\`, or its provenance with \`gh attestation verify <file> -R ${GITHUB_REPOSITORY}\`."
+            echo
+            echo "## Updating"
+            echo
+            echo "Accounts and download history are kept across updates."
+            echo
+            echo "- **Docker Compose:** from the folder with your compose file, \`docker compose pull && docker compose up -d\`."
+            echo "  If your compose file builds from source, \`git pull && docker compose up -d --build\` instead."
+            echo "- **\`docker run\`:** \`docker pull ${{ env.IMAGE }}:latest\`, then \`docker rm -f ollama-model-manager\` and run your"
+            echo "  same \`docker run\` command again. The database is in the \`/data\` volume, so it carries over."
+            echo "- **Standalone binary:** download the archive for your system below, stop the app, replace the old executable with"
+            echo "  the new one and start it again. Leave \`omm.db\` where it is."
+            echo "- **From source:** \`git pull\`, then \`./run-local.sh\` (\`run-local.bat\` on Windows)."
           } >> body.md
 
       - name: Create release

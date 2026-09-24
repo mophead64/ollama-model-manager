@@ -21,7 +21,7 @@ func TestLastUsedColumn(t *testing.T) {
 
 	// Most recently used first; never-used models last.
 	body = get(h, "/models?sort=used&dir=desc", true).Body.String()
-	order := regexp.MustCompile(`class="model-link" href="/models/([^"]+)"`).FindAllStringSubmatch(body, -1)
+	order := regexp.MustCompile(`class="model-name" data-copy-text="([^"]+)"`).FindAllStringSubmatch(body, -1)
 	var got []string
 	for _, m := range order {
 		got = append(got, m[1])

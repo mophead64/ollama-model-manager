@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -202,5 +203,31 @@ func TestAccountDialogs(t *testing.T) {
 	}
 	if strings.Count(body, "data-dialog-autoopen") != 1 {
 		t.Error("only the failing form's dialog should auto-open")
+	}
+}
+
+func TestAccountConfigurationPanel(t *testing.T) {
+	h := newTestServer(t, fakeOllama(t, 1).URL, func(c *Config) {
+		c.Env = []EnvVar{
+			{Name: "OLLAMA_HOST", Value: "http://gpu-box:11434", Source: "set", About: "The Ollama server"},
+			{Name: "HF_TOKEN", Value: "set", Source: "set", About: "Hugging Face token", Secret: true},
+		}
+	})
+	body := get(h, "/account", false).Body.String()
+	for _, want := range []string{`id="configuration"`, "<code>OLLAMA_HOST</code>", "http://gpu-box:11434", `<span class="badge on">Set</span>`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("configuration panel missing %q", want)
+		}
+	}
+
+	// Only the admin sees it.
+	ctx := context.Background()
+	other, err := testStore.CreateUser(ctx, "someone", "password-123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, _ := testStore.CreateSession(ctx, other.ID)
+	if acct := do(h, "GET", "/account", nil, &http.Cookie{Name: sessionCookie, Value: token}).Body.String(); strings.Contains(acct, `id="configuration"`) {
+		t.Error("non-admin sees the configuration panel")
 	}
 }
