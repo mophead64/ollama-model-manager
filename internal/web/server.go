@@ -60,7 +60,7 @@ func NewServer(ol *ollama.Client, st *store.Store, dl *downloads.Manager, sys *s
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 
-	mux.Handle("GET /static/", http.FileServerFS(staticFS))
+	mux.Handle("GET /static/", staticHandler())
 
 	mux.HandleFunc("GET /login", s.handleLoginPage)
 	mux.HandleFunc("POST /login", s.handleLogin)

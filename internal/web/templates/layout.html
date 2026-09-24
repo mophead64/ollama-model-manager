@@ -1,6 +1,6 @@
 {{define "style"}}
-<link rel="icon" type="image/png" href="/static/logo.png">
-<link rel="apple-touch-icon" href="/static/logo.png">
+<link rel="icon" type="image/png" href="{{static "logo-64.png"}}">
+<link rel="apple-touch-icon" href="{{static "logo-180.png"}}">
 <style>
   :root {
     --bg: #f7f8fa; --panel: #ffffff; --border: #e2e5ea; --text: #1f2430;
@@ -381,7 +381,7 @@
 
 {{define "nav"}}
 <nav>
-  <span class="brand"><img src="/static/logo.png" alt="" width="33" height="32">Ollama Model Manager</span>
+  <span class="brand"><img src="{{navlogo}}" alt="" width="33" height="32">Ollama Model Manager</span>
   {{if .User}}<a href="/models"{{template "nav_current" (eq .Nav "models")}}>Models</a>
   <a href="/discover"{{template "nav_current" (eq .Nav "discover")}}>Discover</a>
   <a href="/chat"{{template "nav_current" (eq .Nav "chat")}}>Chat</a>
@@ -452,5 +452,5 @@
 {{define "state_watch"}}<span id="state-watch" hidden hx-get="/state?seen={{.Seen}}"
   hx-trigger="{{if .Seen}}every 3s [document.visibilityState === 'visible']{{else}}load{{end}}" hx-swap="outerHTML"></span>{{end}}
 
-{{define "htmx_script"}}<script src="/static/htmx.min.js"></script>{{end}}
-{{define "dialog_script"}}<script src="/static/dialog.js"></script>{{end}}
+{{define "htmx_script"}}<script src="{{static "htmx.min.js"}}"></script>{{end}}
+{{define "dialog_script"}}<script src="{{static "dialog.js"}}"></script>{{end}}
