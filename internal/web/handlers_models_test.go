@@ -262,3 +262,19 @@ func TestModelsCapabilityChips(t *testing.T) {
 		t.Errorf("next link should keep filters:\n%s", body)
 	}
 }
+
+func TestModelsTableCopyNameAndActions(t *testing.T) {
+	h := newTestServer(t, fakeOllama(t, 1).URL)
+	body := get(h, "/models", true).Body.String()
+	for _, want := range []string{
+		`<button type="button" class="model-name" data-copy-text="user/custom:v1">user/custom:v1</button>`,
+		`Click to copy model name`,
+		`<a class="btn secondary small" href="/models/user/custom:v1">View</a>`,
+		`<details class="split-menu">`,
+		`aria-label="More actions for user/custom:v1"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("models table missing %q", want)
+		}
+	}
+}

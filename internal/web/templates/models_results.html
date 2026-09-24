@@ -30,7 +30,7 @@
     <tbody>
     {{range .Models}}
       <tr>
-        <td><a class="model-link" href="/models/{{.Name}}">{{.Name}}</a></td>
+        <td><span class="copy-tip-wrap"><button type="button" class="model-name" data-copy-text="{{.Name}}">{{.Name}}</button><span class="copy-tip" role="tooltip">Click to copy model name</span></span></td>
         <td>{{or .Details.Family "-"}}</td>
         <td>{{or .Details.ParameterSize "-"}}</td>
         <td>{{or .Details.QuantizationLevel "-"}}</td>
@@ -40,10 +40,18 @@
         <td>{{with lastused $.LastUsed .Name}}<span title="{{time .}}">{{ago .}}</span>{{else}}<span class="muted" title="Not seen in use since this app started tracking">—</span>{{end}}</td>
         <td>{{with .Capabilities}}<div class="caps">{{range .}}<span class="badge cap">{{.}}</span>{{end}}</div>{{else}}<span class="muted">-</span>{{end}}</td>
         <td class="actions">
-          {{if canchat .Capabilities}}<a class="btn secondary small" href="/chat?model={{.Name}}">Chat</a>{{end}}
-          {{if index $.LoadedNames .Name}}{{template "unload_button" .Name}}{{else}}{{template "load_button" .Name}}{{end}}
-          {{if $.AllowDelete}}<button type="button" class="danger small" data-dialog-open="delete-model-modal"
-            data-fill-name="{{.Name}}" data-fill-size="{{bytes .Size}}" data-fill-return="{{$.ListURL}}">Delete</button>{{end}}
+          <div class="split">
+            <a class="btn secondary small" href="/models/{{.Name}}">View</a>
+            <details class="split-menu">
+              <summary class="btn secondary small" aria-label="More actions for {{.Name}}"><span aria-hidden="true">▾</span></summary>
+              <div class="menu">
+                {{if index $.LoadedNames .Name}}{{template "unload_button" .Name}}{{else}}{{template "load_button" .Name}}{{end}}
+                {{if canchat .Capabilities}}<a href="/chat?model={{.Name}}">Chat</a>{{end}}
+                {{if $.AllowDelete}}<button type="button" class="danger" data-dialog-open="delete-model-modal"
+                  data-fill-name="{{.Name}}" data-fill-size="{{bytes .Size}}" data-fill-return="{{$.ListURL}}">Delete</button>{{end}}
+              </div>
+            </details>
+          </div>
         </td>
       </tr>
     {{end}}

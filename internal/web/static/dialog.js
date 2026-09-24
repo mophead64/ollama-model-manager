@@ -12,7 +12,12 @@
 // A submit button with data-busy="Loading…" is disabled and relabelled, with a
 // spinner, while its form submits, for actions that take a while.
 //
-// A button with data-copy="<id>" copies that input's value to the clipboard.
+// A button with data-copy="<id>" copies that input's value to the clipboard;
+// one with data-copy-text="<text>" copies that text. Inside a .copy-tip-wrap,
+// "Copied" shows in its .copy-tip tooltip rather than on the button.
+//
+// An open <details class="split-menu"> dropdown closes on a click outside it,
+// on Escape, or when one of its items is picked.
 //
 // A <dialog data-dialog-autoopen> is opened as soon as the page (or the htmx
 // swap bringing it) loads: used when a form inside it posts, fails server-side,
@@ -30,7 +35,7 @@ document.addEventListener("click", function (e) {
     return;
   }
 
-  var copier = e.target.closest("[data-copy]");
+  var copier = e.target.closest("[data-copy], [data-copy-text]");
   if (copier) {
     copy(copier);
     return;
@@ -54,6 +59,20 @@ document.addEventListener("click", function (e) {
   if (e.target.tagName === "DIALOG" && e.target.open) {
     e.target.close();
   }
+});
+
+document.addEventListener("click", function (e) {
+  document.querySelectorAll("details.split-menu[open]").forEach(function (m) {
+    if (!m.contains(e.target) || e.target.closest(".menu")) m.open = false;
+  });
+});
+
+document.addEventListener("keydown", function (e) {
+  if (e.key !== "Escape") return;
+  document.querySelectorAll("details.split-menu[open]").forEach(function (m) {
+    m.open = false;
+    m.querySelector("summary").focus();
+  });
 });
 
 function fill(dialog, opener) {
@@ -122,22 +141,43 @@ window.addEventListener("pageshow", function (e) {
 });
 
 function copy(btn) {
-  var input = document.getElementById(btn.dataset.copy);
-  if (!input) return;
+  var input = btn.dataset.copyText === undefined && document.getElementById(btn.dataset.copy);
+  if (!input && btn.dataset.copyText === undefined) return;
+  var text = input ? input.value : btn.dataset.copyText;
+  // Feedback goes in the button's tooltip when it has one, else the button.
+  var wrap = btn.closest(".copy-tip-wrap");
+  var label = (wrap && wrap.querySelector(".copy-tip")) || btn;
   function done(ok) {
-    var label = btn.dataset.idleText || btn.textContent;
-    btn.dataset.idleText = label;
-    btn.textContent = ok ? "Copied" : "Select and copy it";
-    setTimeout(function () { btn.textContent = label; }, 2000);
+    var idle = label.dataset.idleText || label.textContent;
+    label.dataset.idleText = idle;
+    label.textContent = ok ? "Copied" : "Select and copy it";
+    if (wrap) wrap.classList.add("copied");
+    clearTimeout(label._copyTimer);
+    label._copyTimer = setTimeout(function () {
+      label.textContent = idle;
+      if (wrap) wrap.classList.remove("copied");
+    }, 2000);
   }
   // The async clipboard API only exists on HTTPS pages (or localhost); the
   // app is often served over plain HTTP, where the old way still works.
-  input.select();
   if (navigator.clipboard && window.isSecureContext) {
-    navigator.clipboard.writeText(input.value).then(function () { done(true); }, function () { done(false); });
+    if (input) input.select();
+    navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); });
     return;
   }
+  var temp;
+  if (!input) {
+    // execCommand copies the selection, so literal text needs something to select.
+    temp = document.createElement("textarea");
+    temp.value = text;
+    temp.setAttribute("readonly", "");
+    temp.style.position = "fixed";
+    temp.style.opacity = "0";
+    document.body.appendChild(temp);
+  }
+  (input || temp).select();
   var ok = false;
   try { ok = document.execCommand("copy"); } catch (e) {}
+  if (temp) { temp.remove(); btn.focus(); }
   done(ok);
 }
