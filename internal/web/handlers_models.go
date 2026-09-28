@@ -86,17 +86,6 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, "models.html", data)
 }
 
-// handleModelsSubpage serves one of the models section's other tabs (see
-// models_tabs), under the same overview as the list. They're placeholders for
-// now.
-func (s *Server) handleModelsSubpage(tab, title string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		data := map[string]any{"Tab": tab, "Title": title}
-		s.addModelsOverview(r, data)
-		s.render(w, r, "models_subpage.html", data)
-	}
-}
-
 // addModelsOverview adds the overview to a models tab that doesn't list the
 // models itself. If Ollama can't be reached, Error hides it.
 func (s *Server) addModelsOverview(r *http.Request, data map[string]any) {

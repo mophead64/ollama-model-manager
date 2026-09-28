@@ -15,7 +15,7 @@
     {{with .Updated}}<div class="notice" role="status" data-clear-param="updated"><span>Updated the reason for <strong>{{.}}</strong>.</span><button type="button" class="notice-close" data-dismiss aria-label="Dismiss">×</button></div>{{end}}
     {{with .Removed}}<div class="notice" role="status" data-clear-param="removed"><span>Removed <strong>{{.}}</strong> from the blacklist.</span><button type="button" class="notice-close" data-dismiss aria-label="Dismiss">×</button></div>{{end}}
     {{if not .Error}}{{template "overview" .}}{{end}}
-    {{template "models_tabs" "blacklist"}}
+    {{template "models_tabs" (modeltabs "blacklist" .ActiveTests)}}
     <div class="panel">
       <div class="row between">
         <h2>Blacklist</h2>

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html/template"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -45,12 +46,33 @@ var templateFuncs = template.FuncMap{
 	"rowactions": func(m ollama.Model, loaded, allowDelete bool, ret string) map[string]any {
 		return map[string]any{"Model": m, "Loaded": loaded, "AllowDelete": allowDelete, "Return": ret}
 	},
+	"ms": formatMS,
+	"modeltabs": func(tab string, activeTests any) map[string]any {
+		return map[string]any{"Tab": tab, "ActiveTests": activeTests}
+	},
+	"has":     func(list []string, s string) bool { return slices.Contains(list, s) },
 	"add":     func(a, b int) int { return a + b },
 	"compact": formatCompact,
 	"tokens":  formatTokens,
 	"sub":     func(a, b int) int { return a - b },
 	"static":  staticURL,
 	"navlogo": func() template.URL { return navLogo },
+}
+
+// formatMS renders a duration in milliseconds (an int64 or float64, e.g. an
+// average) briefly: "850 ms", "12.3s".
+func formatMS(v any) string {
+	var ms float64
+	switch x := v.(type) {
+	case int64:
+		ms = float64(x)
+	case float64:
+		ms = x
+	}
+	if ms < 1000 {
+		return fmt.Sprintf("%.0f ms", ms)
+	}
+	return fmt.Sprintf("%.1fs", ms/1000)
 }
 
 func formatBytes(n int64) string {

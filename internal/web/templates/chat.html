@@ -13,7 +13,7 @@
   {{template "nav" .}}
   <main>
     {{if not .Error}}{{template "overview" .}}{{end}}
-    {{template "models_tabs" "chat"}}
+    {{template "models_tabs" (modeltabs "chat" .ActiveTests)}}
     {{if .Error}}
       <div class="error-box">Couldn't list models from Ollama: {{.Error}}</div>
     {{else if not .Models}}

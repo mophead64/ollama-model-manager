@@ -357,6 +357,89 @@
   .bl-tip { display: block; }
   .bl-tip + .bl-tip { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
   .bl-tip-reason { display: block; color: var(--muted); white-space: pre-wrap; }
+  /* Model tests (the Testing tab). */
+  .test-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 340px); gap: 20px; align-items: start; }
+  .test-layout > .panel, .test-side > .panel:last-child { margin-bottom: 0; }
+  .test-side { display: grid; gap: 20px; position: sticky; top: 76px; }
+  .test-side .panel { margin-bottom: 0; }
+  @media (max-width: 1000px) { .test-layout { grid-template-columns: minmax(0, 1fr); } .test-side { position: static; } }
+  .test-layout + .panel { margin-top: 20px; }
+  .test-intro { font-size: 13px; margin: -4px 0 16px; max-width: 70ch; }
+  .test-form { display: grid; gap: 18px; }
+  .test-field { display: grid; gap: 6px; align-content: start; }
+  .test-label-row { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .test-label { font-size: 13px; color: var(--muted); padding: 0; }
+  .test-label.strong { color: var(--text); font-weight: 600; font-size: 14px; }
+  .test-label .optional { font-weight: 400; font-size: 12px; margin-left: 4px; }
+  .test-label-row .tnum { font-size: 12px; }
+  .test-links { margin-left: auto; display: inline-flex; gap: 12px; }
+  button.link { background: none; border: none; color: var(--accent); padding: 0; font-size: 13px; font-weight: 500; }
+  button.link:hover { text-decoration: underline; background: none; }
+  .test-form textarea, .test-form input[type=text], .test-form input[type=search] { width: 100%; }
+  .test-form textarea {
+    resize: vertical; min-height: 140px; padding: 10px 12px; font: inherit; font-size: 14px; line-height: 1.5;
+    border: 1px solid var(--border); border-radius: 6px; background: var(--panel); color: var(--text);
+  }
+  .test-form textarea:focus { border-color: var(--accent); outline: 2px solid color-mix(in srgb, var(--accent) 25%, transparent); }
+  .test-filter { padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; background: var(--panel); color: var(--text); }
+  .test-form-row { display: flex; gap: 24px; flex-wrap: wrap; align-items: start; }
+  .test-form-row .grow { flex: 1 1 280px; }
+  .test-runs { display: flex; gap: 6px; align-items: center; }
+  .test-runs button.on { background: var(--accent); border-color: var(--accent); color: white; }
+  .test-runs input[type=number] { width: 80px; }
+  .test-runs input[aria-invalid="true"] { border-color: var(--danger); }
+  .test-hint { font-size: 12px; }
+  .test-hint.error { color: var(--danger); }
+  .test-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .test-actions button:disabled { opacity: .5; cursor: not-allowed; pointer-events: none; } /* so the wrapper gets the hover */
+  .test-reset { margin-left: auto; }
+  .why-wrap { cursor: not-allowed; }
+  .why-wrap:has(button:enabled) { cursor: auto; }
+  .why-wrap .tip:empty { display: none; }
+  .test-models { border: none; padding: 0; margin: 0; min-width: 0; display: grid; gap: 8px; }
+  /* One column of fixed-height rows: long names are cut short (full name in the tooltip). */
+  .test-model-list { display: grid; max-height: 344px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; }
+  .test-model {
+    display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 12px;
+    height: 48px; padding: 0 12px; cursor: pointer; border-bottom: 1px solid var(--border);
+  }
+  .test-model:last-child { border-bottom: none; }
+  .test-model:hover { background: var(--hover); }
+  .test-model:has(input:checked) { background: var(--b-blue-bg); box-shadow: inset 3px 0 0 var(--accent); }
+  .test-model.limit { cursor: not-allowed; opacity: .55; }
+  .test-model input[type=checkbox] { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); cursor: inherit; }
+  .test-model-text { display: grid; min-width: 0; line-height: 1.25; }
+  .test-model-name, .test-model-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .test-model-name { font-weight: 600; font-size: 14px; }
+  .test-model-sub, .test-model-meta { font-size: 12px; color: var(--muted); }
+  .test-model-meta { white-space: nowrap; text-align: right; }
+  .tnum { font-variant-numeric: tabular-nums; }
+  .test-sum-runs { font-weight: 600; margin: 0 0 8px; }
+  .test-sum-line { font-size: 13px; margin: 0 0 6px; }
+  .test-sum-warn { margin: 8px 0 0; padding-left: 18px; font-size: 13px; color: var(--b-amber); }
+  .test-sum-warn:empty { display: none; }
+  /* The Tests list: progress, status and created stay on their lines; name and models take the rest. */
+  .tests-table td { vertical-align: top; }
+  .tests-table td:first-child { min-width: 160px; }
+  .tests-progress { width: 150px; white-space: nowrap; }
+  .tests-progress .progress-bar { height: 6px; margin: 6px 0 4px; }
+  .tests-progress .muted { font-size: 12px; }
+  .nowrap { white-space: nowrap; }
+  .badge.test-status { white-space: nowrap; }
+  .test-tpls { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+  .test-tpls li { display: grid; gap: 2px; }
+  .test-tpls .muted { font-size: 12px; }
+  .test-tpl-actions { display: flex; gap: 6px; margin-top: 4px; }
+  ::placeholder { color: var(--muted); opacity: 1; }
+  .test-h3 { font-size: 13px; color: var(--muted); margin: 14px 0 6px; font-weight: 600; }
+  .test-text { white-space: pre-wrap; overflow-wrap: anywhere; margin: 8px 0 0; padding: 10px 12px; font-size: 13px;
+    background: var(--code-bg); border-radius: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .test-run { border-top: 1px solid var(--border); padding: 8px 0; }
+  .test-run:first-of-type { border-top: none; }
+  .test-run > summary { display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 500; flex-wrap: wrap; }
+  .test-run > summary .muted { font-weight: 400; font-size: 13px; }
+  .test-run details.thinking { margin-top: 8px; font-size: 13px; color: var(--muted); }
+  .test-run .error-box { margin: 8px 0 0; }
   .loaded-dot { display: inline-block; width: 8px; height: 8px; margin-right: 7px; border-radius: 50%; background: var(--good); vertical-align: middle; }
   .badge.cap { background: var(--b-blue-bg); color: var(--b-blue); }
   .caps { display: flex; flex-wrap: wrap; gap: 4px; }

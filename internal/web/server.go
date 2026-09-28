@@ -12,6 +12,7 @@ import (
 
 	"github.com/mophead64/ollama-model-manager/internal/downloads"
 	"github.com/mophead64/ollama-model-manager/internal/library"
+	"github.com/mophead64/ollama-model-manager/internal/modeltest"
 	"github.com/mophead64/ollama-model-manager/internal/ollama"
 	"github.com/mophead64/ollama-model-manager/internal/store"
 	"github.com/mophead64/ollama-model-manager/internal/sysinfo"
@@ -47,6 +48,7 @@ type Server struct {
 	ol  *ollama.Client
 	st  *store.Store
 	dl  *downloads.Manager
+	mt  *modeltest.Runner
 	sys *sysinfo.Sampler
 	lib *library.Client
 	cfg Config
@@ -57,13 +59,13 @@ type Server struct {
 	logins  *loginLimiter
 }
 
-func NewServer(ol *ollama.Client, st *store.Store, dl *downloads.Manager, sys *sysinfo.Sampler, cfg Config, log *slog.Logger) (*Server, error) {
+func NewServer(ol *ollama.Client, st *store.Store, dl *downloads.Manager, mt *modeltest.Runner, sys *sysinfo.Sampler, cfg Config, log *slog.Logger) (*Server, error) {
 	tmpl, err := template.New("").Funcs(templateFuncs).ParseFS(templateFS, "templates/*.html")
 	if err != nil {
 		return nil, fmt.Errorf("parse templates: %w", err)
 	}
 	return &Server{
-		ol: ol, st: st, dl: dl, sys: sys, lib: library.New(cfg.LibraryURL, cfg.HFURL, cfg.HFToken), cfg: cfg, log: log,
+		ol: ol, st: st, dl: dl, mt: mt, sys: sys, lib: library.New(cfg.LibraryURL, cfg.HFURL, cfg.HFToken), cfg: cfg, log: log,
 		tmpl: tmpl, updates: newUpdateChecker(), logins: newLoginLimiter(),
 	}, nil
 }
@@ -90,7 +92,15 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /models/blacklist", s.handleBlacklist)
 	mux.HandleFunc("POST /models/blacklist/remove", s.handleUnblacklist)
 	mux.HandleFunc("POST /models/blacklist/reason", s.handleBlacklistReason)
-	mux.HandleFunc("GET /models/testing", s.handleModelsSubpage("testing", "Testing"))
+	mux.HandleFunc("GET /models/testing", s.handleTests)
+	mux.HandleFunc("POST /models/testing", s.handleCreateTest)
+	mux.HandleFunc("GET /models/testing/{id}", s.handleTestDetail)
+	mux.HandleFunc("POST /models/testing/{id}/cancel", s.handleCancelTest)
+	mux.HandleFunc("POST /models/testing/{id}/rerun", s.handleRerunTest)
+	mux.HandleFunc("POST /models/testing/{id}/delete", s.handleDeleteTest)
+	mux.HandleFunc("POST /models/testing/{id}/template", s.handleSaveTestAsTemplate)
+	mux.HandleFunc("POST /models/testing/templates", s.handleSaveTemplate)
+	mux.HandleFunc("POST /models/testing/templates/{id}/delete", s.handleDeleteTemplate)
 	// Model names can contain "/" (e.g. "user/model:tag"), hence the wildcard.
 	mux.HandleFunc("GET /models/{name...}", s.handleModelDetail)
 	// The name goes in the form body: {name...} has to be the last path segment,
@@ -152,6 +162,10 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 				// For the count badge on the nav's Downloads link.
 				if n, err := s.st.CountActiveDownloads(r.Context()); err == nil {
 					m["ActiveDownloads"] = n
+				}
+				// And for the Testing tab's badge.
+				if n, err := s.st.CountActiveModelTests(r.Context()); err == nil {
+					m["ActiveTests"] = n
 				}
 			}
 		}

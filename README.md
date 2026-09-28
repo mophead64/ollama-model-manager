@@ -88,6 +88,11 @@ see tokens, tokens per second and response time for each reply. Nothing is saved
 
 ![The Chat page: a reply from llama3.2 with its token count and speed](docs/chat-with-model.png)
 
+### Compare models
+The Testing tab sends one prompt to several models, a number of times each, and keeps every reply with its timings. A
+comparison table shows each model's average tokens per second, reply length, response time and load time. Tests queue
+and run in the background, one at a time, and pick up where they left off after a restart.
+
 ### System monitoring
 Live graphs of CPU, memory, GPU and VRAM use over the last five minutes, each GPU's memory and utilisation, and what's
 loaded, so you can watch what happens as models load and run. NVIDIA GPUs are read with `nvidia-smi`, AMD and Intel

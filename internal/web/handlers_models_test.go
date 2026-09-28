@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/mophead64/ollama-model-manager/internal/downloads"
+	"github.com/mophead64/ollama-model-manager/internal/modeltest"
 	"github.com/mophead64/ollama-model-manager/internal/ollama"
 	"github.com/mophead64/ollama-model-manager/internal/store"
 	"github.com/mophead64/ollama-model-manager/internal/sysinfo"
@@ -82,6 +83,9 @@ func fakeOllama(t *testing.T, n int) *httptest.Server {
 				return
 			}
 			w.Write([]byte(`{"parameters":"stop \"<eot>\"","details":{"family":"qwen"},"model_info":{"general.parameter_count":3212749888,"tokenizer.ggml.tokens":[]}}`))
+		case "/api/chat": // a short reply, for model tests
+			w.Write([]byte(`{"message":{"content":"Pong"},"done":false}` + "\n" +
+				`{"message":{"content":""},"done":true,"total_duration":1500000000,"load_duration":900000000,"eval_count":30,"eval_duration":500000000}` + "\n"))
 		}
 	}))
 	t.Cleanup(srv.Close)
@@ -92,11 +96,13 @@ func fakeOllama(t *testing.T, n int) *httptest.Server {
 // signed-in user. Set by newTestServer.
 var testSession *http.Cookie
 
-// testManager, testStore and testSampler are the download manager, store and
-// hardware sampler behind the last newTestServer; the manager isn't running
-// unless a test starts it, and the sampler never runs (set its snapshot).
+// testManager, testRunner, testStore and testSampler are the download
+// manager, model test runner, store and hardware sampler behind the last
+// newTestServer; the manager and runner aren't running unless a test starts
+// them, and the sampler never runs (set its snapshot).
 var (
 	testManager *downloads.Manager
+	testRunner  *modeltest.Runner
 	testStore   *store.Store
 	testSampler *sysinfo.Sampler
 )
@@ -147,7 +153,8 @@ func newTestServer(t *testing.T, base string, opts ...func(*Config)) http.Handle
 		o(&cfg)
 	}
 	testSampler = sysinfo.New(time.Second, time.Minute, log)
-	s, err := NewServer(ollama.New(base), st, testManager, testSampler, cfg, log)
+	testRunner = modeltest.New(st, ollama.New(base), log)
+	s, err := NewServer(ollama.New(base), st, testManager, testRunner, testSampler, cfg, log)
 	if err != nil {
 		t.Fatal(err)
 	}

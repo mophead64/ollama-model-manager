@@ -15,7 +15,7 @@
     {{template "flash" .}}
     {{template "deleted_notice" .}}
     {{if not .Error}}{{template "overview" .}}{{end}}
-    {{template "models_tabs" "all"}}
+    {{template "models_tabs" (modeltabs "all" .ActiveTests)}}
     <div class="panel">
       <div class="row between">
         <h2>Models</h2>
@@ -91,14 +91,15 @@
 {{end}}
 {{end}}
 
-{{/* The models section's sub-pages. Takes the current one: "all",
-     "blacklist", "testing" or "chat". */}}
+{{/* The models section's sub-pages. Takes modeltabs: the current one
+     ("all", "blacklist", "testing" or "chat") and how many tests are queued
+     or running, for the Testing tab's badge. */}}
 {{define "models_tabs"}}
 <div class="disc-tabs page-tabs">
-  <a href="/models" class="disc-tab"{{if eq . "all"}} aria-current="true"{{end}}>All Models</a>
-  <a href="/models/blacklist" class="disc-tab"{{if eq . "blacklist"}} aria-current="true"{{end}}>Blacklist</a>
-  <a href="/models/testing" class="disc-tab"{{if eq . "testing"}} aria-current="true"{{end}}>Testing</a>
-  <a href="/models/chat" class="disc-tab"{{if eq . "chat"}} aria-current="true"{{end}}>Chat</a>
+  <a href="/models" class="disc-tab"{{if eq .Tab "all"}} aria-current="true"{{end}}>All Models</a>
+  <a href="/models/blacklist" class="disc-tab"{{if eq .Tab "blacklist"}} aria-current="true"{{end}}>Blacklist</a>
+  <a href="/models/testing" class="disc-tab"{{if eq .Tab "testing"}} aria-current="true"{{end}}>Testing{{with .ActiveTests}} <span class="nav-badge" title="{{.}} test(s) queued or running">{{.}}</span>{{end}}</a>
+  <a href="/models/chat" class="disc-tab"{{if eq .Tab "chat"}} aria-current="true"{{end}}>Chat</a>
 </div>
 {{end}}
 

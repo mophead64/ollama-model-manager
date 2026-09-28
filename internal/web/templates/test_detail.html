@@ -1,0 +1,115 @@
+{{define "test_detail.html"}}
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ollama Model Manager — {{.Test.Name}}</title>
+  {{template "style" .}}
+  {{template "htmx_script" .}}
+  {{template "dialog_script" .}}
+</head>
+<body>
+  {{template "nav" .}}
+  <main>
+    {{if .Queued}}<div class="notice" role="status" data-clear-param="queued"><span>Queued the test. It runs in the background, one model after another, so you can leave this page; its progress shows here and on the Testing tab.</span><button type="button" class="notice-close" data-dismiss aria-label="Dismiss">×</button></div>{{end}}
+    {{if .Cancelled}}<div class="notice" role="status" data-clear-param="cancelled"><span>Cancelled the test.</span><button type="button" class="notice-close" data-dismiss aria-label="Dismiss">×</button></div>{{end}}
+    {{if not .Error}}{{template "overview" .}}{{end}}
+    {{template "models_tabs" (modeltabs "testing" .ActiveTests)}}
+    {{template "test_results" .}}
+  </main>
+  {{template "footer" .}}
+  {{with .Test}}{{if not .Active}}
+  <dialog id="delete-test-modal" aria-labelledby="delete-test-title">
+    <form method="post" action="/models/testing/{{.ID}}/delete">
+      <h2 id="delete-test-title">Delete this test?</h2>
+      <p><strong>{{.Name}}</strong> and all {{.Total}} of its results will be deleted. The models aren't affected.</p>
+      <div class="dialog-actions">
+        <button type="button" class="secondary" data-dialog-close>Cancel</button>
+        <button type="submit" class="danger-solid">Delete</button>
+      </div>
+    </form>
+  </dialog>
+  {{end}}{{end}}
+</body>
+</html>
+{{end}}
+
+{{/* Everything about the test. Re-fetched while it's queued or running;
+     finished runs are kept as they are (hx-preserve) so any opened to read
+     stay open. */}}
+{{define "test_results"}}
+{{with .Test}}
+<div id="test-results"{{if .Active}} hx-get="/models/testing/{{.ID}}" hx-select="#test-results" hx-trigger="every 2s [document.visibilityState === 'visible']" hx-swap="outerHTML"{{end}}>
+  <div class="panel">
+    <p style="margin-top:0"><a href="/models/testing" class="muted">← All tests</a></p>
+    <div class="row between">
+      <h2 style="margin:0">{{.Name}} {{template "test_status" .}}</h2>
+      <div class="row">
+        <form method="post" action="/models/testing/{{.ID}}/template" class="inline"><button type="submit" class="secondary small" title="Keep this prompt, models and runs to start again later">Save as template</button></form>
+        {{if .Active}}
+        <form method="post" action="/models/testing/{{.ID}}/cancel" class="inline"><button type="submit" class="secondary small">Cancel</button></form>
+        {{else}}
+        <form method="post" action="/models/testing/{{.ID}}/rerun" class="inline"><button type="submit" class="secondary small" title="Queue a new test with the same prompt, models and runs">Run again</button></form>
+        <button type="button" class="danger small" data-dialog-open="delete-test-modal">Delete</button>
+        {{end}}
+      </div>
+    </div>
+    <dl class="kv">
+      <dt>Models</dt><dd><div class="caps">{{range .Models}}<span class="badge info mono">{{.}}</span>{{end}}</div></dd>
+      <dt>Runs</dt><dd>{{.Repeats}} per model · {{.Done}} of {{.Total}} done</dd>
+      <dt>Created</dt><dd>{{time .CreatedAt}} by {{.CreatedBy}}</dd>
+      {{with .StartedAt}}<dt>Took</dt><dd>{{took . $.Test.FinishedAt}}{{if $.Test.Active}} so far{{end}}</dd>{{end}}
+    </dl>
+    <h3 class="test-h3">Prompt</h3>
+    <pre class="test-text">{{.Prompt}}</pre>
+  </div>
+{{end}}
+
+  {{with .Summary}}
+  <div class="panel">
+    <h2>Comparison</h2>
+    <p class="muted test-intro">Averages over each model's completed runs. Load time is the longest of its runs; usually the first, when Ollama had to load the model.</p>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Model</th><th>Completed</th><th>Failed</th><th>Tokens/s</th><th>Reply tokens</th><th>Time</th><th>Load</th></tr></thead>
+      <tbody>
+      {{range $i, $m := .}}
+        <tr>
+          <td><a class="model-link" href="#model-{{add $i 1}}">{{.Model}}</a></td>
+          <td>{{.OK}} / {{len .Runs}}</td>
+          <td>{{if .Failed}}<span class="badge failed">{{.Failed}}</span>{{else}}0{{end}}</td>
+          <td>{{if .OK}}{{printf "%.1f" .AvgTPS}}{{else}}-{{end}}</td>
+          <td>{{if .OK}}{{printf "%.0f" .AvgTokens}}{{else}}-{{end}}</td>
+          <td>{{if .OK}}{{ms .AvgTotalMS}}{{else}}-{{end}}</td>
+          <td>{{if .OK}}{{ms .MaxLoadMS}}{{else}}-{{end}}</td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table>
+    </div>
+  </div>
+
+  {{range $i, $m := .}}
+  <div class="panel" id="model-{{add $i 1}}">
+    <h2 class="mono">{{.Model}}</h2>
+    {{range .Runs}}
+    {{/* hx-preserve swaps in the element with the same id from before the
+         refresh, so the id carries the status: a run that's just finished
+         has a new id and shows its result, and after that it's kept as is. */}}
+    <details class="test-run" id="run-{{.ID}}-{{.Status}}"{{if or (eq .Status "completed") (eq .Status "failed") (eq .Status "cancelled")}} hx-preserve="true"{{end}}>
+      <summary>
+        <span>Run {{.Iteration}}</span>
+        <span class="badge {{if eq .Status "pending"}}queued{{else}}{{.Status}}{{end}}">{{if eq .Status "pending"}}Waiting{{else if eq .Status "running"}}Running…{{else if eq .Status "completed"}}Done{{else if eq .Status "failed"}}Failed{{else}}Cancelled{{end}}</span>
+        {{if eq .Status "completed"}}<span class="muted">{{.Tokens}} tokens · {{printf "%.1f" .TokensPerSec}} tokens/s · {{ms .TotalMS}}{{if ge .LoadMS 500}} (loading {{ms .LoadMS}}){{end}}</span>{{end}}
+      </summary>
+      {{with .Error}}<div class="error-box">{{.}}</div>{{end}}
+      {{with .Thinking}}<details class="thinking"><summary>Thinking</summary><pre class="test-text">{{.}}</pre></details>{{end}}
+      {{with .Response}}<pre class="test-text">{{.}}</pre>{{else}}{{if eq .Status "completed"}}<p class="muted">An empty reply.</p>{{end}}{{end}}
+    </details>
+    {{end}}
+  </div>
+  {{end}}
+  {{end}}
+</div>
+{{end}}

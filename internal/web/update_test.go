@@ -55,7 +55,7 @@ func TestReleaseNotesRenderedSafely(t *testing.T) {
 func TestReleasePanel(t *testing.T) {
 	render := func(t *testing.T, running, latest string) string {
 		setVersion(t, running)
-		s, err := NewServer(nil, nil, nil, nil, Config{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+		s, err := NewServer(nil, nil, nil, nil, nil, Config{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 		if err != nil {
 			t.Fatal(err)
 		}
