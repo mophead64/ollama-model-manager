@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/mophead64/ollama-model-manager/internal/library"
+	"github.com/mophead64/ollama-model-manager/internal/store"
 	"github.com/mophead64/ollama-model-manager/internal/sysinfo"
 )
 
@@ -195,6 +196,9 @@ func TestDiscoverStateURL(t *testing.T) {
 			t.Errorf("fit=%q: Fit = %v, want %v", fit, got, want)
 		}
 	}
+	if st := parseDiscoverState(map[string][]string{"src": {"hf"}, "bl": {"hide"}}); !st.HideBL || st.URL() != "/discover?bl=hide&src=hf" {
+		t.Errorf("hide blacklisted on Hugging Face = %+v, %s", st, st.URL())
+	}
 	if got := parseDiscoverState(nil).URL(); got != "/discover" {
 		t.Errorf("empty state URL = %s", got)
 	}
@@ -297,5 +301,82 @@ func TestDiscoverDownloadStaysOnPage(t *testing.T) {
 	// Without htmx it still lands on the downloads page.
 	if rec := do(h, "POST", "/downloads", url.Values{"model": {"llama3.2"}, "from": {"discover"}}, testSession); rec.Code != http.StatusSeeOther {
 		t.Errorf("plain post = %d, want a redirect", rec.Code)
+	}
+}
+
+func TestDiscoverShowsBlacklist(t *testing.T) {
+	lib, hf := fakeLibrary(t), fakeHF(t)
+	h := newTestServer(t, fakeOllama(t, 1).URL, func(c *Config) { c.LibraryURL, c.HFURL = lib.URL, hf.URL })
+	at := time.Date(2026, 9, 1, 10, 30, 0, 0, time.Local)
+	for _, e := range []store.BlacklistEntry{
+		{Model: "model-000:cloud", Reason: "Too slow & vague.", By: "admin", At: at},
+		// Pulled under another name, but the same download as model-000's latest and 8b.
+		{Model: "renamed:v1", Digest: "aaa111" + strings.Repeat("f", 58), By: "admin", At: at},
+		{Model: "hf.co/owner/Small-GGUF:Q4_K_M", Reason: "Lost too much quality.", By: "admin", At: at},
+	} {
+		testStore.BlacklistModel(t.Context(), e)
+	}
+
+	// Cards: a badge whose tooltip has each entry.
+	body := get(h, "/discover?fit=0", false).Body.String()
+	for _, want := range []string{
+		`<a class="badge error tip-wrap" href="/models/blacklist">Blacklisted<span class="tip wide right" role="tooltip">`,
+		"<strong>model-000:cloud</strong> blacklisted 2026-09-01 10:30:00 by admin",
+		`<span class="bl-tip-reason">Too slow &amp; vague.</span>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("ollama.com card missing %q", want)
+		}
+	}
+	if strings.Count(body, "tip-wrap\" href=\"/models/blacklist\"") != 1 {
+		t.Errorf("only model-000's card should be marked")
+	}
+	hfBody := get(h, "/discover?src=hf&fit=0", false).Body.String()
+	if !strings.Contains(hfBody, "<strong>hf.co/owner/Small-GGUF:Q4_K_M</strong>") || !strings.Contains(hfBody, "Lost too much quality.") {
+		t.Error("Hugging Face card should be marked")
+	}
+
+	// Tags: by name, or by digest for an alias.
+	tags := get(h, "/discover/tags?model=model-000", true).Body.String()
+	if n := strings.Count(tags, ">Blacklisted<"); n != 3 {
+		t.Errorf("%d tags marked, want 3 (cloud by name; latest and 8b by digest)", n)
+	}
+	if !strings.Contains(tags, "<strong>renamed:v1</strong>") || !strings.Contains(tags, "No reason given.") {
+		t.Error("alias tags should show the entry they matched")
+	}
+	files := get(h, "/discover/hf/files?repo=owner/Small-GGUF&ctx=131072", true).Body.String()
+	if n := strings.Count(files, ">Blacklisted<"); n != 1 {
+		t.Errorf("%d HF quants marked, want just Q4_K_M:\n%s", n, files)
+	}
+
+	// Hide blacklisted: off by default; on, a model goes if any of its tags is blacklisted.
+	if !strings.Contains(body, `name="bl" value="hide" >`) {
+		t.Error("the filter should be offered, unticked")
+	}
+	hidden := get(h, "/discover?fit=0&bl=hide", false).Body.String()
+	if strings.Contains(hidden, `<h3 class="disc-name">model-000</h3>`) || !strings.Contains(hidden, `<h3 class="disc-name">huge</h3>`) {
+		t.Error("only model-000 (one tag blacklisted) should be hidden")
+	}
+	if !strings.Contains(hidden, `name="bl" value="hide" checked>`) || !strings.Contains(hidden, `hx-get="/discover?bl=hide&amp;fit=0&amp;page=2"`) {
+		t.Error("the filter should stay ticked, and carry on to the next page")
+	}
+	hfHidden := get(h, "/discover?src=hf&fit=0&bl=hide", false).Body.String()
+	if strings.Contains(hfHidden, `<h3 class="disc-name">owner/Small-GGUF</h3>`) || !strings.Contains(hfHidden, `<h3 class="disc-name">owner/Huge-GGUF</h3>`) {
+		t.Error("Small-GGUF (one quant blacklisted) should be hidden on Hugging Face")
+	}
+}
+
+func TestDiscoverAllBlacklisted(t *testing.T) {
+	lib := fakeLibrary(t)
+	h := newTestServer(t, fakeOllama(t, 1).URL, func(c *Config) { c.LibraryURL = lib.URL })
+	for _, m := range []string{"model-000:8b", "huge:4000b", "cloudy:latest"} {
+		testStore.BlacklistModel(t.Context(), store.BlacklistEntry{Model: m, By: "admin", At: time.Now()})
+	}
+	// The search has a next page, so the page still scrolls; its first page is just empty.
+	body := get(h, "/discover?fit=0&bl=hide", true).Body.String()
+	for _, name := range []string{"model-000", "huge", "cloudy"} {
+		if strings.Contains(body, `<h3 class="disc-name">`+name+`</h3>`) {
+			t.Errorf("%s should be hidden", name)
+		}
 	}
 }

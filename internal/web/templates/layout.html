@@ -348,6 +348,12 @@
   .copy-tip-wrap:hover .copy-tip, .copy-tip-wrap:focus-within .copy-tip, .copy-tip-wrap.copied .copy-tip,
   .tip-wrap:hover .tip, .tip-wrap:focus .tip { opacity: 1; visibility: visible; }
   .copy-tip-wrap.copied .copy-tip { color: var(--good); }
+  /* A tooltip with sentences in it (blacklist reasons), hanging leftwards. */
+  .tip.wide { width: max-content; max-width: 320px; white-space: normal; text-align: left; color: var(--text); }
+  .tip.right { left: auto; right: 0; }
+  .bl-tip { display: block; }
+  .bl-tip + .bl-tip { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+  .bl-tip-reason { display: block; color: var(--muted); white-space: pre-wrap; }
   .loaded-dot { display: inline-block; width: 8px; height: 8px; margin-right: 7px; border-radius: 50%; background: var(--good); vertical-align: middle; }
   .badge.cap { background: var(--b-blue-bg); color: var(--b-blue); }
   .caps { display: flex; flex-wrap: wrap; gap: 4px; }
