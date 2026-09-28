@@ -64,6 +64,30 @@
 <th aria-sort="{{.H.Aria}}"><a class="sort-link{{if .H.Arrow}} active{{end}}" href="{{.H.URL}}" hx-get="{{.H.URL}}" hx-target="#model-results" hx-swap="outerHTML" hx-push-url="true">{{.Label}}<span class="arrow">{{or .H.Arrow "↕"}}</span></a></th>
 {{end}}
 
+{{/* Opens the shared "Other quants" dialog (quants_dialog) for a model,
+     loading its list into it. Takes quantsopener. */}}
+{{define "quants_opener"}}<button type="button"{{with .Class}} class="{{.}}"{{end}} data-dialog-open="quants-modal"
+  data-fill-name="{{.Name}}" data-fill-site="{{.Src.Site}}" data-fill-url="{{.Src.URL}}" data-fill-loading="Loading…"
+  hx-get="{{.Src.QuantsURL}}" hx-target="#quants-body" hx-swap="innerHTML">Other quants…</button>{{end}}
+
+{{/* A model's other tags or quantisations, with Download buttons (Discover's
+     list), and a link to its page. Shared by every opener on the page. */}}
+{{define "quants_dialog"}}
+<dialog id="quants-modal" class="wide" aria-labelledby="quants-title">
+  <div class="dialog-body">
+    <div class="row between">
+      <h2 id="quants-title" style="margin:0">Other quants of <code data-fill="name"></code></h2>
+      <a class="hint-link" style="margin:0" data-fill="url" data-fill-attr="href" href="#" target="_blank" rel="noopener noreferrer">View on <span data-fill="site"></span> ↗</a>
+    </div>
+    <p class="muted quants-note">Download another size or quantisation to compare it with the one you have. Downloads queue in the background.</p>
+    <div id="quants-body" data-fill="loading"></div>
+    <div class="dialog-actions">
+      <button type="button" class="secondary" data-dialog-close>Close</button>
+    </div>
+  </div>
+</dialog>
+{{end}}
+
 {{/* A model's name, which copies itself on click (dialog.js). */}}
 {{define "model_name"}}<span class="copy-tip-wrap"><button type="button" class="model-name" data-copy-text="{{.}}">{{.}}</button><span class="copy-tip" role="tooltip">Click to copy model name</span></span>{{end}}
 
@@ -79,6 +103,10 @@
     <div class="menu">
       {{if $.Loaded}}{{template "unload_button" .Name}}{{else}}{{template "load_button" .Name}}{{end}}
       {{if canchat .Capabilities}}<a href="/models/chat?model={{.Name}}">Chat</a>{{end}}
+      {{with modelsrc .Name}}
+      {{if .QuantsURL}}{{template "quants_opener" (quantsopener $.Model.Name .)}}{{end}}
+      {{if .URL}}<a href="{{.URL}}" target="_blank" rel="noopener noreferrer">View on {{.Site}} ↗</a>{{end}}
+      {{end}}
       {{if $.AllowDelete}}<button type="button" class="danger" data-dialog-open="delete-model-modal"
         data-fill-name="{{.Name}}" data-fill-size="{{bytes .Size}}" data-fill-return="{{$.Return}}">Delete</button>{{end}}
     </div>

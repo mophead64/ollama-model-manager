@@ -111,6 +111,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /discover", s.handleDiscover)
 	mux.HandleFunc("GET /discover/tags", s.handleDiscoverTags)
 	mux.HandleFunc("GET /discover/hf/files", s.handleDiscoverHFFiles)
+	mux.HandleFunc("GET /discover/quants", s.handleModelQuants)
 	mux.HandleFunc("GET /models/chat", s.handleChatPage)
 	mux.HandleFunc("GET /chat", func(w http.ResponseWriter, r *http.Request) {
 		// The chat page was here before it became a models tab.

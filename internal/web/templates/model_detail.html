@@ -23,6 +23,10 @@
         <h2 class="mono" style="margin:0">{{$.Name}}</h2>
         <div class="row">
           {{if $.CanChat}}<a class="btn secondary small" href="/models/chat?model={{$.Name}}">Chat</a>{{end}}
+          {{with modelsrc $.Name}}
+          {{if .QuantsURL}}{{template "quants_opener" (quantsopener $.Name . "secondary small")}}{{end}}
+          {{if .URL}}<a class="btn secondary small" href="{{.URL}}" target="_blank" rel="noopener noreferrer">View on {{.Site}} ↗</a>{{end}}
+          {{end}}
           {{if $.AllowDelete}}<button type="button" class="danger small" data-dialog-open="delete-model-modal">Delete model</button>{{end}}
         </div>
       </div>
@@ -71,7 +75,7 @@
     {{end}}
   </main>
   {{template "footer" .}}
-  {{if .Info}}{{template "load_dialog" .}}{{end}}
+  {{if .Info}}{{template "load_dialog" .}}{{template "quants_dialog"}}{{end}}
   {{if and .AllowDelete .Info}}
   <dialog id="delete-model-modal" aria-labelledby="delete-model-title">
     <form method="post" action="/models/delete" data-reset-on-open>

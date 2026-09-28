@@ -522,11 +522,12 @@ func formatCompact(n int) string {
 // a confirmation dialog if the model looks too big for this machine.
 func (s *Server) queueFromDiscover(w http.ResponseWriter, r *http.Request) {
 	input := r.FormValue("model")
+	unblacklist := strings.TrimSpace(r.FormValue("unblacklist"))
 	data := map[string]any{"Name": input, "Fragment": true} // Fragment: refresh the nav badge
 	c, err := s.dl.Check(r.Context(), input)
 	if err == nil && r.FormValue("confirm") == "" {
-		if concerns := s.resourceConcerns(c); len(concerns) > 0 {
-			data["Confirm"] = map[string]any{"Name": c.Name, "Size": c.Size, "Concerns": concerns}
+		if confirm := s.downloadConfirm(r, c, unblacklist); confirm != nil {
+			data["Confirm"] = confirm
 			s.render(w, r, "discover_dl_action", data)
 			return
 		}
@@ -547,5 +548,6 @@ func (s *Server) queueFromDiscover(w http.ResponseWriter, r *http.Request) {
 	s.log.Info("download queued", "model", c.Name, "by", currentUser(r).Username)
 	data["Queued"] = &activeDL{ID: id, Status: store.DownloadQueued, Percent: -1}
 	data["Warning"] = c.Warning
+	data["Unblacklisted"] = s.unblacklistQueued(r, unblacklist)
 	s.render(w, r, "discover_dl_action", data)
 }

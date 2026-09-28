@@ -240,6 +240,7 @@
 {{define "discover_dl_action"}}
 {{with .Queued}}
 {{template "dl_status_badge" .}}
+{{if $.Unblacklisted}}<div class="disc-dl-note">Removed from the blacklist.</div>{{end}}
 {{with $.Warning}}<div class="disc-dl-note warn">{{.}}</div>{{end}}
 {{else}}
 {{template "discover_dl_form" .Name}}
@@ -251,9 +252,7 @@
     <input type="hidden" name="model" value="{{.Name}}">
     <input type="hidden" name="from" value="discover">
     <input type="hidden" name="confirm" value="1">
-    <p>It's a <strong>{{bytes .Size}}</strong> download.</p>
-    <ul class="concerns">{{range .Concerns}}<li>{{.}}</li>{{end}}</ul>
-    <p class="muted" style="font-size:13px">Checked against the machine running this app. If Ollama runs somewhere else, its hardware may differ.</p>
+    {{template "download_confirm_body" .}}
     <div class="dialog-actions">
       <button type="button" class="secondary" data-dialog-close>Cancel</button>
       <button type="submit" data-busy="Queuing…">Download anyway</button>
@@ -263,4 +262,23 @@
 {{end}}
 {{end}}
 {{if .User}}{{template "nav_dl_badge" .}}{{end}}
+{{end}}
+
+{{/* The "download anyway?" dialogs' explanation (downloadConfirm): the
+     blacklist entry, if it's on it, and any size concerns. Also carries the
+     entry to take off the blacklist once confirmed and queued. */}}
+{{define "download_confirm_body"}}
+{{with .Unblacklist}}<input type="hidden" name="unblacklist" value="{{.}}">{{end}}
+{{with .Blacklisted}}
+<p><strong>{{.Model}}</strong> is on your blacklist. Downloading it takes it off.</p>
+<div class="bl-confirm">
+  <div class="muted">Blacklisted {{time .At}}{{with .By}} by {{.}}{{end}}</div>
+  <div class="reason">{{or .Reason "No reason given."}}</div>
+</div>
+{{end}}
+{{if .Concerns}}
+<p>It's a <strong>{{bytes .Size}}</strong> download.</p>
+<ul class="concerns">{{range .Concerns}}<li>{{.}}</li>{{end}}</ul>
+<p class="muted" style="font-size:13px">Checked against the machine running this app. If Ollama runs somewhere else, its hardware may differ.</p>
+{{end}}
 {{end}}

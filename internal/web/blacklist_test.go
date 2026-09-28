@@ -167,3 +167,62 @@ func TestBlacklistDownload(t *testing.T) {
 		t.Error("confirmed download should unblacklist")
 	}
 }
+
+func TestDownloadingBlacklistedModelAsksFirst(t *testing.T) {
+	h := newTestServer(t, fakeOllama(t, 1).URL)
+	at := time.Date(2026, 9, 1, 10, 30, 0, 0, time.Local)
+	for _, m := range []string{"qwen3:8b", "gemma3:latest"} {
+		testStore.BlacklistModel(t.Context(), store.BlacklistEntry{Model: m, Reason: "Rambles & repeats itself.", By: "admin", At: at})
+	}
+	onList := func(m string) bool {
+		got, _ := testStore.Blacklist(t.Context())
+		return slices.ContainsFunc(got, func(e store.BlacklistEntry) bool { return e.Model == m })
+	}
+	queued := func() int {
+		active, _ := testStore.ActiveDownloads(t.Context())
+		return len(active)
+	}
+
+	// The Downloads page: a dialog with the entry, and nothing queued yet.
+	rec := do(h, "POST", "/downloads", url.Values{"model": {"qwen3:8b"}}, testSession)
+	body := rec.Body.String()
+	for _, want := range []string{`id="confirm-download-modal" data-dialog-autoopen`, "<strong>qwen3:8b</strong> is on your blacklist. Downloading it takes it off.",
+		"Blacklisted 2026-09-01 10:30:00 by admin", "Rambles &amp; repeats itself.", `<input type="hidden" name="unblacklist" value="qwen3:8b">`, `name="confirm" value="1"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("confirmation missing %q", want)
+		}
+	}
+	if queued() != 0 || !onList("qwen3:8b") {
+		t.Fatal("nothing should happen before confirming")
+	}
+	// Download anyway: queued, and off the blacklist.
+	rec = do(h, "POST", "/downloads", url.Values{"model": {"qwen3:8b"}, "confirm": {"1"}, "unblacklist": {"qwen3:8b"}}, testSession)
+	if loc := rec.Header().Get("Location"); loc != "/downloads?queued=qwen3%3A8b&unblacklisted=qwen3%3A8b" || queued() != 1 || onList("qwen3:8b") {
+		t.Errorf("confirmed = %q, %d queued, still listed %v", loc, queued(), onList("qwen3:8b"))
+	}
+
+	// Discover's Download (and Other quants'): the same, in place. "gemma3" is gemma3:latest.
+	rec = do(h, "POST", "/downloads", url.Values{"model": {"gemma3"}, "from": {"discover"}}, testSession, "HX-Request", "true")
+	if body := rec.Body.String(); !strings.Contains(body, "data-dialog-autoopen") || !strings.Contains(body, "is on your blacklist") || !strings.Contains(body, `name="unblacklist" value="gemma3:latest"`) {
+		t.Fatalf("discover confirmation wrong:\n%s", body)
+	}
+	rec = do(h, "POST", "/downloads", url.Values{"model": {"gemma3"}, "from": {"discover"}, "confirm": {"1"}, "unblacklist": {"gemma3:latest"}}, testSession, "HX-Request", "true")
+	if body := rec.Body.String(); !strings.Contains(body, "Removed from the blacklist.") || onList("gemma3:latest") || queued() != 2 {
+		t.Errorf("discover confirmed wrong: listed %v, %d queued\n%s", onList("gemma3:latest"), queued(), body)
+	}
+
+	// Models that aren't blacklisted go straight through, as before.
+	if rec := do(h, "POST", "/downloads", url.Values{"model": {"llama3.2"}}, testSession); rec.Code != http.StatusSeeOther {
+		t.Errorf("a model not on the blacklist = %d, want queued", rec.Code)
+	}
+}
+
+func TestBlacklistPageDownloadIsntAskedTwice(t *testing.T) {
+	h := newTestServer(t, fakeOllama(t, 1).URL)
+	testStore.BlacklistModel(t.Context(), store.BlacklistEntry{Model: "qwen3:8b", By: "admin", At: time.Now()})
+	// Its own dialog has said so; it sends unblacklist, so it goes ahead.
+	rec := do(h, "POST", "/downloads", url.Values{"model": {"qwen3:8b"}, "unblacklist": {"qwen3:8b"}}, testSession)
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/downloads?queued=qwen3%3A8b&unblacklisted=qwen3%3A8b" {
+		t.Errorf("blacklist page download = %d %q", rec.Code, rec.Header().Get("Location"))
+	}
+}

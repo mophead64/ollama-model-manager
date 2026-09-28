@@ -120,13 +120,13 @@ func (s *Server) handleQueueDownload(w http.ResponseWriter, r *http.Request) {
 	c, err := s.dl.Check(r.Context(), input)
 	name, warning := c.Name, c.Warning
 	if err == nil && r.FormValue("confirm") == "" {
-		if concerns := s.resourceConcerns(c); len(concerns) > 0 {
+		if confirm := s.downloadConfirm(r, c, unblacklist); confirm != nil {
 			data, derr := s.downloadsData(r)
 			if derr != nil {
 				s.serverError(w, r, derr)
 				return
 			}
-			data["Confirm"] = map[string]any{"Name": c.Name, "Size": c.Size, "Concerns": concerns, "Unblacklist": unblacklist}
+			data["Confirm"] = confirm
 			data["FormValue"] = input
 			s.render(w, r, "downloads.html", data)
 			return
@@ -156,15 +156,62 @@ func (s *Server) handleQueueDownload(w http.ResponseWriter, r *http.Request) {
 	if warning != "" {
 		v.Set("warning", warning)
 	}
-	if unblacklist != "" {
-		if err := s.st.UnblacklistModel(r.Context(), unblacklist); err != nil {
-			s.log.Error("unblacklist model failed", "model", unblacklist, "error", err)
-		} else {
-			s.log.Info("model unblacklisted", "model", unblacklist, "by", currentUser(r).Username)
-			v.Set("unblacklisted", unblacklist)
-		}
+	if s.unblacklistQueued(r, unblacklist) {
+		v.Set("unblacklisted", unblacklist)
 	}
 	http.Redirect(w, r, "/downloads?"+v.Encode(), http.StatusSeeOther)
+}
+
+// downloadConfirm is the "download anyway?" dialog's content, or nil when a
+// download can go ahead without asking: it's asked when the model looks too
+// big for this machine, or is on the blacklist. unblacklist is the entry the
+// request already means to remove (the blacklist's own Download, which has
+// warned); otherwise, confirming carries the entry found, to be removed once
+// the download is queued (unblacklistQueued).
+func (s *Server) downloadConfirm(r *http.Request, c downloads.Checked, unblacklist string) map[string]any {
+	concerns := s.resourceConcerns(c)
+	var banned *store.BlacklistEntry
+	if unblacklist == "" {
+		if banned = s.blacklistedFor(r, c.Name); banned != nil {
+			unblacklist = banned.Model
+		}
+	}
+	if len(concerns) == 0 && banned == nil {
+		return nil
+	}
+	return map[string]any{"Name": c.Name, "Size": c.Size, "Concerns": concerns, "Blacklisted": banned, "Unblacklist": unblacklist}
+}
+
+// blacklistedFor is name's blacklist entry, or nil. Names match as Ollama
+// sees them: "qwen3" is "qwen3:latest", and Hugging Face names ignore case.
+func (s *Server) blacklistedFor(r *http.Request, name string) *store.BlacklistEntry {
+	entries, err := s.st.Blacklist(r.Context())
+	if err != nil {
+		s.log.Warn("read blacklist failed", "error", err)
+		return nil
+	}
+	key := tagKey(name)
+	for i, e := range entries {
+		if strings.EqualFold(e.Model, name) || (key != "" && tagKey(e.Model) == key) {
+			return &entries[i]
+		}
+	}
+	return nil
+}
+
+// unblacklistQueued takes a model off the blacklist once its download is
+// queued (so a download that's cancelled or refused leaves it be), and
+// reports whether it did.
+func (s *Server) unblacklistQueued(r *http.Request, name string) bool {
+	if name == "" {
+		return false
+	}
+	if err := s.st.UnblacklistModel(r.Context(), name); err != nil {
+		s.log.Error("unblacklist model failed", "model", name, "error", err)
+		return false
+	}
+	s.log.Info("model unblacklisted", "model", name, "by", currentUser(r).Username)
+	return true
 }
 
 // downloadAction runs one of the per-download buttons, then returns to

@@ -258,11 +258,18 @@
     width: min(440px, calc(100% - 32px)); padding: 0; border: 1px solid var(--border);
     border-radius: var(--radius); background: var(--panel); color: var(--text);
     box-shadow: 0 20px 50px rgb(0 0 0 / .25);
+    /* A dialog can sit inside a table cell (Discover's "download anyway?"),
+       whose alignment and no-wrap it mustn't inherit. */
+    text-align: left; white-space: normal; font-size: 15px; font-weight: 400; overflow-wrap: anywhere;
   }
   dialog::backdrop { background: rgb(15 18 24 / .45); }
   dialog form { padding: 22px; }
   dialog h2 { margin: 0 0 14px; font-size: 16px; }
   dialog .form-grid { max-width: none; }
+  dialog.wide { width: min(820px, calc(100% - 32px)); }
+  dialog .dialog-body { padding: 22px; }
+  .quants-note { font-size: 13px; margin: 8px 0 12px; }
+  #quants-body:not(:has(table)) { color: var(--muted); font-size: 14px; }
   ul.concerns { margin: 0 0 14px; padding-left: 20px; font-size: 14px; line-height: 1.5; color: var(--b-amber); }
   ul.concerns li + li { margin-top: 6px; }
   .memory-strip {
@@ -498,6 +505,9 @@
   .bl-on, form:has(.bl-toggle:checked) .bl-off { display: none; }
   form:has(.bl-toggle:checked) .bl-on { display: inline; }
   .reason { white-space: pre-wrap; max-width: 420px; }
+  .bl-confirm { margin: -6px 0 16px; padding: 10px 12px; border-left: 3px solid var(--danger); background: var(--code-bg); border-radius: 0 6px 6px 0; font-size: 14px; line-height: 1.5; }
+  .bl-confirm .muted { font-size: 12px; margin-bottom: 4px; }
+  .bl-confirm .reason { max-width: none; }
   a.badge { text-decoration: none; }
   a.badge:hover { filter: brightness(.95); text-decoration: underline; }
   .disc-dl-note { font-size: 12px; white-space: normal; text-align: left; max-width: 280px; margin: 4px 0 0 auto; }
