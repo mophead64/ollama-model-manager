@@ -3,7 +3,7 @@
   {{- if .Update.Available}}
   <a href="{{.Update.URL}}" target="_blank" rel="noopener noreferrer" class="badge update">Update available: {{.Update.Latest}}</a>
   {{- else if .Update.Checked}}
-  up to date
+  <span class="badge on" title="Checked {{time .Update.CheckedAt}}">✓ Up to date</span>
   {{- else}}
   update check unavailable
   {{- end}}

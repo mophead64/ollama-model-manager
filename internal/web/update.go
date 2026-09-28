@@ -22,8 +22,11 @@ import (
 
 const (
 	latestReleaseURL = "https://api.github.com/repos/mophead64/ollama-model-manager/releases/latest"
-	updateOKTTL      = 6 * time.Hour
-	updateErrTTL     = 5 * time.Minute
+	// The footer re-checks this often too (layout.html), so a new release
+	// shows within a couple of hours; it's one request per interval,
+	// whoever's viewing, well within GitHub's unauthenticated rate limit.
+	updateOKTTL  = 2 * time.Hour
+	updateErrTTL = 5 * time.Minute
 	// A manual refresh bypasses the cache, but not more often than this, so a
 	// click-happy user can't burn through GitHub's unauthenticated rate limit.
 	updateMinGap = 30 * time.Second
@@ -38,6 +41,7 @@ type updateInfo struct {
 	Published time.Time
 	Notes     template.HTML // the release notes, rendered from Markdown
 	Checked   bool          // false if the check failed (offline, rate limited, ...)
+	CheckedAt time.Time     // when GitHub was asked
 }
 
 // updateChecker asks GitHub for the latest release, caching the answer so
@@ -72,6 +76,7 @@ func (u *updateChecker) check(ctx context.Context, force bool) updateInfo {
 		u.info, u.expiry = updateInfo{}, time.Now().Add(updateErrTTL)
 		return u.info
 	}
+	info.CheckedAt = now
 	u.info, u.expiry = info, time.Now().Add(updateOKTTL)
 	return info
 }

@@ -203,6 +203,7 @@
   }
   footer.app-footer a { color: var(--accent); text-decoration: none; }
   footer.app-footer a:hover { text-decoration: underline; }
+  footer.app-footer .badge { font-size: 11px; padding: 1px 7px; vertical-align: 1px; }
   .nav-user { display: flex; align-items: center; gap: 12px; }
   button.small { padding: 4px 10px; font-size: 13px; }
   .auth-box { max-width: 380px; margin: 8vh auto 0; }
@@ -647,7 +648,7 @@
 {{define "footer"}}
 <footer class="app-footer">
   Ollama Model Manager <a href="https://github.com/mophead64/ollama-model-manager/releases" target="_blank" rel="noopener noreferrer">{{.Version}}</a>
-  {{if .User}}<span hx-get="/version/check" hx-trigger="load, every 360m" hx-swap="innerHTML"></span>
+  {{if .User}}<span hx-get="/version/check" hx-trigger="load, every 120m" hx-swap="innerHTML"></span>
   {{template "state_watch" .}}{{end}}
 </footer>
 {{end}}
