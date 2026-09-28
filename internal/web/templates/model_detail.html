@@ -39,7 +39,7 @@
         {{if .Details.EmbeddingLength}}<dt>Embedding length</dt><dd>{{count .Details.EmbeddingLength}}</dd>{{end}}
         <dt>Digest</dt><dd class="mono">{{.Digest}}</dd>
         {{end}}
-        <dt>Modified</dt><dd>{{time .ModifiedAt}}</dd>
+        <dt>Downloaded</dt><dd>{{time .ModifiedAt}}</dd>
         <dt>Capabilities</dt><dd>{{with .Capabilities}}<div class="caps">{{range .}}<span class="badge cap">{{.}}</span>{{end}}</div>{{else}}<span class="muted">not reported</span>{{end}}</dd>
       </dl>
     </div>
