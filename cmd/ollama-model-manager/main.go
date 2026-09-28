@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -226,19 +227,25 @@ func printCredentials(title, username, password string) {
 
 // findModelsDir locates Ollama's model store for the free-space dashlet:
 // MODELS_DIR if set, else the container mount point /models, else Ollama's
-// default locations for a native run. Returns "" if none exist.
+// default locations for a native run (on Windows, %USERPROFILE%\.ollama\models).
+// Returns "" if none exist.
 func findModelsDir() string {
 	if v := os.Getenv("MODELS_DIR"); v != "" {
 		return v
 	}
-	candidates := []string{"/models"}
+	var candidates []string
+	if runtime.GOOS != "windows" { // "/models" there is \models on the current drive
+		candidates = append(candidates, "/models")
+	}
 	if v := os.Getenv("OLLAMA_MODELS"); v != "" {
 		candidates = append(candidates, v)
 	}
 	if home, err := os.UserHomeDir(); err == nil {
 		candidates = append(candidates, filepath.Join(home, ".ollama", "models"))
 	}
-	candidates = append(candidates, "/usr/share/ollama/.ollama/models") // Linux service install
+	if runtime.GOOS == "linux" {
+		candidates = append(candidates, "/usr/share/ollama/.ollama/models") // the systemd service's install
+	}
 	for _, c := range candidates {
 		if fi, err := os.Stat(c); err == nil && fi.IsDir() {
 			return c

@@ -69,7 +69,7 @@
   {{else}}
   <div class="stat">
     <div class="value muted">—</div>
-    <div class="label">free space unknown: mount Ollama's models folder at <code>/models</code></div>
+    <div class="label">free space unknown: set <code>MODELS_DIR</code> to Ollama's models folder (in Docker, mount it at <code>/models</code>)</div>
   </div>
   {{end}}
   {{if $dash}}{{template "load_tile" .}}{{end}}
