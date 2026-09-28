@@ -46,8 +46,13 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 	} else {
 		lastUsed := s.lastUsed(r)
 		models := filterModels(all, st.Query, st.Caps)
-		sortModels(models, st.Sort, st.Desc, lastUsed)
+		loads, err := s.st.ModelLoadCounts(r.Context())
+		if err != nil {
+			s.log.Warn("read model load counts failed", "error", err) // only costs the column
+		}
+		sortModels(models, st.Sort, st.Desc, modelUsage{LastUsed: lastUsed, Loads: loads})
 		data["LastUsed"] = lastUsed
+		data["Loads"] = loads
 
 		totalPages := max(1, (len(models)+modelsPageSize-1)/modelsPageSize)
 		st.Page = min(st.Page, totalPages)
@@ -283,6 +288,7 @@ func (s *Server) handleModelDetail(w http.ResponseWriter, r *http.Request) {
 		data["Meta"] = flattenModelInfo(info.ModelInfo)
 		s.addMemoryState(r, name, data)
 		data["CanChat"] = canChat(info.Capabilities)
+		data["Usage"] = s.usageHistory(r, name)
 		// /api/show doesn't report size or digest; pick them up from the list.
 		if all, err := s.ol.List(r.Context()); err == nil {
 			for _, m := range all {
@@ -441,4 +447,68 @@ func (s *Server) handleBlacklistReason(w http.ResponseWriter, r *http.Request) {
 	}
 	s.log.Info("blacklist reason updated", "model", name, "by", currentUser(r).Username)
 	http.Redirect(w, r, "/models/blacklist?updated="+url.QueryEscape(name), http.StatusSeeOther)
+}
+
+// usageDays is how far back a model's page charts its use.
+const usageDays = 30
+
+// usageDay is one day of a model's use, for its page's chart.
+type usageDay struct {
+	Date          time.Time
+	ActiveSeconds int
+	Loads         int
+	Height        float64 // the bar's height, as a percentage of the busiest day
+}
+
+// usageHistory is a model's use over the last usageDays days (every day,
+// oldest first, so the chart has a gap where it wasn't used) and in all.
+type usageHistory struct {
+	Days        []usageDay
+	DaysUsed    int // in those days
+	Active      int // seconds, in those days
+	Loads       int // in those days
+	TotalActive int // seconds, ever
+	TotalLoads  int
+	Since       time.Time // the first day any use was recorded; zero if none
+}
+
+func (s *Server) usageHistory(r *http.Request, name string) *usageHistory {
+	today := time.Now()
+	start := today.AddDate(0, 0, -(usageDays - 1))
+	rows, err := s.st.ModelDailyUsage(r.Context(), name, start.Format(time.DateOnly))
+	if err != nil {
+		s.log.Warn("read model usage history failed", "model", name, "error", err)
+		return nil
+	}
+	h := &usageHistory{}
+	byDay := map[string]store.DailyUsage{}
+	for _, d := range rows {
+		byDay[d.Day] = d
+	}
+	busiest := 0
+	for i := range usageDays {
+		date := start.AddDate(0, 0, i)
+		d := byDay[date.Format(time.DateOnly)]
+		h.Days = append(h.Days, usageDay{Date: date, ActiveSeconds: d.ActiveSeconds, Loads: d.Loads})
+		busiest = max(busiest, d.ActiveSeconds)
+		if d.ActiveSeconds > 0 || d.Loads > 0 {
+			h.DaysUsed++
+		}
+		h.Active += d.ActiveSeconds
+		h.Loads += d.Loads
+	}
+	for i := range h.Days {
+		if busiest > 0 {
+			h.Days[i].Height = 100 * float64(h.Days[i].ActiveSeconds) / float64(busiest)
+		}
+	}
+	var since string
+	h.TotalActive, h.TotalLoads, since, err = s.st.ModelUsageTotals(r.Context(), name)
+	if err != nil {
+		s.log.Warn("read model usage totals failed", "model", name, "error", err)
+	}
+	if t, err := time.ParseInLocation(time.DateOnly, since, time.Local); err == nil {
+		h.Since = t
+	}
+	return h
 }

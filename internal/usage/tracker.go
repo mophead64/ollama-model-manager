@@ -1,9 +1,10 @@
-// Package usage notes roughly when each model was last used. Ollama keeps no
-// usage history, but every request to a model pushes back the time it will
-// be unloaded, so polling the list of loaded models (/api/ps) shows when a
-// model is used: it appears, or its unload time moves later. The result is
-// only as precise as the poll interval, and only covers time this app was
-// running.
+// Package usage notes roughly when each model was last used, how long it's
+// in use each day, and how often it's loaded. Ollama keeps no usage history,
+// but every request to a model pushes back the time it will be unloaded, so
+// polling the list of loaded models (/api/ps) shows when a model is used: it
+// appears (a load), or its unload time moves later. The result is only as
+// precise as the poll interval (each poll a model is seen used counts as one
+// interval of use), and only covers time this app was running.
 package usage
 
 import (
@@ -22,6 +23,8 @@ type Ollama interface {
 // Store is where sightings are recorded.
 type Store interface {
 	MarkModelUsed(ctx context.Context, model string, at time.Time) error
+	// AddModelUsage adds to a model's usage on day (YYYY-MM-DD).
+	AddModelUsage(ctx context.Context, model, day string, activeSeconds, loads int) error
 }
 
 // Tracker polls Ollama and records models as used when it sees them used.
@@ -84,6 +87,14 @@ func (t *Tracker) poll(ctx context.Context, now time.Time) {
 			continue
 		}
 		if err := t.st.MarkModelUsed(ctx, m.Name, now); err != nil {
+			t.log.Warn("usage tracking: can't record use", "model", m.Name, "error", err)
+		}
+		loads := 0
+		if !wasLoaded {
+			loads = 1 // it wasn't loaded at the last poll
+		}
+		day := now.Local().Format(time.DateOnly)
+		if err := t.st.AddModelUsage(ctx, m.Name, day, int(t.interval/time.Second), loads); err != nil {
 			t.log.Warn("usage tracking: can't record use", "model", m.Name, "error", err)
 		}
 	}

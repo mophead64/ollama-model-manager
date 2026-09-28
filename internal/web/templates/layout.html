@@ -447,6 +447,24 @@
   .test-run > summary .muted { font-weight: 400; font-size: 13px; }
   .test-run details.thinking { margin-top: 8px; font-size: 13px; color: var(--muted); }
   .test-run .error-box { margin: 8px 0 0; }
+  /* A model's usage chart (model page): one bar per day, time in use. */
+  .usage-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin: 16px 0 18px; }
+  .usage-stats .value { font-size: 20px; font-weight: 700; }
+  .usage-stats .value .muted { font-size: 14px; font-weight: 400; }
+  .usage-stats .label { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  @media (max-width: 720px) { .usage-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .usage-chart { display: grid; grid-template-columns: repeat(30, minmax(0, 1fr)); gap: 2px; align-items: end;
+    height: 120px; border-bottom: 1px solid var(--border); }
+  .usage-col { display: flex; align-items: flex-end; height: 100%; cursor: default; outline: none; }
+  .usage-col:focus-visible .usage-bar { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .usage-bar { width: 100%; min-height: 3px; background: var(--accent); border-radius: 4px 4px 0 0; }
+  .usage-bar.empty { background: var(--border); min-height: 2px; border-radius: 0; }
+  .usage-col:hover .usage-bar:not(.empty) { background: var(--accent-dark); }
+  .usage-axis { display: flex; justify-content: space-between; font-size: 12px; margin-top: 4px; }
+  .usage-table { margin-top: 12px; font-size: 14px; }
+  .usage-table summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+  .usage-table table { margin-top: 8px; max-width: 420px; }
+  .usage-note { font-size: 12px; margin: 10px 0 0; }
   .loaded-dot { display: inline-block; width: 8px; height: 8px; margin-right: 7px; border-radius: 50%; background: var(--good); vertical-align: middle; }
   .badge.cap { background: var(--b-blue-bg); color: var(--b-blue); }
   .caps { display: flex; flex-wrap: wrap; gap: 4px; }

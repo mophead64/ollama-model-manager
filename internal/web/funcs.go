@@ -41,6 +41,8 @@ var templateFuncs = template.FuncMap{
 	"unloads":    unloadsPhrase,
 	"ago":        timeAgo,
 	"lastused":   lastUsedOf,
+	"activefor":  formatActive,
+	"loadsof":    func(loads map[string]int, name string) int { return loads[name] },
 	"canchat":    canChat,
 	"pickeritem": func(m ollama.Model, loaded bool) map[string]any { return map[string]any{"Model": m, "Loaded": loaded} },
 	"rowactions": func(m ollama.Model, loaded, allowDelete bool, ret string) map[string]any {
@@ -61,6 +63,18 @@ var templateFuncs = template.FuncMap{
 	"sub":     func(a, b int) int { return a - b },
 	"static":  staticURL,
 	"navlogo": func() template.URL { return navLogo },
+}
+
+// formatActive renders roughly how long a model was in use, from the usage
+// tracker's seconds: "≈ 45 s", "≈ 12 min", "≈ 2.5 h".
+func formatActive(seconds int) string {
+	switch {
+	case seconds < 60:
+		return fmt.Sprintf("≈ %d s", seconds)
+	case seconds < 3600:
+		return fmt.Sprintf("≈ %d min", (seconds+30)/60)
+	}
+	return fmt.Sprintf("≈ %.1f h", float64(seconds)/3600)
 }
 
 // formatMS renders a duration in milliseconds (an int64 or float64, e.g. an

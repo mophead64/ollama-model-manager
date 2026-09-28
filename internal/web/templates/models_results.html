@@ -25,6 +25,7 @@
       {{template "sort_th" (sortcol "Size" .Headers.size)}}
       <th>Downloaded</th>
       {{template "sort_th" (sortcol "Last used" .Headers.used)}}
+      {{template "sort_th" (sortcol "Loads" .Headers.loads)}}
       <th>Capabilities</th><th></th>
     </tr></thead>
     <tbody>
@@ -38,6 +39,7 @@
         <td>{{bytes .Size}}</td>
         <td>{{time .ModifiedAt}}</td>
         <td>{{with lastused $.LastUsed .Name}}<span title="{{time .}}">{{ago .}}</span>{{else}}<span class="muted" title="Not seen in use since this app started tracking">—</span>{{end}}</td>
+        <td class="tnum">{{with loadsof $.Loads .Name}}<span title="Times Ollama has loaded it into memory, since this app started tracking">{{.}}</span>{{else}}<span class="muted" title="Not seen loaded since this app started tracking">—</span>{{end}}</td>
         <td>{{with .Capabilities}}<div class="caps">{{range .}}<span class="badge cap">{{.}}</span>{{end}}</div>{{else}}<span class="muted">-</span>{{end}}</td>
         <td class="actions">
           {{template "model_actions" (rowactions . (index $.LoadedNames .Name) $.AllowDelete $.ListURL)}}

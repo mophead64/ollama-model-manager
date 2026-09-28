@@ -97,3 +97,61 @@ func TestTimeAgo(t *testing.T) {
 		}
 	}
 }
+
+func TestLoadsColumn(t *testing.T) {
+	h := newTestServer(t, fakeOllama(t, 3).URL)
+	today := time.Now().Format(time.DateOnly)
+	testStore.AddModelUsage(t.Context(), "model-001:latest", today, 30, 5)
+	testStore.AddModelUsage(t.Context(), "user/custom:v1", today, 15, 2)
+
+	body := get(h, "/models", true).Body.String()
+	for _, want := range []string{">Loads<", `title="Times Ollama has loaded it into memory, since this app started tracking">5</span>`,
+		`title="Not seen loaded since this app started tracking">—</span>`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("models table missing %q", want)
+		}
+	}
+	// Most loaded first; never-seen models last.
+	body = get(h, "/models?sort=loads&dir=desc", true).Body.String()
+	order := regexp.MustCompile(`class="model-name" data-copy-text="([^"]+)"`).FindAllStringSubmatch(body, -1)
+	var got []string
+	for _, m := range order {
+		got = append(got, m[1])
+	}
+	if strings.Join(got, ",") != "model-001:latest,user/custom:v1,model-000:latest,model-002:latest" {
+		t.Errorf("sorted by loads = %v", got)
+	}
+}
+
+func TestModelUsagePanel(t *testing.T) {
+	h := newTestServer(t, fakeOllama(t, 1).URL)
+
+	// Nothing recorded yet.
+	if body := get(h, "/models/user/custom:v1", false).Body.String(); !strings.Contains(body, "No use recorded yet.") {
+		t.Error("a model with no usage should say so")
+	}
+
+	now := time.Now()
+	day := func(back int) string { return now.AddDate(0, 0, -back).Format(time.DateOnly) }
+	testStore.AddModelUsage(t.Context(), "user/custom:v1", day(0), 600, 2)   // today: 10 min, busiest
+	testStore.AddModelUsage(t.Context(), "user/custom:v1", day(3), 150, 1)   // 2.5 min
+	testStore.AddModelUsage(t.Context(), "user/custom:v1", day(40), 3600, 4) // before the chart
+
+	body := get(h, "/models/user/custom:v1", false).Body.String()
+	for _, want := range []string{
+		"<h2 style=\"margin:0\">Usage</h2>", "Recorded since " + now.AddDate(0, 0, -40).Format("2 Jan 2006"),
+		`≈ 13 min</div><div class="label">in use, last 30 days`, // 750 s
+		`2 <span class="muted">of 30</span>`, `>3</div><div class="label">times loaded, last 30 days`,
+		`>7</div><div class="label">times loaded in all (≈ 1.2 h in use)`,
+		`style="height: 100.0%"`, `style="height: 25.0%"`, // today, and three days ago
+		"<strong>" + now.Format("Mon 2 Jan") + "</strong> · ≈ 10 min in use · loaded 2×",
+		"Show as a table", "<td class=\"tnum\">≈ 3 min</td><td class=\"tnum\">1</td>",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("usage panel missing %q", want)
+		}
+	}
+	if n := strings.Count(body, `class="usage-col tip-wrap"`); n != 30 {
+		t.Errorf("%d bars, want one per day for 30 days", n)
+	}
+}

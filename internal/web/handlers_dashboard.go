@@ -35,7 +35,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		data["LoadedNames"] = loaded
 		data["ShowEmpty"] = true // "no models loaded" is worth saying here
 		lastUsed := s.lastUsed(r)
-		sortModels(all, "used", true, lastUsed)
+		sortModels(all, "used", true, modelUsage{LastUsed: lastUsed})
 		var recent []ollama.Model
 		for _, m := range all[:min(dashboardRecent, len(all))] {
 			if _, ok := lastUsed[m.Name]; ok { // unused models sort last
