@@ -13,6 +13,7 @@ var currentLinkRE = regexp.MustCompile(`<a href="([^"]+)"[^>]*aria-current="page
 func TestNavMarksCurrentPage(t *testing.T) {
 	h := newTestServer(t, fakeOllama(t, 1).URL)
 	for path, want := range map[string]string{
+		"/":                      "/",
 		"/models":                "/models",
 		"/models/user/custom:v1": "/models",
 		"/downloads":             "/downloads",

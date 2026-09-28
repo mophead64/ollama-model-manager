@@ -80,9 +80,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /account/password", s.handleChangePassword)
 	mux.HandleFunc("GET /account/huggingface", s.handleHuggingFace)
 
-	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/models", http.StatusFound)
-	})
+	mux.HandleFunc("GET /{$}", s.handleDashboard)
 
 	mux.HandleFunc("GET /version/check", s.handleVersionCheck)
 	mux.HandleFunc("GET /version/release", s.handleRelease)

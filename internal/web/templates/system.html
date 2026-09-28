@@ -102,12 +102,13 @@
 </div>
 {{end}}
 
-{{/* Models Ollama has loaded. On the models page (Compact) it polls itself and
-     stays out of the way when nothing's loaded; on the system page it's part
-     of the polled live section. */}}
+{{/* Models Ollama has loaded. On the dashboard and models page (Compact) it
+     polls itself, and stays out of the way when nothing's loaded unless
+     ShowEmpty (the dashboard); on the system page it's part of the polled
+     live section. */}}
 {{define "running_panel"}}
-<div id="running-panel"{{if .Compact}} hx-get="/system/running" hx-trigger="every 5s [document.visibilityState === 'visible'], state-changed from:body" hx-swap="outerHTML"{{end}}>
-  {{if or .Running (not .Compact)}}
+<div id="running-panel"{{if .Compact}} hx-get="/system/running{{if .ShowEmpty}}?show=empty{{end}}" hx-trigger="every 5s [document.visibilityState === 'visible'], state-changed from:body" hx-swap="outerHTML"{{end}}>
+  {{if or .Running (not .Compact) .ShowEmpty}}
   <div class="panel">
     <div class="row between">
       <h2>Loaded in memory</h2>
@@ -141,7 +142,7 @@
 </div>
 {{end}}
 
-{{/* The models page's fourth tile: current load, polled. GPU and VRAM are
+{{/* The dashboard's fourth tile: current load, polled. GPU and VRAM are
      across every GPU in the machine. */}}
 {{define "load_tile"}}
 <a class="stat load-tile" id="load-tile" href="/system" title="System details and live graphs"

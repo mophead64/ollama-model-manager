@@ -28,9 +28,11 @@ loading and unloading them, and watching CPU, GPU and memory while they run.
 ## Features
 
 ### Your models at a glance
-- Every installed model with its family, parameter count, quantisation, context length, size, capabilities and when it
-  was last used. Filter by name, family or capability, and sort by any column.
-- Totals for your library, free space on the disk Ollama stores models on, and a live CPU, memory, GPU and VRAM tile.
+- A dashboard with totals for your library, free space on the disk Ollama stores models on, a live CPU, memory, GPU
+  and VRAM tile, what's loaded in memory, and the models you've used most recently.
+- A Models page listing every installed model with its family, parameter count, quantisation, context length, size,
+  capabilities and when it was last used, most recently used first. Filter by name, family or capability, and sort by
+  any column.
 - Delete models you no longer need (this can be turned off with `ALLOW_MODEL_DELETE=false`).
 
 ### Detailed model information

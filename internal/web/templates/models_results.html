@@ -30,7 +30,7 @@
     <tbody>
     {{range .Models}}
       <tr>
-        <td><span class="copy-tip-wrap"><button type="button" class="model-name" data-copy-text="{{.Name}}">{{.Name}}</button><span class="copy-tip" role="tooltip">Click to copy model name</span></span></td>
+        <td>{{template "model_name" .Name}}</td>
         <td>{{or .Details.Family "-"}}</td>
         <td>{{or .Details.ParameterSize "-"}}</td>
         <td>{{or .Details.QuantizationLevel "-"}}</td>
@@ -40,18 +40,7 @@
         <td>{{with lastused $.LastUsed .Name}}<span title="{{time .}}">{{ago .}}</span>{{else}}<span class="muted" title="Not seen in use since this app started tracking">—</span>{{end}}</td>
         <td>{{with .Capabilities}}<div class="caps">{{range .}}<span class="badge cap">{{.}}</span>{{end}}</div>{{else}}<span class="muted">-</span>{{end}}</td>
         <td class="actions">
-          <div class="split">
-            <a class="btn secondary small" href="/models/{{.Name}}">View</a>
-            <details class="split-menu">
-              <summary class="btn secondary small" aria-label="More actions for {{.Name}}"><span aria-hidden="true">▾</span></summary>
-              <div class="menu">
-                {{if index $.LoadedNames .Name}}{{template "unload_button" .Name}}{{else}}{{template "load_button" .Name}}{{end}}
-                {{if canchat .Capabilities}}<a href="/chat?model={{.Name}}">Chat</a>{{end}}
-                {{if $.AllowDelete}}<button type="button" class="danger" data-dialog-open="delete-model-modal"
-                  data-fill-name="{{.Name}}" data-fill-size="{{bytes .Size}}" data-fill-return="{{$.ListURL}}">Delete</button>{{end}}
-              </div>
-            </details>
-          </div>
+          {{template "model_actions" (rowactions . (index $.LoadedNames .Name) $.AllowDelete $.ListURL)}}
         </td>
       </tr>
     {{end}}
@@ -73,4 +62,27 @@
 
 {{define "sort_th"}}
 <th aria-sort="{{.H.Aria}}"><a class="sort-link{{if .H.Arrow}} active{{end}}" href="{{.H.URL}}" hx-get="{{.H.URL}}" hx-target="#model-results" hx-swap="outerHTML" hx-push-url="true">{{.Label}}<span class="arrow">{{or .H.Arrow "↕"}}</span></a></th>
+{{end}}
+
+{{/* A model's name, which copies itself on click (dialog.js). */}}
+{{define "model_name"}}<span class="copy-tip-wrap"><button type="button" class="model-name" data-copy-text="{{.}}">{{.}}</button><span class="copy-tip" role="tooltip">Click to copy model name</span></span>{{end}}
+
+{{/* A model row's split button: View, and a menu of Load/Unload, Chat and
+     Delete. Takes rowactions; Delete needs the page's delete_model_dialog and
+     returns to .Return afterwards. */}}
+{{define "model_actions"}}
+{{- with .Model}}
+<div class="split">
+  <a class="btn secondary small" href="/models/{{.Name}}">View</a>
+  <details class="split-menu">
+    <summary class="btn secondary small" aria-label="More actions for {{.Name}}"><span aria-hidden="true">▾</span></summary>
+    <div class="menu">
+      {{if $.Loaded}}{{template "unload_button" .Name}}{{else}}{{template "load_button" .Name}}{{end}}
+      {{if canchat .Capabilities}}<a href="/chat?model={{.Name}}">Chat</a>{{end}}
+      {{if $.AllowDelete}}<button type="button" class="danger" data-dialog-open="delete-model-modal"
+        data-fill-name="{{.Name}}" data-fill-size="{{bytes .Size}}" data-fill-return="{{$.Return}}">Delete</button>{{end}}
+    </div>
+  </details>
+</div>
+{{- end}}
 {{end}}

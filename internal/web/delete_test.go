@@ -36,6 +36,15 @@ func TestDeleteModel(t *testing.T) {
 		t.Errorf("ollama received %v", deletedModels)
 	}
 
+	// From the dashboard, back to the dashboard.
+	rec = do(h, "POST", "/models/delete", url.Values{"name": {"x"}, "return": {"/"}}, testSession)
+	if got := rec.Header().Get("Location"); got != "/?deleted=x" {
+		t.Errorf("dashboard delete should return there, got %q", got)
+	}
+	if body := get(h, "/?deleted=x", false).Body.String(); !strings.Contains(body, "Deleted <strong>x</strong>") {
+		t.Error("dashboard should confirm the delete")
+	}
+
 	// A return URL pointing elsewhere is ignored.
 	rec = do(h, "POST", "/models/delete", url.Values{"name": {"x"}, "return": {"https://evil.test/models"}}, testSession)
 	if got := rec.Header().Get("Location"); got != "/models?deleted=x" {
@@ -62,7 +71,7 @@ func TestDeleteDisabled(t *testing.T) {
 	if rec.Code != http.StatusForbidden || len(deletedModels) != 0 {
 		t.Errorf("delete should be refused when disabled: %d, ollama got %v", rec.Code, deletedModels)
 	}
-	for _, path := range []string{"/models", "/models/user/custom:v1"} {
+	for _, path := range []string{"/", "/models", "/models/user/custom:v1"} {
 		if body := do(h, "GET", path, nil, c).Body.String(); strings.Contains(body, "delete-model-modal") {
 			t.Errorf("%s shouldn't offer delete when disabled", path)
 		}

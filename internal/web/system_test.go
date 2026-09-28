@@ -2,6 +2,10 @@ package web
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"net/http/httputil"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -42,18 +46,54 @@ func TestSystemHistory(t *testing.T) {
 	}
 }
 
-func TestModelsPageLoad(t *testing.T) {
+func TestDashboardLoad(t *testing.T) {
 	h := newTestServer(t, fakeOllama(t, 1).URL)
-	body := get(h, "/models", false).Body.String()
-	for _, want := range []string{`id="load-tile"`, `hx-get="/system/load"`, `id="running-panel"`, "2 model(s) in use"} {
+	body := get(h, "/", false).Body.String()
+	for _, want := range []string{`id="load-tile"`, `hx-get="/system/load"`, `id="running-panel"`, "2 model(s) in use", "on the models disk"} {
 		if !strings.Contains(body, want) {
+			t.Errorf("dashboard missing %q", want)
+		}
+	}
+	// The models page has the same overview above its list, less system load.
+	list := get(h, "/models", false).Body.String()
+	for _, want := range []string{`id="running-panel"`, "2 model(s) in use", "on the models disk"} {
+		if !strings.Contains(list, want) {
 			t.Errorf("models page missing %q", want)
 		}
+	}
+	if strings.Contains(list, `id="load-tile"`) {
+		t.Error("models page shouldn't have the system load tile")
 	}
 	if tile := get(h, "/system/load", true).Body.String(); !strings.Contains(tile, "VRAM") {
 		t.Errorf("load tile fragment wrong:\n%s", tile)
 	}
 	if panel := get(h, "/system/running", true).Body.String(); !strings.Contains(panel, "user/custom:v1") {
 		t.Errorf("running panel fragment wrong:\n%s", panel)
+	}
+}
+
+func TestDashboardShowsEmptyRunningPanel(t *testing.T) {
+	fake := fakeOllama(t, 1)
+	target, _ := url.Parse(fake.URL)
+	proxy := httputil.NewSingleHostReverseProxy(target)
+	idle := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/ps" {
+			w.Write([]byte(`{"models":[]}`))
+			return
+		}
+		proxy.ServeHTTP(w, r)
+	}))
+	t.Cleanup(idle.Close)
+	h := newTestServer(t, idle.URL)
+
+	const empty = "No models are loaded right now"
+	if body := get(h, "/", false).Body.String(); !strings.Contains(body, empty) || !strings.Contains(body, `hx-get="/system/running?show=empty"`) {
+		t.Errorf("dashboard should show the empty panel and keep it when polled:\n%s", body)
+	}
+	if body := get(h, "/system/running?show=empty", true).Body.String(); !strings.Contains(body, empty) {
+		t.Error("polled panel should stay visible with show=empty")
+	}
+	if body := get(h, "/models", false).Body.String(); strings.Contains(body, empty) {
+		t.Error("models page should still hide the panel when nothing's loaded")
 	}
 }

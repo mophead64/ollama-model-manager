@@ -26,12 +26,15 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 	data := map[string]any{
 		"Query":      st.Query,
 		"Caps":       st.Caps,
-		"Sort":       st.Sort,
 		"Dir":        st.Dir(),
 		"Page":       st.Page,
 		"TotalPages": 1,
 		"OllamaURL":  s.ol.BaseURL(),
 		"Deleted":    r.URL.Query().Get("deleted"),
+	}
+
+	if !st.isDefaultSort() {
+		data["Sort"] = st.Sort // kept by the filter form; the default is left out
 	}
 
 	all, err := s.ol.List(r.Context())
@@ -44,10 +47,6 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 		sortModels(models, st.Sort, st.Desc, lastUsed)
 		data["LastUsed"] = lastUsed
 
-		var totalBytes int64
-		for _, m := range all {
-			totalBytes += m.Size
-		}
 		totalPages := max(1, (len(models)+modelsPageSize-1)/modelsPageSize)
 		st.Page = min(st.Page, totalPages)
 		start := (st.Page - 1) * modelsPageSize
@@ -55,19 +54,12 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 
 		data["Models"] = models[start:end]
 		data["Total"] = len(models)
-		data["Count"] = len(all)
-		data["TotalBytes"] = totalBytes
 		data["Page"] = st.Page
 		data["TotalPages"] = totalPages
 		data["AllCaps"] = capabilityOptions(all, st.Caps)
 		data["Headers"] = st.headers()
 		data["ListURL"] = st.URL()
-		data["Disk"] = s.diskUsage()
-		data["Load"] = s.sys.Latest().Sample()
-		data["PollEvery"] = pollEvery(s.sys.Interval())
-		running, runErr := s.runningModels(r)
-		data["Running"], data["RunningErr"] = running, runErr
-		data["Compact"] = true
+		running := s.addOverview(r, all, data)
 		loaded := make(map[string]bool, len(running))
 		for _, m := range running {
 			loaded[m.Name] = true
@@ -173,7 +165,8 @@ func capabilityOptions(models []ollama.Model, selected []string) []capOption {
 }
 
 // handleDeleteModel removes a model from Ollama, then goes back to the list
-// (with the filters/sort/page it was deleted from, if it came from there).
+// (with the filters/sort/page it was deleted from, if it came from there) or
+// the dashboard.
 func (s *Server) handleDeleteModel(w http.ResponseWriter, r *http.Request) {
 	if !s.cfg.AllowDelete {
 		w.WriteHeader(http.StatusForbidden)
@@ -202,11 +195,16 @@ func (s *Server) handleDeleteModel(w http.ResponseWriter, r *http.Request) {
 	}
 	s.log.Info("model deleted", "model", name, "by", currentUser(r).Username)
 
-	back := parseListState(nil)
-	if ret, err := url.Parse(r.FormValue("return")); err == nil && ret.Path == "/models" {
-		back = parseListState(ret.Query())
+	back := parseListState(nil).URL()
+	if ret, err := url.Parse(r.FormValue("return")); err == nil {
+		switch ret.Path {
+		case "/models":
+			back = parseListState(ret.Query()).URL()
+		case "/": // the dashboard
+			back = "/"
+		}
 	}
-	target, _ := url.Parse(back.URL())
+	target, _ := url.Parse(back)
 	q := target.Query()
 	q.Set("deleted", name)
 	target.RawQuery = q.Encode()

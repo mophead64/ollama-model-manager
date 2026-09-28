@@ -169,7 +169,7 @@ func TestModelsPagination(t *testing.T) {
 	h := newTestServer(t, fakeOllama(t, 30).URL) // 31 models -> 2 pages
 
 	body := get(h, "/models", false).Body.String()
-	for _, want := range []string{"31 model(s)", "Page 1 of 2", "model-000:latest", "Next →", "<!doctype html>", "on the models disk"} {
+	for _, want := range []string{"31 model(s)", "Page 1 of 2", "model-000:latest", "Next →", "<!doctype html>"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("page 1 missing %q", want)
 		}

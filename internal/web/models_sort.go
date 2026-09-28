@@ -17,10 +17,16 @@ import (
 type listState struct {
 	Query string
 	Caps  []string
-	Sort  string // "name" or one of sortKeys; "" means name ascending
+	Sort  string // "name" or one of sortKeys
 	Desc  bool
 	Page  int
 }
+
+// The default order, which is left out of URLs: most recently used first.
+const (
+	defaultSort = "used"
+	defaultDesc = true
+)
 
 // sortKeys maps each sortable column to the value it sorts on. ok=false
 // means the value isn't known for that model; those always sort last,
@@ -44,17 +50,21 @@ func parseListState(q url.Values) listState {
 		Query: strings.TrimSpace(q.Get("q")),
 		Caps:  q["cap"],
 		Page:  1,
-		Desc:  q.Get("dir") == "desc",
+		Sort:  defaultSort,
+		Desc:  defaultDesc,
 	}
-	if _, ok := sortKeys[q.Get("sort")]; ok || (q.Get("sort") == "name" && st.Desc) {
-		st.Sort = q.Get("sort")
-	} else {
-		st.Desc = false // name ascending, the default, is left out of URLs
+	if key := q.Get("sort"); key == "name" || sortKeys[key] != nil {
+		st.Sort, st.Desc = key, q.Get("dir") == "desc"
 	}
 	if p, err := strconv.Atoi(q.Get("page")); err == nil && p > 0 {
 		st.Page = p
 	}
 	return st
+}
+
+// isDefaultSort reports whether the list is in the default order.
+func (st listState) isDefaultSort() bool {
+	return st.Sort == defaultSort && st.Desc == defaultDesc
 }
 
 func (st listState) Dir() string {
@@ -73,7 +83,7 @@ func (st listState) URL() string {
 	for _, c := range st.Caps {
 		v.Add("cap", c)
 	}
-	if st.Sort != "" {
+	if !st.isDefaultSort() {
 		v.Set("sort", st.Sort)
 		v.Set("dir", st.Dir())
 	}
@@ -99,7 +109,7 @@ type sortHeader struct {
 func (st listState) headers() map[string]sortHeader {
 	out := map[string]sortHeader{}
 	for _, key := range []string{"name", "size", "context", "params", "used"} {
-		active := st.Sort == key || (key == "name" && st.Sort == "")
+		active := st.Sort == key
 		next := st
 		next.Page = 1
 		next.Sort = key
@@ -112,9 +122,6 @@ func (st listState) headers() map[string]sortHeader {
 			}
 		} else {
 			next.Desc = key != "name"
-		}
-		if key == "name" && !next.Desc {
-			next.Sort = ""
 		}
 		h.URL = next.URL()
 		out[key] = h

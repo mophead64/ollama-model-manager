@@ -42,12 +42,15 @@ var templateFuncs = template.FuncMap{
 	"lastused":   lastUsedOf,
 	"canchat":    canChat,
 	"pickeritem": func(m ollama.Model, loaded bool) map[string]any { return map[string]any{"Model": m, "Loaded": loaded} },
-	"add":        func(a, b int) int { return a + b },
-	"compact":    formatCompact,
-	"tokens":     formatTokens,
-	"sub":        func(a, b int) int { return a - b },
-	"static":     staticURL,
-	"navlogo":    func() template.URL { return navLogo },
+	"rowactions": func(m ollama.Model, loaded, allowDelete bool, ret string) map[string]any {
+		return map[string]any{"Model": m, "Loaded": loaded, "AllowDelete": allowDelete, "Return": ret}
+	},
+	"add":     func(a, b int) int { return a + b },
+	"compact": formatCompact,
+	"tokens":  formatTokens,
+	"sub":     func(a, b int) int { return a - b },
+	"static":  staticURL,
+	"navlogo": func() template.URL { return navLogo },
 }
 
 func formatBytes(n int64) string {

@@ -62,7 +62,7 @@ func (s *Server) handleSystemHistory(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleSystemLoad is the models page's system-load tile, polled by htmx.
+// handleSystemLoad is the dashboard's system-load tile, polled by htmx.
 func (s *Server) handleSystemLoad(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, "load_tile", map[string]any{
 		"Load":      s.sys.Latest().Sample(),
@@ -70,10 +70,14 @@ func (s *Server) handleSystemLoad(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleRunningModels is the models page's "loaded now" panel, polled by htmx.
+// handleRunningModels is the dashboard's and models page's "loaded now"
+// panel, polled by htmx. show=empty keeps it visible when nothing's loaded.
 func (s *Server) handleRunningModels(w http.ResponseWriter, r *http.Request) {
 	running, runErr := s.runningModels(r)
-	s.render(w, r, "running_panel", map[string]any{"Running": running, "RunningErr": runErr, "Compact": true})
+	s.render(w, r, "running_panel", map[string]any{
+		"Running": running, "RunningErr": runErr, "Compact": true,
+		"ShowEmpty": r.URL.Query().Get("show") == "empty",
+	})
 }
 
 // pollEvery is an htmx trigger interval matching the sampler, e.g. "2s".
