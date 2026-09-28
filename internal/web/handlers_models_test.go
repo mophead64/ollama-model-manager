@@ -103,6 +103,7 @@ var testSession *http.Cookie
 var (
 	testManager *downloads.Manager
 	testRunner  *modeltest.Runner
+	testServer  *Server
 	testStore   *store.Store
 	testSampler *sysinfo.Sampler
 )
@@ -158,6 +159,9 @@ func newTestServer(t *testing.T, base string, opts ...func(*Config)) http.Handle
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Never GitHub itself; a test that needs a release sets testServer's.
+	s.updates.url, s.ollamaUp.releases.url = "http://127.0.0.1:1", "http://127.0.0.1:1"
+	testServer = s
 	return s.Routes()
 }
 

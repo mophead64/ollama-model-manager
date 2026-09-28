@@ -49,6 +49,11 @@ type updateInfo struct {
 type updateChecker struct {
 	client *http.Client
 	url    string
+	// current is the running version the latest release is compared with
+	// (Current, Available); nil leaves them unset, for a caller comparing
+	// with something that changes between fetches (Ollama's version).
+	current func() string
+	ttl     time.Duration // how long a successful answer is kept
 
 	mu      sync.Mutex
 	info    updateInfo
@@ -57,7 +62,8 @@ type updateChecker struct {
 }
 
 func newUpdateChecker() *updateChecker {
-	return &updateChecker{client: &http.Client{Timeout: 5 * time.Second}, url: latestReleaseURL}
+	return &updateChecker{client: &http.Client{Timeout: 5 * time.Second}, url: latestReleaseURL,
+		current: func() string { return version.Version }, ttl: updateOKTTL}
 }
 
 // check returns the cached answer while it's fresh; force (a manual refresh)
@@ -77,7 +83,7 @@ func (u *updateChecker) check(ctx context.Context, force bool) updateInfo {
 		return u.info
 	}
 	info.CheckedAt = now
-	u.info, u.expiry = info, time.Now().Add(updateOKTTL)
+	u.info, u.expiry = info, time.Now().Add(u.ttl)
 	return info
 }
 
@@ -110,16 +116,19 @@ func (u *updateChecker) fetch(ctx context.Context) (updateInfo, error) {
 	if err != nil {
 		return updateInfo{}, fmt.Errorf("render release notes: %w", err)
 	}
-	return updateInfo{
+	info := updateInfo{
 		Checked:   true,
 		Latest:    rel.TagName,
 		Name:      rel.Name,
 		URL:       rel.HTMLURL,
 		Published: rel.PublishedAt,
 		Notes:     notes,
-		Current:   rel.TagName == version.Version,
-		Available: version.Newer(rel.TagName, version.Version),
-	}, nil
+	}
+	if u.current != nil {
+		cur := u.current()
+		info.Current, info.Available = rel.TagName == cur, version.Newer(rel.TagName, cur)
+	}
+	return info, nil
 }
 
 // releaseMarkdown renders release notes as GitHub does (tables, task lists,
@@ -153,7 +162,7 @@ func (externalLinks) Transform(doc *ast.Document, _ text.Reader, _ parser.Contex
 }
 
 // handleVersionCheck is fetched by htmx after each page renders (and again
-// every 6 hours while a page stays open), so the network round trip to GitHub
+// every 2 hours while a page stays open), so the network round trip to GitHub
 // never delays the page itself. ?force=1 is the footer's manual refresh.
 func (s *Server) handleVersionCheck(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, "version_status.html", map[string]any{

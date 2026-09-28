@@ -44,9 +44,9 @@ func (s *Server) handleSystem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data["OllamaURL"] = s.ol.BaseURL()
-	if v, err := s.ol.Version(r.Context()); err == nil {
-		data["OllamaVersion"] = v
-	}
+	// The latest release as last checked, against Ollama's version now; the
+	// panel re-checks GitHub itself once shown, if that's due.
+	data["OllamaUpdate"] = s.withRunning(r.Context())
 	data["WindowMinutes"] = int(s.sys.Window() / time.Minute)
 	s.render(w, r, "system.html", data)
 }

@@ -15,7 +15,7 @@ func TestSystemPage(t *testing.T) {
 
 	body := get(h, "/system", false).Body.String()
 	for _, want := range []string{
-		"<!doctype html>", "version 0.12.3", `data-charts="/system/history"`, `data-metric="vram"`,
+		"<!doctype html>", `<span class="mono">0.12.3</span>`, `data-charts="/system/history"`, `data-metric="vram"`,
 		"Collecting the first sample", // the test sampler never runs
 		"Loaded in memory", "2 model(s) in use", "50%/50% CPU/GPU", "100% GPU", "8,192", "never (kept loaded)",
 	} {

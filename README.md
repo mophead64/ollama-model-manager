@@ -98,6 +98,10 @@ Live graphs of CPU, memory, GPU and VRAM use over the last five minutes, each GP
 loaded, so you can watch what happens as models load and run. NVIDIA GPUs are read with `nvidia-smi`, AMD and Intel
 GPUs from `/sys`, and Apple silicon natively.
 
+It also checks for Ollama updates: an orange dot on the System link means a newer release is out, and the System page
+says how to update for Docker, the Linux install script (including backing up your `ollama.service` settings), macOS
+and Windows.
+
 ![The System page: CPU, memory, GPU and VRAM graphs for an Apple M4, and the models loaded in memory](docs/view-sys-info.png)
 
 ### And also

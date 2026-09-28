@@ -140,6 +140,9 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Whether Ollama itself has an update, for the nav and the System page.
+	go srv.RunOllamaUpdateChecks(ctx)
+
 	httpServer := &http.Server{
 		Addr:              addr,
 		Handler:           srv.Routes(),

@@ -13,22 +13,19 @@
   {{template "nav" .}}
   <main>
     {{template "flash" .}}
-    <div class="panel">
-      <div class="row between">
-        <h2>System</h2>
-        <span class="muted">Ollama at <code>{{.OllamaURL}}</code>{{with .OllamaVersion}} · version {{.}}{{end}}</span>
+    <div class="system-top">
+      <div class="panel">
+        <h2>This machine</h2>
+        <dl class="kv kv-2">
+          <dt>Host</dt><dd>{{or .Snap.Host "-"}}</dd>
+          <dt>Platform</dt><dd>{{or .Snap.Platform "-"}}</dd>
+          <dt>CPU</dt><dd>{{or .Snap.CPUModel "-"}}{{with .Snap.CPUCores}} · {{.}} logical cores{{end}}</dd>
+          <dt>Memory</dt><dd>{{if .Snap.MemTotal}}{{bytes (int64 .Snap.MemTotal)}}{{else}}-{{end}}</dd>
+          <dt>GPUs</dt><dd>{{len .Snap.GPUs}}</dd>
+        </dl>
+        <p class="muted system-note">Hardware figures are for the machine running this app. If Ollama runs somewhere else, they won't reflect its load; the loaded models list always comes from Ollama itself.</p>
       </div>
-      <dl class="kv">
-        <dt>Host</dt><dd>{{or .Snap.Host "-"}}</dd>
-        <dt>Platform</dt><dd>{{or .Snap.Platform "-"}}</dd>
-        <dt>CPU</dt><dd>{{or .Snap.CPUModel "-"}}{{with .Snap.CPUCores}} · {{.}} logical cores{{end}}</dd>
-        <dt>Memory</dt><dd>{{if .Snap.MemTotal}}{{bytes (int64 .Snap.MemTotal)}}{{else}}-{{end}}</dd>
-        <dt>GPUs</dt><dd>{{len .Snap.GPUs}}</dd>
-      </dl>
-      <p class="muted" style="font-size:13px; margin:14px 0 0">
-        Hardware figures are for the machine running this app. If Ollama runs somewhere else, they won't reflect its load;
-        the loaded models list always comes from Ollama itself.
-      </p>
+      {{template "ollama_panel" .}}
     </div>
 
     {{/* Drawn and kept live by static/charts.js from /system/history. */}}
@@ -162,3 +159,79 @@
   <span class="m-val">{{with .V}}{{pct .}}%{{else}}<span class="muted" title="Not reported on this machine">—</span>{{end}}</span>
 </div>
 {{end}}
+
+{{/* Ollama's version, whether there's a newer release, and how to update.
+     Checked in the background (RunOllamaUpdateChecks); re-checks itself when
+     the page loads, and on "check now". */}}
+{{define "ollama_panel"}}
+{{$u := .OllamaUpdate}}
+<div class="panel ollama-panel" id="ollama-panel"{{if not .Fragment}} hx-get="/system/ollama" hx-trigger="load" hx-swap="outerHTML"{{end}}>
+  <div class="row between">
+    <h2 style="margin:0">Ollama</h2>
+    <a class="hint-link" style="margin:0" href="https://github.com/ollama/ollama/releases" target="_blank" rel="noopener noreferrer">Releases ↗</a>
+  </div>
+  <dl class="kv">
+    <dt>Server</dt><dd><code>{{.OllamaURL}}</code></dd>
+    <dt>Version</dt>
+    <dd>
+      {{if $u.Running}}<span class="mono">{{$u.Running}}</span>{{else}}<span class="muted">couldn't ask Ollama</span>{{end}}
+      {{if $u.Available}}<a class="badge update" href="{{$u.URL}}" target="_blank" rel="noopener noreferrer" title="Release notes">Update available: {{$u.Latest}}</a>
+      {{else if $u.Current}}<span class="badge on">✓ Up to date</span>
+      {{else if and $u.Running (not $u.Latest)}}<span class="muted">(couldn't check GitHub for the latest release)</span>{{end}}
+    </dd>
+    <dt>Checked</dt>
+    <dd>
+      {{if $u.CheckedAt.IsZero}}<span class="muted">not yet</span>{{else}}<span class="tip-wrap" tabindex="0">{{ago $u.CheckedAt}}<span class="tip" role="tooltip">{{time $u.CheckedAt}}</span></span>{{end}}
+      · <button type="button" class="link" hx-get="/system/ollama?force=1" hx-target="#ollama-panel" hx-swap="outerHTML">check now</button>
+    </dd>
+  </dl>
+  {{if $u.Available}}
+  <div class="ollama-update-lead">
+    <p>Ollama <strong>{{$u.Latest}}</strong> is out{{if not $u.Published.IsZero}} ({{ago $u.Published}}){{end}}. Keeping Ollama up to date matters more than for most apps:</p>
+    <ul>
+      <li><strong>New models need it.</strong> Recently released models often use architectures older versions can't load, so they fail to download or run (“requires a newer version of Ollama”, “unknown model architecture”).</li>
+      <li><strong>Downloads from Hugging Face</strong> rely on it too: older versions can't follow some of its newer download hosts.</li>
+      <li><strong>Speed, memory use and GPU support</strong> improve from release to release, along with fixes for tool calling, templates and bugs.</li>
+    </ul>
+    <p>The <a href="{{$u.URL}}" target="_blank" rel="noopener noreferrer">release notes ↗</a> say what's changed in this one. How to update depends on how Ollama was installed:</p>
+  </div>
+  {{template "ollama_update_steps" $u}}
+  {{else}}
+  <details class="ollama-how"><summary>How to update Ollama</summary>{{template "ollama_update_steps" $u}}</details>
+  {{end}}
+</div>
+{{end}}
+
+{{define "ollama_update_steps"}}
+<div class="update-steps">
+  <details open>
+    <summary>Docker Compose <span class="muted">(recommended)</span></summary>
+    <p>From the folder with your <code>docker-compose.yml</code>, pull the new image and recreate the container. Models are kept in the volume.</p>
+    {{template "copy_cmd" (copycmd "upd-compose" "docker compose pull ollama && docker compose up -d ollama")}}
+  </details>
+  <details>
+    <summary>docker run</summary>
+    <p>Pull the new image, then remove and recreate the container with the same options you started it with (volume, ports, GPUs):</p>
+    {{template "copy_cmd" (copycmd "upd-docker" "docker pull ollama/ollama:latest")}}
+    {{template "copy_cmd" (copycmd "upd-docker-run" "docker stop ollama && docker rm ollama && docker run -d --gpus=all -v ollama:/root/.ollama -p 11434:11434 --name ollama --restart unless-stopped ollama/ollama")}}
+  </details>
+  <details>
+    <summary>Linux (install script)</summary>
+    <p>Re-running the installer updates Ollama in place:</p>
+    {{template "copy_cmd" (copycmd "upd-linux" "curl -fsSL https://ollama.com/install.sh | sh")}}
+    <p class="update-warn"><strong>Back up your service settings first.</strong> The installer rewrites <code>/etc/systemd/system/ollama.service</code>, so anything added to it directly (<code>OLLAMA_HOST</code>, <code>OLLAMA_MODELS</code>, <code>OLLAMA_KEEP_ALIVE</code>…) is lost:</p>
+    {{template "copy_cmd" (copycmd "upd-backup" "sudo cp /etc/systemd/system/ollama.service ~/ollama.service.bak")}}
+    <p>To stop it happening again, keep them in an override, which updates leave alone: <code>sudo systemctl edit ollama</code>, then add them under <code>[Service]</code> as <code>Environment="OLLAMA_HOST=0.0.0.0"</code>. Afterwards:</p>
+    {{template "copy_cmd" (copycmd "upd-restart" "sudo systemctl daemon-reload && sudo systemctl restart ollama")}}
+  </details>
+  <details>
+    <summary>macOS or Windows</summary>
+    <p>The Ollama app updates itself: when an update's ready, choose <em>Restart to update</em> from its menu bar or tray icon. Or download the latest from <a href="https://ollama.com/download" target="_blank" rel="noopener noreferrer">ollama.com/download ↗</a>. With Homebrew:</p>
+    {{template "copy_cmd" (copycmd "upd-brew" "brew upgrade ollama && brew services restart ollama")}}
+  </details>
+  <p class="muted update-tips">Updating restarts Ollama: loaded models are unloaded, and downloads in progress pause (this app resumes them). Downloaded models are kept. It's worth a look at the <a href="https://github.com/ollama/ollama/releases" target="_blank" rel="noopener noreferrer">release notes ↗</a> for anything that's changed, and running <code>ollama --version</code> afterwards to check.</p>
+</div>
+{{end}}
+
+{{/* A command with a Copy button (dialog.js). Takes copycmd. */}}
+{{define "copy_cmd"}}<div class="copy-row"><input type="text" id="{{.ID}}" class="mono" value="{{.Cmd}}" readonly aria-label="Command"><button type="button" class="secondary small" data-copy="{{.ID}}">Copy</button></div>{{end}}

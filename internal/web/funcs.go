@@ -48,7 +48,10 @@ var templateFuncs = template.FuncMap{
 	"rowactions": func(m ollama.Model, loaded, allowDelete bool, ret string) map[string]any {
 		return map[string]any{"Model": m, "Loaded": loaded, "AllowDelete": allowDelete, "Return": ret}
 	},
-	"ms":       formatMS,
+	"ms": formatMS,
+	"copycmd": func(id, cmd string) map[string]string {
+		return map[string]string{"ID": id, "Cmd": cmd}
+	},
 	"modelsrc": sourceOf,
 	"quantsopener": func(name string, src modelSource, class ...string) map[string]any {
 		return map[string]any{"Name": name, "Src": src, "Class": strings.Join(class, " ")}

@@ -107,6 +107,7 @@ func updateOllamaHint(version string) Hint {
 		},
 		Commands: []string{"docker pull ollama/ollama:latest"},
 		Links: []Link{
+			{"How to update (System page)", "/system#ollama-panel"},
 			{"Download Ollama", "https://ollama.com/download"},
 			{"Ollama releases", "https://github.com/ollama/ollama/releases"},
 		},

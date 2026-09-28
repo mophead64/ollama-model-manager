@@ -56,7 +56,9 @@ type Server struct {
 
 	tmpl    *template.Template
 	updates *updateChecker
-	logins  *loginLimiter
+	// Ollama's own updates; kept fresh by RunOllamaUpdateChecks.
+	ollamaUp *ollamaUpdates
+	logins   *loginLimiter
 }
 
 func NewServer(ol *ollama.Client, st *store.Store, dl *downloads.Manager, mt *modeltest.Runner, sys *sysinfo.Sampler, cfg Config, log *slog.Logger) (*Server, error) {
@@ -66,7 +68,7 @@ func NewServer(ol *ollama.Client, st *store.Store, dl *downloads.Manager, mt *mo
 	}
 	return &Server{
 		ol: ol, st: st, dl: dl, mt: mt, sys: sys, lib: library.New(cfg.LibraryURL, cfg.HFURL, cfg.HFToken), cfg: cfg, log: log,
-		tmpl: tmpl, updates: newUpdateChecker(), logins: newLoginLimiter(),
+		tmpl: tmpl, updates: newUpdateChecker(), ollamaUp: newOllamaUpdates(), logins: newLoginLimiter(),
 	}, nil
 }
 
@@ -127,6 +129,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /system/history", s.handleSystemHistory)
 	mux.HandleFunc("GET /system/load", s.handleSystemLoad)
 	mux.HandleFunc("GET /system/running", s.handleRunningModels)
+	mux.HandleFunc("GET /system/ollama", s.handleOllamaUpdate)
 
 	mux.HandleFunc("GET /downloads", s.handleDownloads)
 	mux.HandleFunc("POST /downloads", s.handleQueueDownload)
@@ -163,6 +166,10 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 				// For the count badge on the nav's Downloads link.
 				if n, err := s.st.CountActiveDownloads(r.Context()); err == nil {
 					m["ActiveDownloads"] = n
+				}
+				// For the dot on the nav's System link (the System page has its own, fresher).
+				if _, set := m["OllamaUpdate"]; !set {
+					m["OllamaUpdate"] = s.ollamaUp.latest()
 				}
 				// And for the Testing tab's badge.
 				if n, err := s.st.CountActiveModelTests(r.Context()); err == nil {

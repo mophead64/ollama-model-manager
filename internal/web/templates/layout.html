@@ -466,6 +466,29 @@
   .usage-table summary { cursor: pointer; color: var(--muted); font-size: 13px; }
   .usage-table table { margin-top: 8px; max-width: 420px; }
   .usage-note { font-size: 12px; margin: 10px 0 0; }
+  /* The System page's top: this machine beside Ollama and its updates. */
+  .system-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; margin-bottom: 20px; }
+  .system-top > .panel { margin-bottom: 0; }
+  @media (max-width: 1000px) { .system-top { grid-template-columns: minmax(0, 1fr); } }
+  dl.kv.kv-2 { grid-template-columns: max-content minmax(0, 1fr) max-content minmax(0, 1fr); }
+  @media (max-width: 720px) { dl.kv.kv-2 { grid-template-columns: max-content minmax(0, 1fr); } }
+  .system-note { font-size: 13px; margin: 14px 0 0; }
+  .ollama-panel dl.kv { margin-top: 12px; }
+  .ollama-panel dd .badge { margin-left: 6px; }
+  .ollama-update-lead { font-size: 14px; line-height: 1.5; margin: 16px 0 8px; }
+  .ollama-update-lead p { margin: 0 0 8px; }
+  .ollama-update-lead ul { margin: 0 0 10px; padding-left: 20px; display: grid; gap: 4px; }
+  .ollama-how { margin-top: 14px; }
+  .ollama-how > summary, .update-steps summary { cursor: pointer; font-weight: 500; font-size: 14px; }
+  .update-steps { display: grid; gap: 8px; margin-top: 8px; }
+  .update-steps details { border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; }
+  .update-steps details[open] summary { margin-bottom: 8px; }
+  .update-steps p { font-size: 13px; line-height: 1.5; margin: 0 0 8px; }
+  .update-steps .copy-row { margin-bottom: 8px; }
+  .update-warn { color: var(--b-amber); }
+  .update-tips { font-size: 12px !important; margin-top: 4px !important; }
+  .nav-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-left: 4px; vertical-align: 2px; }
+  .nav-dot.warn { background: #f59e0b; box-shadow: 0 0 0 2px var(--panel); }
   .loaded-dot { display: inline-block; width: 8px; height: 8px; margin-right: 7px; border-radius: 50%; background: var(--good); vertical-align: middle; }
   .badge.cap { background: var(--b-blue-bg); color: var(--b-blue); }
   .caps { display: flex; flex-wrap: wrap; gap: 4px; }
@@ -593,7 +616,7 @@
   <a href="/models"{{template "nav_current" (eq .Nav "models")}}>Models</a>
   <a href="/discover"{{template "nav_current" (eq .Nav "discover")}}>Discover</a>
   <a href="/downloads"{{template "nav_current" (eq .Nav "downloads")}}>Downloads {{template "nav_dl_badge" .}}</a>
-  <a href="/system"{{template "nav_current" (eq .Nav "system")}}>System</a>{{end}}
+  <a href="/system"{{template "nav_current" (eq .Nav "system")}}>System{{with .OllamaUpdate}}{{if .Available}} <span class="nav-dot warn" role="img" aria-label="Ollama update available" title="Ollama {{.Latest}} is available (running {{.Running}})"></span>{{end}}{{end}}</a>{{end}}
   <div class="theme-switch" role="group" aria-label="Colour theme">
     <button type="button" class="secondary" data-theme-choice="auto">Auto</button>
     <button type="button" class="secondary" data-theme-choice="dark">Dark</button>
