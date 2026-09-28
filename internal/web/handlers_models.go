@@ -13,6 +13,7 @@ import (
 
 	"github.com/mophead64/ollama-model-manager/internal/disk"
 	"github.com/mophead64/ollama-model-manager/internal/ollama"
+	"github.com/mophead64/ollama-model-manager/internal/store"
 )
 
 const modelsPageSize = 25
@@ -24,13 +25,14 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 	st := parseListState(r.URL.Query())
 
 	data := map[string]any{
-		"Query":      st.Query,
-		"Caps":       st.Caps,
-		"Dir":        st.Dir(),
-		"Page":       st.Page,
-		"TotalPages": 1,
-		"OllamaURL":  s.ol.BaseURL(),
-		"Deleted":    r.URL.Query().Get("deleted"),
+		"Query":       st.Query,
+		"Caps":        st.Caps,
+		"Dir":         st.Dir(),
+		"Page":        st.Page,
+		"TotalPages":  1,
+		"OllamaURL":   s.ol.BaseURL(),
+		"Deleted":     r.URL.Query().Get("deleted"),
+		"Blacklisted": r.URL.Query().Get("blacklisted") == "1",
 	}
 
 	if !st.isDefaultSort() {
@@ -90,14 +92,21 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleModelsSubpage(tab, title string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := map[string]any{"Tab": tab, "Title": title}
-		if all, err := s.ol.List(r.Context()); err != nil {
-			s.log.Error("list models failed", "error", err)
-			data["Error"] = err.Error() // just hides the overview; these pages don't list models
-		} else {
-			s.addOverview(r, all, data)
-		}
+		s.addModelsOverview(r, data)
 		s.render(w, r, "models_subpage.html", data)
 	}
+}
+
+// addModelsOverview adds the overview to a models tab that doesn't list the
+// models itself. If Ollama can't be reached, Error hides it.
+func (s *Server) addModelsOverview(r *http.Request, data map[string]any) {
+	all, err := s.ol.List(r.Context())
+	if err != nil {
+		s.log.Error("list models failed", "error", err)
+		data["Error"] = err.Error()
+		return
+	}
+	s.addOverview(r, all, data)
 }
 
 // lastUsed is when each model was last seen in use (see package usage). A
@@ -180,9 +189,13 @@ func capabilityOptions(models []ollama.Model, selected []string) []capOption {
 	return out
 }
 
+// blacklistReasonMax caps a blacklist reason, in characters.
+const blacklistReasonMax = 2000
+
 // handleDeleteModel removes a model from Ollama, then goes back to the list
 // (with the filters/sort/page it was deleted from, if it came from there) or
-// the dashboard.
+// the dashboard. With blacklist=on it also adds the model to the blacklist,
+// with the form's reason and a copy of its details, which go with it.
 func (s *Server) handleDeleteModel(w http.ResponseWriter, r *http.Request) {
 	if !s.cfg.AllowDelete {
 		w.WriteHeader(http.StatusForbidden)
@@ -194,8 +207,18 @@ func (s *Server) handleDeleteModel(w http.ResponseWriter, r *http.Request) {
 		s.badRequest(w, r, errMsg("model name required"))
 		return
 	}
+	blacklist := r.FormValue("blacklist") == "on"
+	reason, err := blacklistReason(r)
+	if err != nil {
+		s.badRequest(w, r, err)
+		return
+	}
+	var entry store.BlacklistEntry
+	if blacklist {
+		entry = s.blacklistEntry(r, name, reason) // before its details are gone
+	}
 
-	err := s.ol.Delete(r.Context(), name)
+	err = s.ol.Delete(r.Context(), name)
 	var se *ollama.StatusError
 	if errors.As(err, &se) && se.StatusCode == http.StatusNotFound {
 		err = nil // already gone; the outcome the user wanted
@@ -210,6 +233,18 @@ func (s *Server) handleDeleteModel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.log.Info("model deleted", "model", name, "by", currentUser(r).Username)
+	if blacklist {
+		if err := s.st.BlacklistModel(r.Context(), entry); err != nil {
+			s.log.Error("blacklist model failed", "model", name, "error", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			s.render(w, r, "model_detail.html", map[string]any{
+				"Name":  name,
+				"Error": fmt.Sprintf("Deleted %s, but couldn't add it to the blacklist: %v", name, err),
+			})
+			return
+		}
+		s.log.Info("model blacklisted", "model", name, "by", entry.By)
+	}
 
 	back := parseListState(nil).URL()
 	if ret, err := url.Parse(r.FormValue("return")); err == nil {
@@ -223,6 +258,9 @@ func (s *Server) handleDeleteModel(w http.ResponseWriter, r *http.Request) {
 	target, _ := url.Parse(back)
 	q := target.Query()
 	q.Set("deleted", name)
+	if blacklist {
+		q.Set("blacklisted", "1")
+	}
 	target.RawQuery = q.Encode()
 	http.Redirect(w, r, target.String(), http.StatusSeeOther)
 }
@@ -328,4 +366,90 @@ func metaValue(v any) string {
 	default:
 		return fmt.Sprint(x)
 	}
+}
+
+// blacklistReason is the form's reason for blacklisting, trimmed.
+func blacklistReason(r *http.Request) (string, error) {
+	reason := strings.TrimSpace(r.FormValue("reason"))
+	if len([]rune(reason)) > blacklistReasonMax {
+		return "", errMsg(fmt.Sprintf("the reason can be at most %d characters", blacklistReasonMax))
+	}
+	return reason, nil
+}
+
+// blacklistEntry describes the model for its blacklist entry. If Ollama can't
+// say what it is, the entry just has its name.
+func (s *Server) blacklistEntry(r *http.Request, name, reason string) store.BlacklistEntry {
+	e := store.BlacklistEntry{Model: name, Reason: reason, By: currentUser(r).Username, At: time.Now()}
+	all, err := s.ol.List(r.Context())
+	if err != nil {
+		s.log.Warn("list models for blacklist entry failed", "model", name, "error", err)
+	}
+	for _, m := range all {
+		if m.Name == name || m.Model == name {
+			e.Family, e.ParameterSize, e.Quantization = m.Details.Family, m.Details.ParameterSize, m.Details.QuantizationLevel
+			e.Size, e.Digest = m.Size, m.Digest
+			break
+		}
+	}
+	return e
+}
+
+// handleBlacklist is the models section's Blacklist tab.
+func (s *Server) handleBlacklist(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	data := map[string]any{"Removed": q.Get("removed"), "Updated": q.Get("updated")}
+	s.addModelsOverview(r, data)
+	entries, err := s.st.Blacklist(r.Context())
+	if err != nil {
+		s.log.Error("read blacklist failed", "error", err)
+		data["BlacklistErr"] = err.Error()
+	}
+	data["Entries"] = entries
+	s.render(w, r, "blacklist.html", data)
+}
+
+// handleUnblacklist takes a model off the blacklist.
+func (s *Server) handleUnblacklist(w http.ResponseWriter, r *http.Request) {
+	name := strings.TrimSpace(r.FormValue("name"))
+	if name == "" {
+		s.badRequest(w, r, errMsg("model name required"))
+		return
+	}
+	if err := s.st.UnblacklistModel(r.Context(), name); err != nil {
+		s.log.Error("unblacklist model failed", "model", name, "error", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		s.render(w, r, "error_fragment.html", map[string]any{"Error": fmt.Sprintf("Couldn't remove %s from the blacklist: %v", name, err)})
+		return
+	}
+	s.log.Info("model unblacklisted", "model", name, "by", currentUser(r).Username)
+	http.Redirect(w, r, "/models/blacklist?removed="+url.QueryEscape(name), http.StatusSeeOther)
+}
+
+// handleBlacklistReason changes why a model is blacklisted (the Edit dialog).
+func (s *Server) handleBlacklistReason(w http.ResponseWriter, r *http.Request) {
+	name := strings.TrimSpace(r.FormValue("name"))
+	if name == "" {
+		s.badRequest(w, r, errMsg("model name required"))
+		return
+	}
+	reason, err := blacklistReason(r)
+	if err != nil {
+		s.badRequest(w, r, err)
+		return
+	}
+	ok, err := s.st.UpdateBlacklistReason(r.Context(), name, reason)
+	if err != nil {
+		s.log.Error("update blacklist reason failed", "model", name, "error", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		s.render(w, r, "error_fragment.html", map[string]any{"Error": fmt.Sprintf("Couldn't update %s's reason: %v", name, err)})
+		return
+	}
+	if !ok {
+		w.WriteHeader(http.StatusNotFound)
+		s.render(w, r, "error_fragment.html", map[string]any{"Error": fmt.Sprintf("%s isn't on the blacklist.", name)})
+		return
+	}
+	s.log.Info("blacklist reason updated", "model", name, "by", currentUser(r).Username)
+	http.Redirect(w, r, "/models/blacklist?updated="+url.QueryEscape(name), http.StatusSeeOther)
 }

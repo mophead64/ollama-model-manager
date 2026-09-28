@@ -74,14 +74,11 @@
   {{if .Info}}{{template "load_dialog" .}}{{end}}
   {{if and .AllowDelete .Info}}
   <dialog id="delete-model-modal" aria-labelledby="delete-model-title">
-    <form method="post" action="/models/delete">
+    <form method="post" action="/models/delete" data-reset-on-open>
       <h2 id="delete-model-title">Delete model?</h2>
       <input type="hidden" name="name" value="{{.Name}}">
       <p><code>{{.Name}}</code> will be removed from Ollama{{with .Model}}, freeing up to <strong>{{bytes .Size}}</strong>{{end}}. You'd have to pull it again to use it.</p>
-      <div class="dialog-actions">
-        <button type="button" class="secondary" data-dialog-close>Cancel</button>
-        <button type="submit" class="danger-solid">Delete</button>
-      </div>
+      {{template "blacklist_fields"}}
     </form>
   </dialog>
   {{end}}

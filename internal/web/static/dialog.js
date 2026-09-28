@@ -5,7 +5,9 @@
 // One dialog can serve many openers: each data-fill-<key>="value" on the opener
 // is copied into the dialog's [data-fill="<key>"] elements (an input's value,
 // anything else's text; or the attribute named by data-fill-attr, e.g. a
-// form's action), e.g. the model name in a shared delete confirmation.
+// form's action), e.g. the model name in a shared delete confirmation. A form
+// with data-reset-on-open inside it is reset first, so nothing typed for one
+// opener carries over to the next.
 //
 // A [data-dismiss] button removes the .notice it's in.
 //
@@ -29,6 +31,7 @@ document.addEventListener("click", function (e) {
   if (opener && !opener.disabled) {
     var dialog = document.getElementById(opener.getAttribute("data-dialog-open"));
     if (dialog && !dialog.open && typeof dialog.showModal === "function") {
+      dialog.querySelectorAll("form[data-reset-on-open]").forEach(function (f) { f.reset(); });
       fill(dialog, opener);
       dialog.showModal();
     }
@@ -89,12 +92,12 @@ function fill(dialog, opener) {
 }
 
 document.addEventListener("DOMContentLoaded", function () {
-  // A one-off notice (e.g. ?deleted=x) is shown once: drop its query param so
-  // a refresh or bookmark doesn't bring it back.
+  // A one-off notice (e.g. ?deleted=x) is shown once: drop its query params
+  // (space-separated) so a refresh or bookmark doesn't bring it back.
   document.querySelectorAll(".notice[data-clear-param]").forEach(function (n) {
     try {
       var url = new URL(window.location.href);
-      url.searchParams.delete(n.dataset.clearParam);
+      n.dataset.clearParam.split(" ").forEach(function (p) { url.searchParams.delete(p); });
       history.replaceState(history.state, "", url.pathname + url.search + url.hash);
     } catch (e) {}
   });

@@ -13,7 +13,7 @@
   {{template "nav" .}}
   <main>
     {{template "flash" .}}
-    {{with .Deleted}}<div class="notice" role="status" data-clear-param="deleted"><span>Deleted <strong>{{.}}</strong>.</span><button type="button" class="notice-close" data-dismiss aria-label="Dismiss">×</button></div>{{end}}
+    {{template "deleted_notice" .}}
     {{if .Error}}
     <div class="panel"><div class="error-box" style="margin:0">Couldn't list models from Ollama: {{.Error}}</div></div>
     {{else}}

@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/mophead64/ollama-model-manager/internal/disk"
@@ -100,18 +101,22 @@ func (s *Server) handleDownloads(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	data["Queued"] = q.Get("queued")
 	data["Warning"] = q.Get("warning")
+	data["Unblacklisted"] = q.Get("unblacklisted")
 	s.render(w, r, "downloads.html", data)
 }
 
 // handleQueueDownload vets a requested model and queues it. If it looks too
 // big for this machine, the page comes back with a confirmation dialog
-// instead; confirming re-posts with confirm=1.
+// instead; confirming re-posts with confirm=1. unblacklist names a blacklist
+// entry to remove once the download is queued (the blacklist's Download), so
+// a download that's cancelled or refused leaves it be.
 func (s *Server) handleQueueDownload(w http.ResponseWriter, r *http.Request) {
 	if r.FormValue("from") == "discover" && r.Header.Get("HX-Request") == "true" {
 		s.queueFromDiscover(w, r)
 		return
 	}
 	input := r.FormValue("model")
+	unblacklist := strings.TrimSpace(r.FormValue("unblacklist"))
 	c, err := s.dl.Check(r.Context(), input)
 	name, warning := c.Name, c.Warning
 	if err == nil && r.FormValue("confirm") == "" {
@@ -121,7 +126,7 @@ func (s *Server) handleQueueDownload(w http.ResponseWriter, r *http.Request) {
 				s.serverError(w, r, derr)
 				return
 			}
-			data["Confirm"] = map[string]any{"Name": c.Name, "Size": c.Size, "Concerns": concerns}
+			data["Confirm"] = map[string]any{"Name": c.Name, "Size": c.Size, "Concerns": concerns, "Unblacklist": unblacklist}
 			data["FormValue"] = input
 			s.render(w, r, "downloads.html", data)
 			return
@@ -150,6 +155,14 @@ func (s *Server) handleQueueDownload(w http.ResponseWriter, r *http.Request) {
 	v := url.Values{"queued": {name}}
 	if warning != "" {
 		v.Set("warning", warning)
+	}
+	if unblacklist != "" {
+		if err := s.st.UnblacklistModel(r.Context(), unblacklist); err != nil {
+			s.log.Error("unblacklist model failed", "model", unblacklist, "error", err)
+		} else {
+			s.log.Info("model unblacklisted", "model", unblacklist, "by", currentUser(r).Username)
+			v.Set("unblacklisted", unblacklist)
+		}
 	}
 	http.Redirect(w, r, "/downloads?"+v.Encode(), http.StatusSeeOther)
 }

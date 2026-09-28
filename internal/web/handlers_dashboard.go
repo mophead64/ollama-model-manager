@@ -14,11 +14,12 @@ const dashboardRecent = 10
 // memory, and the models used most recently.
 func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	data := map[string]any{
-		"Nav":       "dashboard",
-		"OllamaURL": s.ol.BaseURL(),
-		"Deleted":   r.URL.Query().Get("deleted"),
-		"Load":      s.sys.Latest().Sample(),
-		"PollEvery": pollEvery(s.sys.Interval()),
+		"Nav":         "dashboard",
+		"OllamaURL":   s.ol.BaseURL(),
+		"Deleted":     r.URL.Query().Get("deleted"),
+		"Blacklisted": r.URL.Query().Get("blacklisted") == "1",
+		"Load":        s.sys.Latest().Sample(),
+		"PollEvery":   pollEvery(s.sys.Interval()),
 	}
 
 	all, err := s.ol.List(r.Context())

@@ -395,6 +395,17 @@
   .disc-tab:hover { color: var(--text); }
   .disc-tab[aria-current] { color: var(--text); border-bottom-color: var(--accent); }
   .disc-tabs.page-tabs { margin: 0 0 16px; }
+  .bl-check { display: flex; align-items: center; gap: 8px; margin: 4px 0 12px; }
+  .bl-reason { display: none; margin-bottom: 12px; }
+  .bl-reason label { display: block; font-size: 13px; margin-bottom: 6px; }
+  .bl-reason textarea {
+    width: 100%; box-sizing: border-box; resize: vertical; padding: 8px 10px; font: inherit; font-size: 14px;
+    border: 1px solid var(--border); border-radius: 6px; background: var(--panel); color: var(--text);
+  }
+  form:has(.bl-toggle:checked) .bl-reason, .bl-reason.edit { display: block; }
+  .bl-on, form:has(.bl-toggle:checked) .bl-off { display: none; }
+  form:has(.bl-toggle:checked) .bl-on { display: inline; }
+  .reason { white-space: pre-wrap; max-width: 420px; }
   a.badge { text-decoration: none; }
   a.badge:hover { filter: brightness(.95); text-decoration: underline; }
   .disc-dl-note { font-size: 12px; white-space: normal; text-align: left; max-width: 280px; margin: 4px 0 0 auto; }

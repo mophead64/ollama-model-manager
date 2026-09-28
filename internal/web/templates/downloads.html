@@ -14,9 +14,9 @@
   <main>
     {{with .Queued}}
       {{if $.Warning}}
-      <div class="notice warning" role="status" data-clear-param="queued"><span>Queued <strong>{{.}}</strong>. {{$.Warning}}</span><button type="button" class="notice-close" data-dismiss aria-label="Dismiss">×</button></div>
+      <div class="notice warning" role="status" data-clear-param="queued warning unblacklisted"><span>Queued <strong>{{.}}</strong>.{{template "unblacklisted_note" $}} {{$.Warning}}</span><button type="button" class="notice-close" data-dismiss aria-label="Dismiss">×</button></div>
       {{else}}
-      <div class="notice" role="status" data-clear-param="queued"><span>Queued <strong>{{.}}</strong>. It downloads in the background, so you can leave this page.</span><button type="button" class="notice-close" data-dismiss aria-label="Dismiss">×</button></div>
+      <div class="notice" role="status" data-clear-param="queued unblacklisted"><span>Queued <strong>{{.}}</strong>.{{template "unblacklisted_note" $}} It downloads in the background, so you can leave this page.</span><button type="button" class="notice-close" data-dismiss aria-label="Dismiss">×</button></div>
       {{end}}
     {{end}}
     <div class="panel">
@@ -43,6 +43,7 @@
       <h2 id="confirm-download-title">Download {{.Name}} anyway?</h2>
       <input type="hidden" name="model" value="{{.Name}}">
       <input type="hidden" name="confirm" value="1">
+      {{with .Unblacklist}}<input type="hidden" name="unblacklist" value="{{.}}">{{end}}
       <p>It's a <strong>{{bytes .Size}}</strong> download.</p>
       <ul class="concerns">{{range .Concerns}}<li>{{.}}</li>{{end}}</ul>
       <p class="muted" style="font-size:13px">Checked against the machine running this app. If Ollama runs somewhere else, its hardware may differ.</p>
@@ -56,3 +57,5 @@
 </body>
 </html>
 {{end}}
+
+{{define "unblacklisted_note"}}{{with .Unblacklisted}} Removed <strong>{{.}}</strong> from the blacklist.{{end}}{{end}}
