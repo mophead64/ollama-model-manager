@@ -16,7 +16,7 @@ func TestNavMarksCurrentPage(t *testing.T) {
 		"/":                      "/",
 		"/models":                "/models",
 		"/models/user/custom:v1": "/models",
-		"/models/blocklist":      "/models",
+		"/models/blacklist":      "/models",
 		"/models/testing":        "/models",
 		"/downloads":             "/downloads",
 		"/discover":              "/discover",

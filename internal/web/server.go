@@ -86,7 +86,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /version/release", s.handleRelease)
 
 	mux.HandleFunc("GET /models", s.handleModels)
-	mux.HandleFunc("GET /models/blocklist", s.handleModelsSubpage("blocklist", "Blocklist"))
+	mux.HandleFunc("GET /models/blacklist", s.handleModelsSubpage("blacklist", "Blacklist"))
 	mux.HandleFunc("GET /models/testing", s.handleModelsSubpage("testing", "Testing"))
 	// Model names can contain "/" (e.g. "user/model:tag"), hence the wildcard.
 	mux.HandleFunc("GET /models/{name...}", s.handleModelDetail)

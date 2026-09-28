@@ -283,7 +283,7 @@ func TestModelsTabs(t *testing.T) {
 	h := newTestServer(t, fakeOllama(t, 1).URL)
 	for path, want := range map[string]string{
 		"/models":           `<a href="/models" class="disc-tab" aria-current="true">All Models</a>`,
-		"/models/blocklist": `<a href="/models/blocklist" class="disc-tab" aria-current="true">Blocklist</a>`,
+		"/models/blacklist": `<a href="/models/blacklist" class="disc-tab" aria-current="true">Blacklist</a>`,
 		"/models/testing":   `<a href="/models/testing" class="disc-tab" aria-current="true">Testing</a>`,
 	} {
 		rec := get(h, path, false)
@@ -293,7 +293,7 @@ func TestModelsTabs(t *testing.T) {
 		}
 	}
 	// Every tab has the same overview above the tabs.
-	for _, path := range []string{"/models/blocklist", "/models/testing"} {
+	for _, path := range []string{"/models/blacklist", "/models/testing"} {
 		body := get(h, path, false).Body.String()
 		overview, tabs := strings.Index(body, "on the models disk"), strings.Index(body, `class="disc-tabs page-tabs"`)
 		if overview < 0 || overview > tabs || !strings.Contains(body, `id="running-panel"`) {
