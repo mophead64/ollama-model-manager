@@ -15,7 +15,8 @@
   var menu = picker.querySelector("[data-picker-menu]");
   var filter = picker.querySelector("[data-picker-filter]");
   var empty = picker.querySelector("[data-picker-empty]");
-  var items = Array.prototype.slice.call(picker.querySelectorAll("[role=option]"));
+  var list = picker.querySelector("[data-picker-list]");
+  var items = Array.prototype.slice.call(list.querySelectorAll("[role=option]"));
 
   function visibleItems() { return items.filter(function (i) { return !i.hidden; }); }
 
@@ -118,6 +119,40 @@
   }
   document.addEventListener("click", function (e) { if (!picker.contains(e.target)) close(false); });
 
+  // Models load and unload (from this chat, the properties panel, or
+  // elsewhere), so re-fetch the options when the footer's state watcher says
+  // something changed, keeping the filter and the highlighted option.
+  function refreshList() {
+    var url = "/chat/picker" + (panel.dataset.model ? "?model=" + encodeURIComponent(panel.dataset.model) : "");
+    fetch(url, { credentials: "same-origin" }).then(function (resp) {
+      if (!resp.ok) throw new Error(resp.status);
+      return resp.text();
+    }).then(function (html) {
+      var active = list.querySelector(".dropdown-item.active");
+      var activeName = active && active.dataset.value;
+      var hadFocus = active && document.activeElement === active;
+      list.innerHTML = html;
+      items = Array.prototype.slice.call(list.querySelectorAll("[role=option]"));
+      var picked = list.querySelector("[aria-selected=true]");
+      if (picked) current.innerHTML = picked.innerHTML;
+      if (filter) applyFilter();
+      var again = activeName && items.filter(function (i) { return i.dataset.value === activeName; })[0];
+      if (again) {
+        again.classList.add("active");
+        if (hadFocus) again.focus({ preventScroll: true });
+      }
+    }).catch(function () {
+      // Keep the list as it was; the next change tries again.
+    });
+  }
+  document.body.addEventListener("state-changed", refreshList);
+
+  // Tells every view that follows model state (this picker, the properties
+  // panel) to refresh, as the state watcher would once it noticed.
+  function announceChange() {
+    document.body.dispatchEvent(new CustomEvent("state-changed", { bubbles: true }));
+  }
+
   // ---- Conversation ------------------------------------------------------
 
   var log = panel.querySelector("[data-chat-log]");
@@ -199,7 +234,12 @@
         if (!line.trim()) return;
         var ev = JSON.parse(line);
         if (ev.error) { failed = true; fail("Couldn't get a reply from " + model + ": " + ev.error); return; }
-        if (pending.parentNode) pending.remove();
+        if (pending.parentNode) {
+          pending.remove();
+          // Ollama only starts replying once the model's loaded: show that now
+          // (picker badge, properties panel) rather than at the watcher's next poll.
+          announceChange();
+        }
         if (ev.thinking) {
           if (!thinking) {
             thinking = el("details", "thinking");
@@ -211,7 +251,10 @@
           thinkingText.appendData(ev.thinking);
         }
         if (ev.content) { reply += ev.content; answer.appendData(ev.content); }
-        if (ev.done) log.appendChild(statsLine(model, ev.stats));
+        if (ev.done) {
+          log.appendChild(statsLine(model, ev.stats));
+          announceChange(); // its last used, and unload countdown, moved on
+        }
         scroll();
       }
       function pump() {

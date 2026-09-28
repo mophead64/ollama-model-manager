@@ -92,12 +92,13 @@
 {{end}}
 
 {{/* The models section's sub-pages. Takes the current one: "all",
-     "blacklist" or "testing". */}}
+     "blacklist", "testing" or "chat". */}}
 {{define "models_tabs"}}
 <div class="disc-tabs page-tabs">
   <a href="/models" class="disc-tab"{{if eq . "all"}} aria-current="true"{{end}}>All Models</a>
   <a href="/models/blacklist" class="disc-tab"{{if eq . "blacklist"}} aria-current="true"{{end}}>Blacklist</a>
   <a href="/models/testing" class="disc-tab"{{if eq . "testing"}} aria-current="true"{{end}}>Testing</a>
+  <a href="/models/chat" class="disc-tab"{{if eq . "chat"}} aria-current="true"{{end}}>Chat</a>
 </div>
 {{end}}
 

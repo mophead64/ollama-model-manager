@@ -43,6 +43,9 @@
     }
   }
   * { box-sizing: border-box; }
+  /* The hidden attribute always hides, even on elements given a display
+     below (e.g. the chat picker's filtered-out .dropdown-items, which are flex). */
+  [hidden] { display: none !important; }
   /* A column so main can grow and keep the footer at the bottom on short pages. */
   body {
     margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -450,7 +453,6 @@
   }
   .chart-tip strong { display: block; font-size: 14px; color: var(--text); }
   .chart-tip-bytes { display: block; color: var(--text); margin-bottom: 2px; }
-  .chart-tip-bytes[hidden] { display: none; }
   @media (max-width: 900px) { .chart-grid { grid-template-columns: 1fr; } }
   @media (max-width: 720px) {
     nav { flex-wrap: wrap; gap: 12px; padding: 12px 16px; }
@@ -478,7 +480,6 @@
   {{if .User}}<a href="/"{{template "nav_current" (eq .Nav "dashboard")}}>Dashboard</a>
   <a href="/models"{{template "nav_current" (eq .Nav "models")}}>Models</a>
   <a href="/discover"{{template "nav_current" (eq .Nav "discover")}}>Discover</a>
-  <a href="/chat"{{template "nav_current" (eq .Nav "chat")}}>Chat</a>
   <a href="/downloads"{{template "nav_current" (eq .Nav "downloads")}}>Downloads {{template "nav_dl_badge" .}}</a>
   <a href="/system"{{template "nav_current" (eq .Nav "system")}}>System</a>{{end}}
   <div class="theme-switch" role="group" aria-label="Colour theme">

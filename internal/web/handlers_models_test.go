@@ -285,6 +285,7 @@ func TestModelsTabs(t *testing.T) {
 		"/models":           `<a href="/models" class="disc-tab" aria-current="true">All Models</a>`,
 		"/models/blacklist": `<a href="/models/blacklist" class="disc-tab" aria-current="true">Blacklist</a>`,
 		"/models/testing":   `<a href="/models/testing" class="disc-tab" aria-current="true">Testing</a>`,
+		"/models/chat":      `<a href="/models/chat" class="disc-tab" aria-current="true">Chat</a>`,
 	} {
 		rec := get(h, path, false)
 		body := rec.Body.String()

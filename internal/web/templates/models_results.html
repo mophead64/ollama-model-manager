@@ -78,7 +78,7 @@
     <summary class="btn secondary small" aria-label="More actions for {{.Name}}"><span aria-hidden="true">▾</span></summary>
     <div class="menu">
       {{if $.Loaded}}{{template "unload_button" .Name}}{{else}}{{template "load_button" .Name}}{{end}}
-      {{if canchat .Capabilities}}<a href="/chat?model={{.Name}}">Chat</a>{{end}}
+      {{if canchat .Capabilities}}<a href="/models/chat?model={{.Name}}">Chat</a>{{end}}
       {{if $.AllowDelete}}<button type="button" class="danger" data-dialog-open="delete-model-modal"
         data-fill-name="{{.Name}}" data-fill-size="{{bytes .Size}}" data-fill-return="{{$.Return}}">Delete</button>{{end}}
     </div>

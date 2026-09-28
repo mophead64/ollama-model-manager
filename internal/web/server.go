@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/mophead64/ollama-model-manager/internal/downloads"
@@ -100,8 +101,14 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /discover", s.handleDiscover)
 	mux.HandleFunc("GET /discover/tags", s.handleDiscoverTags)
 	mux.HandleFunc("GET /discover/hf/files", s.handleDiscoverHFFiles)
-	mux.HandleFunc("GET /chat", s.handleChatPage)
+	mux.HandleFunc("GET /models/chat", s.handleChatPage)
+	mux.HandleFunc("GET /chat", func(w http.ResponseWriter, r *http.Request) {
+		// The chat page was here before it became a models tab.
+		target := &url.URL{Path: "/models/chat", RawQuery: r.URL.RawQuery}
+		http.Redirect(w, r, target.String(), http.StatusMovedPermanently)
+	})
 	mux.HandleFunc("GET /chat/model", s.handleChatModelInfo)
+	mux.HandleFunc("GET /chat/picker", s.handleChatPicker)
 	mux.HandleFunc("POST /chat", s.handleChat)
 
 	mux.HandleFunc("GET /state", s.handleState)
