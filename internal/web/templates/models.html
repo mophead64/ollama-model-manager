@@ -15,6 +15,7 @@
     {{template "flash" .}}
     {{with .Deleted}}<div class="notice" role="status" data-clear-param="deleted"><span>Deleted <strong>{{.}}</strong>.</span><button type="button" class="notice-close" data-dismiss aria-label="Dismiss">×</button></div>{{end}}
     {{if not .Error}}{{template "overview" .}}{{end}}
+    {{template "models_tabs" "all"}}
     <div class="panel">
       <div class="row between">
         <h2>Models</h2>
@@ -91,4 +92,14 @@
   </form>
 </dialog>
 {{end}}
+{{end}}
+
+{{/* The models section's sub-pages. Takes the current one: "all",
+     "blocklist" or "testing". */}}
+{{define "models_tabs"}}
+<div class="disc-tabs page-tabs">
+  <a href="/models" class="disc-tab"{{if eq . "all"}} aria-current="true"{{end}}>All Models</a>
+  <a href="/models/blocklist" class="disc-tab"{{if eq . "blocklist"}} aria-current="true"{{end}}>Blocklist</a>
+  <a href="/models/testing" class="disc-tab"{{if eq . "testing"}} aria-current="true"{{end}}>Testing</a>
+</div>
 {{end}}

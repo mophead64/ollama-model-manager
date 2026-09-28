@@ -278,3 +278,36 @@ func TestModelsTableCopyNameAndActions(t *testing.T) {
 		}
 	}
 }
+
+func TestModelsTabs(t *testing.T) {
+	h := newTestServer(t, fakeOllama(t, 1).URL)
+	for path, want := range map[string]string{
+		"/models":           `<a href="/models" class="disc-tab" aria-current="true">All Models</a>`,
+		"/models/blocklist": `<a href="/models/blocklist" class="disc-tab" aria-current="true">Blocklist</a>`,
+		"/models/testing":   `<a href="/models/testing" class="disc-tab" aria-current="true">Testing</a>`,
+	} {
+		rec := get(h, path, false)
+		body := rec.Body.String()
+		if rec.Code != http.StatusOK || !strings.Contains(body, want) || strings.Count(body, `aria-current="true"`) != 1 {
+			t.Errorf("%s: %d, want just %s current", path, rec.Code, want)
+		}
+	}
+	// Every tab has the same overview above the tabs.
+	for _, path := range []string{"/models/blocklist", "/models/testing"} {
+		body := get(h, path, false).Body.String()
+		overview, tabs := strings.Index(body, "on the models disk"), strings.Index(body, `class="disc-tabs page-tabs"`)
+		if overview < 0 || overview > tabs || !strings.Contains(body, `id="running-panel"`) {
+			t.Errorf("%s should have the overview above its tabs", path)
+		}
+	}
+	// On All Models the tabs sit between the overview and the filters.
+	body := get(h, "/models", false).Body.String()
+	overview, tabs, filters := strings.Index(body, `id="running-panel"`), strings.Index(body, `class="disc-tabs page-tabs"`), strings.Index(body, `id="f-q"`)
+	if overview < 0 || !(overview < tabs && tabs < filters) {
+		t.Errorf("tabs should be below the overview and above the filters: %d, %d, %d", overview, tabs, filters)
+	}
+	// Model detail pages are unaffected.
+	if rec := get(h, "/models/user/custom:v1", false); rec.Code != http.StatusOK {
+		t.Errorf("model detail = %d", rec.Code)
+	}
+}
