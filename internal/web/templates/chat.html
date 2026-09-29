@@ -12,6 +12,8 @@
 <body>
   {{template "nav" .}}
   <main>
+    {{if not .Error}}{{template "overview" .}}{{end}}
+    {{template "models_tabs" (modeltabs "chat" .ActiveTests)}}
     {{if .Error}}
       <div class="error-box">Couldn't list models from Ollama: {{.Error}}</div>
     {{else if not .Models}}
@@ -67,17 +69,21 @@
   </button>
   <div class="dropdown-menu" data-picker-menu hidden>
     {{if gt (len .Models) 6}}<input type="search" class="dropdown-filter" data-picker-filter placeholder="Filter models" aria-label="Filter models" autocomplete="off">{{end}}
-    <div role="listbox" aria-labelledby="picker-label" data-picker-list>
-      {{range .Models}}
-      <div class="dropdown-item" role="option" tabindex="-1" data-value="{{.Name}}"
-           aria-selected="{{if and $.Selected (eq $.Selected.Name .Name)}}true{{else}}false{{end}}">
-        {{template "picker_item_body" (pickeritem . (index $.LoadedNames .Name))}}
-      </div>
-      {{end}}
-    </div>
+    <div role="listbox" aria-labelledby="picker-label" data-picker-list>{{template "picker_items" .}}</div>
     <p class="dropdown-empty muted" data-picker-empty hidden>No models match.</p>
   </div>
 </div>
+{{end}}
+
+{{/* The picker's options. Also served alone (handleChatPicker), for chat.js
+     to swap in when models are loaded or unloaded. */}}
+{{define "picker_items"}}
+{{range .Models}}
+<div class="dropdown-item" role="option" tabindex="-1" data-value="{{.Name}}"
+     aria-selected="{{if and $.Selected (eq $.Selected.Name .Name)}}true{{else}}false{{end}}">
+  {{template "picker_item_body" (pickeritem . (index $.LoadedNames .Name))}}
+</div>
+{{end}}
 {{end}}
 
 {{/* One model's line in the picker: its name, then parameters and size. */}}

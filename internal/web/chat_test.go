@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -89,11 +90,14 @@ func TestChatPage(t *testing.T) {
 	h := newTestServer(t, fakeOllama(t, 1).URL)
 
 	// Every model that can chat is in the picker, with its parameters and size.
-	page := get(h, "/chat", false).Body.String()
+	page := get(h, "/models/chat", false).Body.String()
 	for _, want := range []string{
 		`data-value="model-000:latest"`, `data-value="user/custom:v1"`,
 		`<span class="item-meta">2.0 KB`, "Choose a model…", "Pick a model first",
-		`<a href="/chat" class="active" aria-current="page">Chat</a>`,
+		// A models tab, under the same overview as the others.
+		`<a href="/models" class="active" aria-current="page">Models</a>`,
+		`<a href="/models/chat" class="disc-tab" aria-current="true">Chat</a>`,
+		"on the models disk",
 	} {
 		if !strings.Contains(page, want) {
 			t.Errorf("chat page missing %q", want)
@@ -101,7 +105,12 @@ func TestChatPage(t *testing.T) {
 	}
 
 	// ?model= picks one: the toggle shows it, and its properties are shown.
-	page = get(h, "/chat?model=user/custom:v1", false).Body.String()
+	// The old address still works.
+	if rec := get(h, "/chat?model=user/custom:v1", false); rec.Code != http.StatusMovedPermanently || rec.Header().Get("Location") != "/models/chat?model=user/custom:v1" {
+		t.Errorf("old /chat = %d %q", rec.Code, rec.Header().Get("Location"))
+	}
+
+	page = get(h, "/models/chat?model=user/custom:v1", false).Body.String()
 	for _, want := range []string{
 		`data-model="user/custom:v1"`, `aria-selected="true"`, `id="chat-model-info" hx-get="/chat/model?name=user/custom:v1"`,
 		"<dt>Family</dt><dd>qwen</dd>", "50%/50% CPU/GPU", "Unload from memory",
@@ -109,6 +118,19 @@ func TestChatPage(t *testing.T) {
 		if !strings.Contains(page, want) {
 			t.Errorf("chat page with a model picked missing %q", want)
 		}
+	}
+
+	// The picker's options on their own, as chat.js re-fetches them when models
+	// load or unload: current "loaded" badges, and the picked one kept.
+	items := get(h, "/chat/picker?model=user/custom:v1", false).Body.String()
+	if strings.Contains(items, "<!doctype html>") || strings.Contains(items, "data-picker-toggle") {
+		t.Errorf("picker fragment should be just the options:\n%s", items)
+	}
+	if !regexp.MustCompile(`data-value="user/custom:v1"\s+aria-selected="true"`).MatchString(items) || !strings.Contains(items, `data-value="model-000:latest"`) {
+		t.Errorf("picker fragment should list both, with the picked one selected:\n%s", items)
+	}
+	if n := strings.Count(items, `<span class="badge on">loaded</span>`); n != 2 {
+		t.Errorf("%d options marked loaded, want 2 (fakeOllama has both loaded)", n)
 	}
 
 	// The properties panel on its own, as the picker and live refreshes fetch it.
@@ -124,13 +146,13 @@ func TestChatPage(t *testing.T) {
 func TestChatLinks(t *testing.T) {
 	h := newTestServer(t, fakeOllama(t, 1).URL)
 	list := get(h, "/models", true).Body.String()
-	for _, want := range []string{`href="/chat?model=model-000%3alatest">Chat</a>`, `href="/chat?model=user%2fcustom%3av1">Chat</a>`} {
+	for _, want := range []string{`href="/models/chat?model=model-000%3alatest">Chat</a>`, `href="/models/chat?model=user%2fcustom%3av1">Chat</a>`} {
 		if !strings.Contains(list, want) {
 			t.Errorf("models list missing %s", want)
 		}
 	}
 	detail := get(h, "/models/user/custom:v1", false).Body.String()
-	if !strings.Contains(detail, `href="/chat?model=user%2fcustom%3av1">Chat</a>`) || strings.Contains(detail, "chat.js") {
+	if !strings.Contains(detail, `href="/models/chat?model=user%2fcustom%3av1">Chat</a>`) || strings.Contains(detail, "chat.js") {
 		t.Error("the model page should link to the Chat page rather than embed a chat")
 	}
 

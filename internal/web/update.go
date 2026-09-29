@@ -22,8 +22,11 @@ import (
 
 const (
 	latestReleaseURL = "https://api.github.com/repos/mophead64/ollama-model-manager/releases/latest"
-	updateOKTTL      = 6 * time.Hour
-	updateErrTTL     = 5 * time.Minute
+	// The footer re-checks this often too (layout.html), so a new release
+	// shows within a couple of hours; it's one request per interval,
+	// whoever's viewing, well within GitHub's unauthenticated rate limit.
+	updateOKTTL  = 2 * time.Hour
+	updateErrTTL = 5 * time.Minute
 	// A manual refresh bypasses the cache, but not more often than this, so a
 	// click-happy user can't burn through GitHub's unauthenticated rate limit.
 	updateMinGap = 30 * time.Second
@@ -38,6 +41,7 @@ type updateInfo struct {
 	Published time.Time
 	Notes     template.HTML // the release notes, rendered from Markdown
 	Checked   bool          // false if the check failed (offline, rate limited, ...)
+	CheckedAt time.Time     // when GitHub was asked
 }
 
 // updateChecker asks GitHub for the latest release, caching the answer so
@@ -45,6 +49,11 @@ type updateInfo struct {
 type updateChecker struct {
 	client *http.Client
 	url    string
+	// current is the running version the latest release is compared with
+	// (Current, Available); nil leaves them unset, for a caller comparing
+	// with something that changes between fetches (Ollama's version).
+	current func() string
+	ttl     time.Duration // how long a successful answer is kept
 
 	mu      sync.Mutex
 	info    updateInfo
@@ -53,7 +62,8 @@ type updateChecker struct {
 }
 
 func newUpdateChecker() *updateChecker {
-	return &updateChecker{client: &http.Client{Timeout: 5 * time.Second}, url: latestReleaseURL}
+	return &updateChecker{client: &http.Client{Timeout: 5 * time.Second}, url: latestReleaseURL,
+		current: func() string { return version.Version }, ttl: updateOKTTL}
 }
 
 // check returns the cached answer while it's fresh; force (a manual refresh)
@@ -72,7 +82,8 @@ func (u *updateChecker) check(ctx context.Context, force bool) updateInfo {
 		u.info, u.expiry = updateInfo{}, time.Now().Add(updateErrTTL)
 		return u.info
 	}
-	u.info, u.expiry = info, time.Now().Add(updateOKTTL)
+	info.CheckedAt = now
+	u.info, u.expiry = info, time.Now().Add(u.ttl)
 	return info
 }
 
@@ -105,16 +116,19 @@ func (u *updateChecker) fetch(ctx context.Context) (updateInfo, error) {
 	if err != nil {
 		return updateInfo{}, fmt.Errorf("render release notes: %w", err)
 	}
-	return updateInfo{
+	info := updateInfo{
 		Checked:   true,
 		Latest:    rel.TagName,
 		Name:      rel.Name,
 		URL:       rel.HTMLURL,
 		Published: rel.PublishedAt,
 		Notes:     notes,
-		Current:   rel.TagName == version.Version,
-		Available: version.Newer(rel.TagName, version.Version),
-	}, nil
+	}
+	if u.current != nil {
+		cur := u.current()
+		info.Current, info.Available = rel.TagName == cur, version.Newer(rel.TagName, cur)
+	}
+	return info, nil
 }
 
 // releaseMarkdown renders release notes as GitHub does (tables, task lists,
@@ -148,7 +162,7 @@ func (externalLinks) Transform(doc *ast.Document, _ text.Reader, _ parser.Contex
 }
 
 // handleVersionCheck is fetched by htmx after each page renders (and again
-// every 6 hours while a page stays open), so the network round trip to GitHub
+// every 2 hours while a page stays open), so the network round trip to GitHub
 // never delays the page itself. ?force=1 is the footer's manual refresh.
 func (s *Server) handleVersionCheck(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, "version_status.html", map[string]any{

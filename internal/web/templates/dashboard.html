@@ -1,0 +1,57 @@
+{{define "dashboard.html"}}
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ollama Model Manager — Dashboard</title>
+  {{template "style" .}}
+  {{template "htmx_script" .}}
+  {{template "dialog_script" .}}
+</head>
+<body>
+  {{template "nav" .}}
+  <main>
+    {{template "flash" .}}
+    {{template "deleted_notice" .}}
+    {{if .Error}}
+    <div class="panel"><div class="error-box" style="margin:0">Couldn't list models from Ollama: {{.Error}}</div></div>
+    {{else}}
+    {{template "overview" .}}
+    {{/* Re-fetched when model state changes, so last used and the loaded dot keep up. */}}
+    <div class="panel" id="recent-panel" hx-get="/" hx-select="#recent-panel" hx-trigger="state-changed from:body" hx-swap="outerHTML">
+      <div class="row between">
+        <h2>Recently used</h2>
+        <a class="muted" href="/models">All models →</a>
+      </div>
+      {{if not .Recent}}
+      <p class="muted" style="margin:0">{{if .Count}}No models have been used since this app started tracking.{{else}}No models on this Ollama server yet. <a href="/discover">Discover models</a> to download.{{end}}</p>
+      {{else}}
+      <div class="table-wrap">
+      <table>
+        <thead><tr><th>Model</th><th>Params</th><th>Size</th><th>Last used</th><th></th></tr></thead>
+        <tbody>
+        {{range .Recent}}
+          <tr>
+            <td>{{if index $.LoadedNames .Name}}<span class="loaded-dot" role="img" aria-label="Loaded in memory" title="Loaded in memory"></span>{{end}}{{template "model_name" .Name}}</td>
+            <td>{{or .Details.ParameterSize "-"}}</td>
+            <td>{{bytes .Size}}</td>
+            <td>{{with lastused $.LastUsed .Name}}<span class="tip-wrap" tabindex="0">{{ago .}}<span class="tip" role="tooltip">{{time .}}</span></span>{{end}}</td>
+            <td class="actions">{{template "model_actions" (rowactions . (index $.LoadedNames .Name) $.AllowDelete "/")}}</td>
+          </tr>
+        {{end}}
+        </tbody>
+      </table>
+      </div>
+      {{end}}
+    </div>
+    {{end}}
+    <p class="muted">Ollama at <code>{{.OllamaURL}}</code></p>
+  </main>
+  {{template "footer" .}}
+  {{template "load_dialog" .}}
+  {{template "delete_model_dialog" .}}
+  {{template "quants_dialog"}}
+</body>
+</html>
+{{end}}

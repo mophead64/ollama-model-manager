@@ -13,27 +13,9 @@
   {{template "nav" .}}
   <main>
     {{template "flash" .}}
-    {{with .Deleted}}<div class="notice" role="status" data-clear-param="deleted"><span>Deleted <strong>{{.}}</strong>.</span><button type="button" class="notice-close" data-dismiss aria-label="Dismiss">×</button></div>{{end}}
-    {{if not .Error}}
-    <div class="stat-grid">
-      <div class="stat"><div class="value">{{.Count}}</div><div class="label">models installed</div></div>
-      <div class="stat"><div class="value">{{bytes .TotalBytes}}</div><div class="label">total size on disk</div></div>
-      {{with .Disk}}
-      <div class="stat">
-        <div class="value">{{bytes (int64 .Free)}}</div>
-        <div class="label">free of {{bytes (int64 .Total)}} on the models disk</div>
-        <div class="progress-bar" title="{{printf "%.0f" .UsedPercent}}% used"><div class="fill{{if gt .UsedPercent 90.0}} low{{end}}" style="width: {{printf "%.1f" .UsedPercent}}%"></div></div>
-      </div>
-      {{else}}
-      <div class="stat">
-        <div class="value muted">—</div>
-        <div class="label">free space unknown: mount Ollama's models folder at <code>/models</code></div>
-      </div>
-      {{end}}
-      {{template "load_tile" .}}
-    </div>
-    {{template "running_panel" .}}
-    {{end}}
+    {{template "deleted_notice" .}}
+    {{if not .Error}}{{template "overview" .}}{{end}}
+    {{template "models_tabs" (modeltabs "all" .ActiveTests)}}
     <div class="panel">
       <div class="row between">
         <h2>Models</h2>
@@ -60,21 +42,84 @@
   </main>
   {{template "footer" .}}
   {{template "load_dialog" .}}
-  {{if .AllowDelete}}
-  {{/* Shared by every row's Delete button, which fills in the model (dialog.js). */}}
-  <dialog id="delete-model-modal" aria-labelledby="delete-model-title">
-    <form method="post" action="/models/delete">
-      <h2 id="delete-model-title">Delete model?</h2>
-      <input type="hidden" name="name" data-fill="name">
-      <input type="hidden" name="return" data-fill="return">
-      <p><code data-fill="name"></code> will be removed from Ollama, freeing up to <strong data-fill="size"></strong>. You'd have to pull it again to use it.</p>
-      <div class="dialog-actions">
-        <button type="button" class="secondary" data-dialog-close>Cancel</button>
-        <button type="submit" class="danger-solid">Delete</button>
-      </div>
-    </form>
-  </dialog>
-  {{end}}
+  {{template "delete_model_dialog" .}}
+  {{template "quants_dialog"}}
 </body>
 </html>
+{{end}}
+
+{{/* Library totals, disk space and what's in memory: the top of both the
+     dashboard and the models page (see addOverview). The dashboard adds the
+     system load tile. */}}
+{{define "overview"}}
+{{$dash := eq .Nav "dashboard"}}
+<div class="stat-grid{{if not $dash}} three{{end}}">
+  {{if $dash}}
+  <a class="stat" href="/models" title="All models"><div class="value">{{.Count}}</div><div class="label">models installed →</div></a>
+  {{else}}
+  <div class="stat"><div class="value">{{.Count}}</div><div class="label">models installed</div></div>
+  {{end}}
+  <div class="stat"><div class="value">{{bytes .TotalBytes}}</div><div class="label">total size on disk</div></div>
+  {{with .Disk}}
+  <div class="stat">
+    <div class="value">{{bytes (int64 .Free)}}</div>
+    <div class="label">free of {{bytes (int64 .Total)}} on the models disk</div>
+    <div class="progress-bar" title="{{printf "%.0f" .UsedPercent}}% used"><div class="fill{{if gt .UsedPercent 90.0}} low{{end}}" style="width: {{printf "%.1f" .UsedPercent}}%"></div></div>
+  </div>
+  {{else}}
+  <div class="stat">
+    <div class="value muted">—</div>
+    <div class="label">free space unknown: set <code>MODELS_DIR</code> to Ollama's models folder (in Docker, mount it at <code>/models</code>)</div>
+  </div>
+  {{end}}
+  {{if $dash}}{{template "load_tile" .}}{{end}}
+</div>
+{{template "running_panel" .}}
+{{end}}
+
+{{/* Shared by every row's Delete button, which fills in the model (dialog.js). */}}
+{{define "delete_model_dialog"}}
+{{if .AllowDelete}}
+<dialog id="delete-model-modal" aria-labelledby="delete-model-title">
+  <form method="post" action="/models/delete" data-reset-on-open>
+    <h2 id="delete-model-title">Delete model?</h2>
+    <input type="hidden" name="name" data-fill="name">
+    <input type="hidden" name="return" data-fill="return">
+    <p><code data-fill="name"></code> will be removed from Ollama, freeing up to <strong data-fill="size"></strong>. You'd have to pull it again to use it.</p>
+    {{template "blacklist_fields"}}
+  </form>
+</dialog>
+{{end}}
+{{end}}
+
+{{/* The models section's sub-pages. Takes modeltabs: the current one
+     ("all", "blacklist", "testing" or "chat") and how many tests are queued
+     or running, for the Testing tab's badge. */}}
+{{define "models_tabs"}}
+<div class="disc-tabs page-tabs">
+  <a href="/models" class="disc-tab"{{if eq .Tab "all"}} aria-current="true"{{end}}>All Models</a>
+  <a href="/models/blacklist" class="disc-tab"{{if eq .Tab "blacklist"}} aria-current="true"{{end}}>Blacklist</a>
+  <a href="/models/testing" class="disc-tab"{{if eq .Tab "testing"}} aria-current="true"{{end}}>Testing{{with .ActiveTests}} <span class="nav-badge" title="{{.}} test(s) queued or running">{{.}}</span>{{end}}</a>
+  <a href="/models/chat" class="disc-tab"{{if eq .Tab "chat"}} aria-current="true"{{end}}>Chat</a>
+</div>
+{{end}}
+
+{{/* The delete dialogs' optional blacklisting (handleDeleteModel), and their
+     buttons. The reason box, and the submit button's wording, follow the
+     checkbox (CSS). */}}
+{{define "blacklist_fields"}}
+<label class="bl-check"><input type="checkbox" name="blacklist" class="bl-toggle"> Also add it to the blacklist</label>
+<div class="bl-reason">
+  <label for="bl-reason" class="muted">Why isn't it any good? This is kept on the blacklist after the model is deleted.</label>
+  <textarea id="bl-reason" name="reason" rows="3" maxlength="2000" placeholder="e.g. too slow on this machine, poor at code"></textarea>
+</div>
+<div class="dialog-actions">
+  <button type="button" class="secondary" data-dialog-close>Cancel</button>
+  <button type="submit" class="danger-solid"><span class="bl-off">Delete</span><span class="bl-on">Delete and blacklist</span></button>
+</div>
+{{end}}
+
+{{/* After a delete (handleDeleteModel's redirect). */}}
+{{define "deleted_notice"}}
+{{with .Deleted}}<div class="notice" role="status" data-clear-param="deleted blacklisted"><span>Deleted <strong>{{.}}</strong>{{if $.Blacklisted}} and added it to the <a href="/models/blacklist">blacklist</a>{{end}}.</span><button type="button" class="notice-close" data-dismiss aria-label="Dismiss">×</button></div>{{end}}
 {{end}}

@@ -7,10 +7,12 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/mophead64/ollama-model-manager/internal/downloads"
 	"github.com/mophead64/ollama-model-manager/internal/library"
+	"github.com/mophead64/ollama-model-manager/internal/modeltest"
 	"github.com/mophead64/ollama-model-manager/internal/ollama"
 	"github.com/mophead64/ollama-model-manager/internal/store"
 	"github.com/mophead64/ollama-model-manager/internal/sysinfo"
@@ -46,6 +48,7 @@ type Server struct {
 	ol  *ollama.Client
 	st  *store.Store
 	dl  *downloads.Manager
+	mt  *modeltest.Runner
 	sys *sysinfo.Sampler
 	lib *library.Client
 	cfg Config
@@ -53,17 +56,19 @@ type Server struct {
 
 	tmpl    *template.Template
 	updates *updateChecker
-	logins  *loginLimiter
+	// Ollama's own updates; kept fresh by RunOllamaUpdateChecks.
+	ollamaUp *ollamaUpdates
+	logins   *loginLimiter
 }
 
-func NewServer(ol *ollama.Client, st *store.Store, dl *downloads.Manager, sys *sysinfo.Sampler, cfg Config, log *slog.Logger) (*Server, error) {
+func NewServer(ol *ollama.Client, st *store.Store, dl *downloads.Manager, mt *modeltest.Runner, sys *sysinfo.Sampler, cfg Config, log *slog.Logger) (*Server, error) {
 	tmpl, err := template.New("").Funcs(templateFuncs).ParseFS(templateFS, "templates/*.html")
 	if err != nil {
 		return nil, fmt.Errorf("parse templates: %w", err)
 	}
 	return &Server{
-		ol: ol, st: st, dl: dl, sys: sys, lib: library.New(cfg.LibraryURL, cfg.HFURL, cfg.HFToken), cfg: cfg, log: log,
-		tmpl: tmpl, updates: newUpdateChecker(), logins: newLoginLimiter(),
+		ol: ol, st: st, dl: dl, mt: mt, sys: sys, lib: library.New(cfg.LibraryURL, cfg.HFURL, cfg.HFToken), cfg: cfg, log: log,
+		tmpl: tmpl, updates: newUpdateChecker(), ollamaUp: newOllamaUpdates(), logins: newLoginLimiter(),
 	}, nil
 }
 
@@ -80,14 +85,24 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /account/password", s.handleChangePassword)
 	mux.HandleFunc("GET /account/huggingface", s.handleHuggingFace)
 
-	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/models", http.StatusFound)
-	})
+	mux.HandleFunc("GET /{$}", s.handleDashboard)
 
 	mux.HandleFunc("GET /version/check", s.handleVersionCheck)
 	mux.HandleFunc("GET /version/release", s.handleRelease)
 
 	mux.HandleFunc("GET /models", s.handleModels)
+	mux.HandleFunc("GET /models/blacklist", s.handleBlacklist)
+	mux.HandleFunc("POST /models/blacklist/remove", s.handleUnblacklist)
+	mux.HandleFunc("POST /models/blacklist/reason", s.handleBlacklistReason)
+	mux.HandleFunc("GET /models/testing", s.handleTests)
+	mux.HandleFunc("POST /models/testing", s.handleCreateTest)
+	mux.HandleFunc("GET /models/testing/{id}", s.handleTestDetail)
+	mux.HandleFunc("POST /models/testing/{id}/cancel", s.handleCancelTest)
+	mux.HandleFunc("POST /models/testing/{id}/rerun", s.handleRerunTest)
+	mux.HandleFunc("POST /models/testing/{id}/delete", s.handleDeleteTest)
+	mux.HandleFunc("POST /models/testing/{id}/template", s.handleSaveTestAsTemplate)
+	mux.HandleFunc("POST /models/testing/templates", s.handleSaveTemplate)
+	mux.HandleFunc("POST /models/testing/templates/{id}/delete", s.handleDeleteTemplate)
 	// Model names can contain "/" (e.g. "user/model:tag"), hence the wildcard.
 	mux.HandleFunc("GET /models/{name...}", s.handleModelDetail)
 	// The name goes in the form body: {name...} has to be the last path segment,
@@ -98,8 +113,15 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /discover", s.handleDiscover)
 	mux.HandleFunc("GET /discover/tags", s.handleDiscoverTags)
 	mux.HandleFunc("GET /discover/hf/files", s.handleDiscoverHFFiles)
-	mux.HandleFunc("GET /chat", s.handleChatPage)
+	mux.HandleFunc("GET /discover/quants", s.handleModelQuants)
+	mux.HandleFunc("GET /models/chat", s.handleChatPage)
+	mux.HandleFunc("GET /chat", func(w http.ResponseWriter, r *http.Request) {
+		// The chat page was here before it became a models tab.
+		target := &url.URL{Path: "/models/chat", RawQuery: r.URL.RawQuery}
+		http.Redirect(w, r, target.String(), http.StatusMovedPermanently)
+	})
 	mux.HandleFunc("GET /chat/model", s.handleChatModelInfo)
+	mux.HandleFunc("GET /chat/picker", s.handleChatPicker)
 	mux.HandleFunc("POST /chat", s.handleChat)
 
 	mux.HandleFunc("GET /state", s.handleState)
@@ -107,6 +129,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /system/history", s.handleSystemHistory)
 	mux.HandleFunc("GET /system/load", s.handleSystemLoad)
 	mux.HandleFunc("GET /system/running", s.handleRunningModels)
+	mux.HandleFunc("GET /system/ollama", s.handleOllamaUpdate)
 
 	mux.HandleFunc("GET /downloads", s.handleDownloads)
 	mux.HandleFunc("POST /downloads", s.handleQueueDownload)
@@ -143,6 +166,14 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 				// For the count badge on the nav's Downloads link.
 				if n, err := s.st.CountActiveDownloads(r.Context()); err == nil {
 					m["ActiveDownloads"] = n
+				}
+				// For the dot on the nav's System link (the System page has its own, fresher).
+				if _, set := m["OllamaUpdate"]; !set {
+					m["OllamaUpdate"] = s.ollamaUp.latest()
+				}
+				// And for the Testing tab's badge.
+				if n, err := s.st.CountActiveModelTests(r.Context()); err == nil {
+					m["ActiveTests"] = n
 				}
 			}
 		}

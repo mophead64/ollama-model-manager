@@ -32,11 +32,46 @@ func (s *Server) handleChatPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	loaded := map[string]bool{}
+	for _, m := range s.addOverview(r, all, data) {
+		loaded[m.Name] = true
+	}
+	models := chatModels(all)
+	data["Models"] = models
+	data["LoadedNames"] = loaded
+
+	if i := pickedModel(r, models); i >= 0 {
+		data["Selected"] = models[i]
+		data["Info"] = s.chatModelInfo(r, models[i])
+	}
+	s.render(w, r, "chat.html", data)
+}
+
+// handleChatPicker is the picker's list on its own, which the page re-fetches
+// when models are loaded or unloaded (or downloaded or deleted), so their
+// "loaded" badges keep up. ?model= is the picked one.
+func (s *Server) handleChatPicker(w http.ResponseWriter, r *http.Request) {
+	all, err := s.ol.List(r.Context())
+	if err != nil {
+		s.log.Warn("list models for chat picker failed", "error", err)
+		w.WriteHeader(http.StatusBadGateway) // the page keeps the list it has
+		return
+	}
+	loaded := map[string]bool{}
 	if running, err := s.ol.Running(r.Context()); err == nil {
 		for _, m := range running {
 			loaded[m.Name] = true
 		}
 	}
+	models := chatModels(all)
+	data := map[string]any{"Models": models, "LoadedNames": loaded}
+	if i := pickedModel(r, models); i >= 0 {
+		data["Selected"] = models[i]
+	}
+	s.render(w, r, "picker_items", data)
+}
+
+// chatModels are the models that can chat, by name.
+func chatModels(all []ollama.Model) []ollama.Model {
 	var models []ollama.Model
 	for _, m := range all {
 		if canChat(m.Capabilities) {
@@ -44,16 +79,16 @@ func (s *Server) handleChatPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	slices.SortFunc(models, func(a, b ollama.Model) int { return strings.Compare(a.Name, b.Name) })
-	data["Models"] = models
-	data["LoadedNames"] = loaded
+	return models
+}
 
-	if want := r.URL.Query().Get("model"); want != "" {
-		if i := slices.IndexFunc(models, func(m ollama.Model) bool { return m.Name == want }); i >= 0 {
-			data["Selected"] = models[i]
-			data["Info"] = s.chatModelInfo(r, models[i])
-		}
+// pickedModel is the index in models of the one ?model= names, or -1.
+func pickedModel(r *http.Request, models []ollama.Model) int {
+	want := r.URL.Query().Get("model")
+	if want == "" {
+		return -1
 	}
-	s.render(w, r, "chat.html", data)
+	return slices.IndexFunc(models, func(m ollama.Model) bool { return m.Name == want })
 }
 
 // handleChatModelInfo is the picked model's properties panel, fetched when

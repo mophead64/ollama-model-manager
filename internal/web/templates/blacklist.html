@@ -1,0 +1,110 @@
+{{define "blacklist.html"}}
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ollama Model Manager — Blacklist</title>
+  {{template "style" .}}
+  {{template "htmx_script" .}}
+  {{template "dialog_script" .}}
+</head>
+<body>
+  {{template "nav" .}}
+  <main>
+    {{with .Updated}}<div class="notice" role="status" data-clear-param="updated"><span>Updated the reason for <strong>{{.}}</strong>.</span><button type="button" class="notice-close" data-dismiss aria-label="Dismiss">×</button></div>{{end}}
+    {{with .Removed}}<div class="notice" role="status" data-clear-param="removed"><span>Removed <strong>{{.}}</strong> from the blacklist.</span><button type="button" class="notice-close" data-dismiss aria-label="Dismiss">×</button></div>{{end}}
+    {{if not .Error}}{{template "overview" .}}{{end}}
+    {{template "models_tabs" (modeltabs "blacklist" .ActiveTests)}}
+    <div class="panel">
+      <div class="row between">
+        <h2>Blacklist</h2>
+        {{with .Entries}}<span class="muted">{{len .}} model(s)</span>{{end}}
+      </div>
+      {{if .BlacklistErr}}
+      <div class="error-box" style="margin:0">Couldn't read the blacklist: {{.BlacklistErr}}</div>
+      {{else if not .Entries}}
+      <p class="muted" style="margin:0">No models are blacklisted. To add one, tick “Also add it to the blacklist” when deleting it.</p>
+      {{else}}
+      <div class="table-wrap">
+      <table>
+        <thead><tr><th>Model</th><th>Reason</th><th>Params</th><th>Quant</th><th>Size</th><th>Blacklisted</th><th></th></tr></thead>
+        <tbody>
+        {{range .Entries}}
+          <tr>
+            <td>{{template "model_name" .Model}}{{with .Family}}<div class="muted">{{.}}</div>{{end}}</td>
+            <td class="reason">{{or .Reason "-"}}</td>
+            <td>{{or .ParameterSize "-"}}</td>
+            <td>{{or .Quantization "-"}}</td>
+            <td>{{if .Size}}{{bytes .Size}}{{else}}-{{end}}</td>
+            <td><span class="tip-wrap" tabindex="0">{{ago .At}}<span class="tip" role="tooltip">{{time .At}}</span></span><div class="muted">by {{.By}}</div></td>
+            <td class="actions">
+              <div class="split">
+                <button type="button" class="btn secondary small" data-dialog-open="blacklist-edit-modal"
+                  data-fill-name="{{.Model}}" data-fill-reason="{{.Reason}}">Edit</button>
+                <details class="split-menu">
+                  <summary class="btn secondary small" aria-label="More actions for {{.Model}}"><span aria-hidden="true">▾</span></summary>
+                  <div class="menu">
+                    <button type="button" data-dialog-open="blacklist-download-modal" data-fill-name="{{.Model}}">Download</button>
+                    <button type="button" class="danger" data-dialog-open="blacklist-remove-modal" data-fill-name="{{.Model}}">Remove</button>
+                  </div>
+                </details>
+              </div>
+            </td>
+          </tr>
+        {{end}}
+        </tbody>
+      </table>
+      </div>
+      {{end}}
+    </div>
+  </main>
+  {{template "footer" .}}
+  {{/* Shared by every row's Edit button, which fills in the model and its reason (dialog.js). */}}
+  <dialog id="blacklist-edit-modal" aria-labelledby="blacklist-edit-title">
+    <form method="post" action="/models/blacklist/reason" data-reset-on-open>
+      <h2 id="blacklist-edit-title">Edit reason</h2>
+      <input type="hidden" name="name" data-fill="name">
+      <div class="bl-reason edit">
+        <label for="bl-edit-reason" class="muted">Why <code data-fill="name"></code> is blacklisted</label>
+        <textarea id="bl-edit-reason" name="reason" rows="4" maxlength="2000" data-fill="reason"></textarea>
+      </div>
+      <div class="dialog-actions">
+        <button type="button" class="secondary" data-dialog-close>Cancel</button>
+        <button type="submit">Save</button>
+      </div>
+    </form>
+  </dialog>
+  {{/* Shared by every row's Remove. */}}
+  <dialog id="blacklist-remove-modal" aria-labelledby="blacklist-remove-title">
+    <form method="post" action="/models/blacklist/remove">
+      <h2 id="blacklist-remove-title">Remove from the blacklist?</h2>
+      <input type="hidden" name="name" data-fill="name">
+      <p>The blacklist is your record of models and quants that weren't worth keeping, and why: too slow on this machine,
+        poor answers, a quant that lost too much quality. It stays after the model is deleted, so you don't end up
+        downloading and testing the same thing again.</p>
+      <p><code data-fill="name"></code> and the reason you gave will be removed from it. This doesn't download or change
+        anything in Ollama.</p>
+      <div class="dialog-actions">
+        <button type="button" class="secondary" data-dialog-close>Cancel</button>
+        <button type="submit" class="danger-solid">Remove</button>
+      </div>
+    </form>
+  </dialog>
+  {{/* Shared by every row's Download. Queued through /downloads, which removes
+       the entry once the download is queued (handleQueueDownload). */}}
+  <dialog id="blacklist-download-modal" aria-labelledby="blacklist-download-title">
+    <form method="post" action="/downloads">
+      <h2 id="blacklist-download-title">Download it again?</h2>
+      <input type="hidden" name="model" data-fill="name">
+      <input type="hidden" name="unblacklist" data-fill="name">
+      <p><code data-fill="name"></code> will be removed from the blacklist, along with the reason you gave, and downloaded again.</p>
+      <div class="dialog-actions">
+        <button type="button" class="secondary" data-dialog-close>Cancel</button>
+        <button type="submit" data-busy="Checking…">Remove and download</button>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>
+{{end}}

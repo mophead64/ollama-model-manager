@@ -17,25 +17,42 @@ import (
 type listState struct {
 	Query string
 	Caps  []string
-	Sort  string // "name" or one of sortKeys; "" means name ascending
+	Sort  string // "name" or one of sortKeys
 	Desc  bool
 	Page  int
 }
 
+// The default order, which is left out of URLs: most recently used first.
+const (
+	defaultSort = "used"
+	defaultDesc = true
+)
+
+// modelUsage is what's known about models' use here, for the Last used and
+// Loads columns and sorting by them.
+type modelUsage struct {
+	LastUsed map[string]time.Time
+	Loads    map[string]int // times seen loaded; absent if never tracked
+}
+
 // sortKeys maps each sortable column to the value it sorts on. ok=false
 // means the value isn't known for that model; those always sort last,
-// whichever direction is chosen. lastUsed is when each model was last used.
-var sortKeys = map[string]func(m ollama.Model, lastUsed map[string]time.Time) (v float64, ok bool){
-	"size": func(m ollama.Model, _ map[string]time.Time) (float64, bool) { return float64(m.Size), true },
-	"context": func(m ollama.Model, _ map[string]time.Time) (float64, bool) {
+// whichever direction is chosen.
+var sortKeys = map[string]func(m ollama.Model, u modelUsage) (v float64, ok bool){
+	"size": func(m ollama.Model, _ modelUsage) (float64, bool) { return float64(m.Size), true },
+	"context": func(m ollama.Model, _ modelUsage) (float64, bool) {
 		return float64(m.Details.ContextLength), m.Details.ContextLength > 0
 	},
-	"params": func(m ollama.Model, _ map[string]time.Time) (float64, bool) {
+	"params": func(m ollama.Model, _ modelUsage) (float64, bool) {
 		return parseParamSize(m.Details.ParameterSize)
 	},
-	"used": func(m ollama.Model, lastUsed map[string]time.Time) (float64, bool) {
-		t, ok := lastUsed[m.Name]
+	"used": func(m ollama.Model, u modelUsage) (float64, bool) {
+		t, ok := u.LastUsed[m.Name]
 		return float64(t.Unix()), ok
+	},
+	"loads": func(m ollama.Model, u modelUsage) (float64, bool) {
+		n, ok := u.Loads[m.Name]
+		return float64(n), ok
 	},
 }
 
@@ -44,17 +61,21 @@ func parseListState(q url.Values) listState {
 		Query: strings.TrimSpace(q.Get("q")),
 		Caps:  q["cap"],
 		Page:  1,
-		Desc:  q.Get("dir") == "desc",
+		Sort:  defaultSort,
+		Desc:  defaultDesc,
 	}
-	if _, ok := sortKeys[q.Get("sort")]; ok || (q.Get("sort") == "name" && st.Desc) {
-		st.Sort = q.Get("sort")
-	} else {
-		st.Desc = false // name ascending, the default, is left out of URLs
+	if key := q.Get("sort"); key == "name" || sortKeys[key] != nil {
+		st.Sort, st.Desc = key, q.Get("dir") == "desc"
 	}
 	if p, err := strconv.Atoi(q.Get("page")); err == nil && p > 0 {
 		st.Page = p
 	}
 	return st
+}
+
+// isDefaultSort reports whether the list is in the default order.
+func (st listState) isDefaultSort() bool {
+	return st.Sort == defaultSort && st.Desc == defaultDesc
 }
 
 func (st listState) Dir() string {
@@ -73,7 +94,7 @@ func (st listState) URL() string {
 	for _, c := range st.Caps {
 		v.Add("cap", c)
 	}
-	if st.Sort != "" {
+	if !st.isDefaultSort() {
 		v.Set("sort", st.Sort)
 		v.Set("dir", st.Dir())
 	}
@@ -98,8 +119,8 @@ type sortHeader struct {
 // way it goes back to page 1.
 func (st listState) headers() map[string]sortHeader {
 	out := map[string]sortHeader{}
-	for _, key := range []string{"name", "size", "context", "params", "used"} {
-		active := st.Sort == key || (key == "name" && st.Sort == "")
+	for _, key := range []string{"name", "size", "context", "params", "used", "loads"} {
+		active := st.Sort == key
 		next := st
 		next.Page = 1
 		next.Sort = key
@@ -113,16 +134,13 @@ func (st listState) headers() map[string]sortHeader {
 		} else {
 			next.Desc = key != "name"
 		}
-		if key == "name" && !next.Desc {
-			next.Sort = ""
-		}
 		h.URL = next.URL()
 		out[key] = h
 	}
 	return out
 }
 
-func sortModels(models []ollama.Model, key string, desc bool, lastUsed map[string]time.Time) {
+func sortModels(models []ollama.Model, key string, desc bool, u modelUsage) {
 	byName := func(a, b ollama.Model) int { return cmp.Compare(a.Name, b.Name) }
 	val, numeric := sortKeys[key]
 	slices.SortStableFunc(models, func(a, b ollama.Model) int {
@@ -132,8 +150,8 @@ func sortModels(models []ollama.Model, key string, desc bool, lastUsed map[strin
 			}
 			return byName(a, b)
 		}
-		av, aok := val(a, lastUsed)
-		bv, bok := val(b, lastUsed)
+		av, aok := val(a, u)
+		bv, bok := val(b, u)
 		switch {
 		case aok != bok: // unknown values last
 			if aok {

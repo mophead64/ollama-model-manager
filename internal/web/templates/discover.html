@@ -51,6 +51,7 @@
           {{end}}
           <input type="hidden" name="fit" value="0">
           <label class="cap-chip"><input type="checkbox" name="fit" value="1" {{if .State.Fit}}checked{{end}}> Runs on this machine</label>
+          <label class="cap-chip" title="Leave out models with any tag or quantisation on your blacklist"><input type="checkbox" name="bl" value="hide" {{if .State.HideBL}}checked{{end}}> Hide blacklisted</label>
         </div>
       </form>
       <div class="memory-strip">
@@ -90,8 +91,12 @@
   <div class="error-box">Search failed: {{.Error}}</div>
   {{else if or .Cards .HFCards .NextURL}}
   <div class="disc-grid">{{template "discover_cards" .}}</div>
+  {{else if and .Hidden .HiddenBL}}
+  <div class="panel muted">Every model found is hidden: {{.Hidden}} wouldn't run on this machine and {{.HiddenBL}} {{if eq .HiddenBL 1}}is{{else}}are{{end}} blacklisted. Untick <em>Runs on this machine</em> or <em>Hide blacklisted</em> to see them.</div>
   {{else if .Hidden}}
   <div class="panel muted">None of the models found would run on this machine. Untick <em>Runs on this machine</em> to see them.</div>
+  {{else if .HiddenBL}}
+  <div class="panel muted">Every model found is on your blacklist. Untick <em>Hide blacklisted</em> to see them.</div>
   {{else}}
   <div class="panel muted">No models found{{with .State.Query}} for “{{.}}”{{end}}.</div>
   {{end}}
@@ -110,11 +115,15 @@
 {{end}}
 {{end}}
 
-{{/* A card's Installed / Queued / Downloading badges. */}}
+{{/* A card's Installed / Queued / Downloading / Blacklisted badges. */}}
 {{define "discover_status"}}
 {{if .Installed}}<span class="badge completed">Installed</span>{{end}}
 {{with .Active}}{{template "dl_status_badge" .}}{{end}}
+{{with .Blacklisted}}<a class="badge error tip-wrap" href="/models/blacklist">{{if gt (len .) 1}}{{len .}} blacklisted{{else}}Blacklisted{{end}}<span class="tip wide right" role="tooltip">{{range .}}{{template "blacklist_tip" .}}{{end}}</span></a>{{end}}
 {{end}}
+
+{{/* A blacklist entry, for a Blacklisted badge's tooltip. */}}
+{{define "blacklist_tip"}}<span class="bl-tip"><strong>{{.Model}}</strong> blacklisted {{time .At}}{{with .By}} by {{.}}{{end}}<span class="bl-tip-reason">{{or .Reason "No reason given."}}</span></span>{{end}}
 
 {{/* A queued or running download, linking to its page. */}}
 {{define "dl_status_badge"}}<a class="badge {{.Status}}" href="/downloads/{{.ID}}" title="Open the download">{{if eq .Status "downloading"}}Downloading{{if ge .Percent 0.0}} {{printf "%.0f" .Percent}}%{{end}}{{else}}Queued{{end}}</a>{{end}}
@@ -196,6 +205,7 @@
       <td>{{or .Context "—"}}</td>
       <td><span class="badge {{.Fit.Badge}}" title="{{.Fit.Detail}}">{{.Fit.Label}}</span></td>
       <td class="actions">
+        {{with .Blacklisted}}<a class="badge error tip-wrap" href="/models/blacklist">Blacklisted<span class="tip wide right" role="tooltip">{{template "blacklist_tip" .}}</span></a>{{end}}
         {{if .Installed}}<span class="badge completed">Installed</span>
         {{else if .Active}}{{template "dl_status_badge" .Active}}
         {{else if .Cloud}}
@@ -230,6 +240,7 @@
 {{define "discover_dl_action"}}
 {{with .Queued}}
 {{template "dl_status_badge" .}}
+{{if $.Unblacklisted}}<div class="disc-dl-note">Removed from the blacklist.</div>{{end}}
 {{with $.Warning}}<div class="disc-dl-note warn">{{.}}</div>{{end}}
 {{else}}
 {{template "discover_dl_form" .Name}}
@@ -241,9 +252,7 @@
     <input type="hidden" name="model" value="{{.Name}}">
     <input type="hidden" name="from" value="discover">
     <input type="hidden" name="confirm" value="1">
-    <p>It's a <strong>{{bytes .Size}}</strong> download.</p>
-    <ul class="concerns">{{range .Concerns}}<li>{{.}}</li>{{end}}</ul>
-    <p class="muted" style="font-size:13px">Checked against the machine running this app. If Ollama runs somewhere else, its hardware may differ.</p>
+    {{template "download_confirm_body" .}}
     <div class="dialog-actions">
       <button type="button" class="secondary" data-dialog-close>Cancel</button>
       <button type="submit" data-busy="Queuing…">Download anyway</button>
@@ -253,4 +262,23 @@
 {{end}}
 {{end}}
 {{if .User}}{{template "nav_dl_badge" .}}{{end}}
+{{end}}
+
+{{/* The "download anyway?" dialogs' explanation (downloadConfirm): the
+     blacklist entry, if it's on it, and any size concerns. Also carries the
+     entry to take off the blacklist once confirmed and queued. */}}
+{{define "download_confirm_body"}}
+{{with .Unblacklist}}<input type="hidden" name="unblacklist" value="{{.}}">{{end}}
+{{with .Blacklisted}}
+<p><strong>{{.Model}}</strong> is on your blacklist. Downloading it takes it off.</p>
+<div class="bl-confirm">
+  <div class="muted">Blacklisted {{time .At}}{{with .By}} by {{.}}{{end}}</div>
+  <div class="reason">{{or .Reason "No reason given."}}</div>
+</div>
+{{end}}
+{{if .Concerns}}
+<p>It's a <strong>{{bytes .Size}}</strong> download.</p>
+<ul class="concerns">{{range .Concerns}}<li>{{.}}</li>{{end}}</ul>
+<p class="muted" style="font-size:13px">Checked against the machine running this app. If Ollama runs somewhere else, its hardware may differ.</p>
+{{end}}
 {{end}}

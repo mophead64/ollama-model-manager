@@ -41,7 +41,7 @@ func TestSuggest(t *testing.T) {
 		t.Errorf("no error and no warnings should give no hints, got [%s]", titles(hs))
 	}
 	up := Suggest("hf.co/a/b:Q8_0", "blocked redirect to a different host", nil, "0.34.2")[0]
-	if !strings.Contains(up.Text, "v0.34.2") || up.Links[0].URL != "https://ollama.com/download" {
+	if !strings.Contains(up.Text, "v0.34.2") || up.Links[0].URL != "/system#ollama-panel" || up.Links[1].URL != "https://ollama.com/download" {
 		t.Errorf("update hint = %+v", up)
 	}
 	gated := Suggest("hf.co/meta-llama/Llama-3.2-1B:latest", "401 unauthorized", nil, "")[0]

@@ -1,0 +1,180 @@
+{{define "tests.html"}}
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ollama Model Manager — Testing</title>
+  {{template "style" .}}
+  {{template "htmx_script" .}}
+  {{template "dialog_script" .}}
+</head>
+<body>
+  {{template "nav" .}}
+  <main>
+    {{with .Deleted}}<div class="notice" role="status" data-clear-param="deleted"><span>Deleted the test <strong>{{.}}</strong>.</span><button type="button" class="notice-close" data-dismiss aria-label="Dismiss">×</button></div>{{end}}
+    {{with .TemplateDeleted}}<div class="notice" role="status" data-clear-param="template_deleted"><span>Deleted the template <strong>{{.}}</strong>.</span><button type="button" class="notice-close" data-dismiss aria-label="Dismiss">×</button></div>{{end}}
+    {{with .Notice}}<div class="notice" role="status" data-clear-param="template saved"><span>{{.}}</span><button type="button" class="notice-close" data-dismiss aria-label="Dismiss">×</button></div>{{end}}
+    {{if not .Error}}{{template "overview" .}}{{end}}
+    {{template "models_tabs" (modeltabs "testing" .ActiveTests)}}
+
+    <div class="test-layout">
+    <div class="panel">
+      <h2>New test</h2>
+      <p class="muted test-intro">Send one prompt to one or more models and compare replies and speed. Runs are fresh conversations, executed in the background one at a time. Each model is unloaded when its runs are done, so the next gets the GPU to itself.</p>
+      {{with .FormError}}<div class="error-box">{{.}}</div>{{end}}
+      {{with .Missing}}<div class="notice warning"><span>Not on this Ollama server any more, so left out: {{range $i, $m := .}}{{if $i}}, {{end}}<code>{{$m}}</code>{{end}}.</span></div>{{end}}
+      {{if .Error}}
+      <div class="error-box" style="margin:0">Couldn't list models from Ollama: {{.Error}}</div>
+      {{else if not .ModelOptions}}
+      <p class="muted" style="margin:0">There are no models to test yet. <a class="hint-link inline" href="/downloads">Download one</a> to get started.</p>
+      {{else}}
+      {{/* static/tests.js adds the filter, counts, limit and live summary; without it the form still works. */}}
+      <form method="post" action="/models/testing" class="test-form" id="test-form" data-max-models="{{.MaxModels}}" data-max-repeats="{{.MaxRepeats}}">
+        <div class="test-field">
+          <div class="test-label-row">
+            <label for="t-prompt" class="test-label strong">Prompt</label>
+            <span class="muted tnum" data-prompt-count aria-live="polite">{{len .Form.Prompt}} / {{count .MaxPrompt}}</span>
+          </div>
+          <textarea id="t-prompt" name="prompt" rows="7" maxlength="{{.MaxPrompt}}" required placeholder="e.g. Write a Python function that checks whether a string is a palindrome.">{{.Form.Prompt}}</textarea>
+        </div>
+
+        <fieldset class="test-models" aria-labelledby="models-label">
+          <div class="test-label-row">
+            <span class="test-label strong" id="models-label">Models</span>
+            <span class="muted tnum" data-selected-count aria-live="polite">Up to {{.MaxModels}}</span>
+            <span class="test-links">
+              <button type="button" class="link" data-select-all>Select all</button>
+              <button type="button" class="link" data-select-none>Clear</button>
+            </span>
+          </div>
+          <input type="search" class="test-filter" data-model-filter placeholder="Filter by name, source or family" aria-label="Filter models" autocomplete="off">
+          <div class="test-model-list">
+            {{range .ModelOptions}}
+            <label class="test-model" title="{{.Name}}" data-search="{{.Name}} {{.Family}}" data-est="{{printf "%.0f" .EstMS}}" data-size="{{.Size}}" data-short="{{.Short}}"{{with .Fit.Label}} data-fit="{{.}}"{{end}}>
+              <input type="checkbox" name="model" value="{{.Name}}"{{if .Selected}} checked{{end}}>
+              <span class="test-model-text">
+                <span class="test-model-name">{{.Short}}</span>
+                <span class="test-model-sub">{{range $i, $p := .Sub}}{{if $i}} · {{end}}{{$p}}{{end}}</span>
+              </span>
+              {{if .Fit.Label}}<span class="badge {{.Fit.Badge}}" title="{{.Fit.Detail}}">{{.Fit.Symbol}} {{.Fit.Label}}</span>{{end}}
+              <span class="test-model-meta tnum">{{with .Params}}{{.}} · {{end}}{{bytes .Size}}</span>
+            </label>
+            {{end}}
+          </div>
+          <p class="muted" data-model-empty hidden>No models match.</p>
+        </fieldset>
+
+        <div class="test-form-row">
+          <div class="test-field">
+            <span class="test-label strong" id="runs-label">Runs per model</span>
+            <div class="test-runs" role="group" aria-labelledby="runs-label">
+              {{range .Presets}}<button type="button" class="secondary small{{if eq . $.Form.Repeats}} on{{end}}" data-repeats="{{.}}" aria-pressed="{{if eq . $.Form.Repeats}}true{{else}}false{{end}}">{{.}}</button>{{end}}
+              <input type="number" name="repeats" min="1" max="{{.MaxRepeats}}" value="{{.Form.Repeats}}" data-default="{{.DefaultRepeats}}" required aria-labelledby="runs-label" aria-describedby="runs-hint" data-repeats-input>
+            </div>
+            <span class="muted test-hint" id="runs-hint" data-repeats-hint>1 to {{.MaxRepeats}}</span>
+          </div>
+          <div class="test-field grow">
+            <label for="t-name" class="test-label strong">Name <span class="muted optional">optional</span></label>
+            <input id="t-name" type="text" name="name" maxlength="100" value="{{.Form.Name}}" placeholder="The prompt's first line">
+          </div>
+        </div>
+
+        {{/* tests.js disables a button until the form has what it needs, and
+             says what's missing in its tooltip (on the wrapper: disabled
+             buttons don't get hovered). A template can do without models. */}}
+        <div class="test-actions">
+          <span class="tip-wrap why-wrap"><button type="submit" data-busy="Queuing…" data-needs="models prompt runs" aria-describedby="why-queue">Queue test</button><span class="tip" role="tooltip" id="why-queue" data-why></span></span>
+          <span class="tip-wrap why-wrap"><button type="submit" class="secondary" formaction="/models/testing/templates" data-needs="prompt runs" data-busy="Saving…" aria-describedby="why-save">Save as template</button><span class="tip" role="tooltip" id="why-save" data-why>Keep this prompt, models and runs to start again later. Models are optional.</span></span>
+          {{/* A link to a blank form; tests.js clears it in place instead. */}}
+          <a class="btn secondary test-reset" href="/models/testing" data-reset title="Clear the prompt, name and models, and set the runs back to {{.DefaultRepeats}}">Reset</a>
+        </div>
+      </form>
+      {{end}}
+    </div>
+
+    <aside class="test-side">
+      {{if .ModelOptions}}
+      <div class="panel" data-summary hidden>
+        <h2>Summary</h2>
+        <p class="test-sum-runs" data-sum-runs></p>
+        <p class="muted test-sum-line" data-sum-est></p>
+        <p class="muted test-sum-line" data-sum-size></p>
+        <ul class="test-sum-warn" data-sum-warn></ul>
+      </div>
+      {{end}}
+      <div class="panel">
+        <h2>Templates</h2>
+        {{with .Templates}}
+        <ul class="test-tpls">
+          {{range .}}
+          <li>
+            <strong class="test-tpl-name">{{.Name}}</strong>
+            <div class="muted">{{with len .Models}}{{.}} model{{if ne . 1}}s{{end}}{{else}}Models picked when run{{end}} · {{.Repeats}} run{{if ne .Repeats 1}}s{{end}} each</div>
+            <div class="test-tpl-actions">
+              <a class="btn secondary small" href="/models/testing?template={{.ID}}" title="Fill the New test form in from this template, to check it and queue it">Apply</a>
+              <button type="button" class="danger small" data-dialog-open="delete-template-modal" data-fill-name="{{.Name}}" data-fill-action="/models/testing/templates/{{.ID}}/delete">Delete</button>
+            </div>
+          </li>
+          {{end}}
+        </ul>
+        {{else}}
+        <p class="muted" style="margin:0">Save a prompt, models and runs as a template to fill the form in with them again later. Use <em>Save as template</em> on the form, or on a test's page.</p>
+        {{end}}
+      </div>
+    </aside>
+    </div>
+
+    {{/* Re-fetched while anything's queued or running, to show progress. */}}
+    <div class="panel" id="tests-panel"{{if .AnyActive}} hx-get="/models/testing" hx-select="#tests-panel" hx-trigger="every 3s [document.visibilityState === 'visible']" hx-swap="outerHTML"{{end}}>
+      <div class="row between">
+        <h2>Tests</h2>
+        {{with .Tests}}<span class="muted">{{len .}} test(s)</span>{{end}}
+      </div>
+      {{if .TestsErr}}
+      <div class="error-box" style="margin:0">Couldn't read the tests: {{.TestsErr}}</div>
+      {{else if not .Tests}}
+      <p class="muted" style="margin:0">No tests yet.</p>
+      {{else}}
+      <div class="table-wrap">
+      <table class="tests-table">
+        <thead><tr><th>Test</th><th>Models</th><th>Progress</th><th>Status</th><th>Created</th><th></th></tr></thead>
+        <tbody>
+        {{range .Tests}}
+          <tr>
+            <td><a class="model-link" href="/models/testing/{{.ID}}">{{.Name}}</a></td>
+            <td><div class="caps">{{range .Models}}<span class="badge info mono">{{.}}</span>{{end}}</div></td>
+            <td class="tests-progress">
+              <span class="tnum">{{.Done}} of {{.Total}}</span>
+              <div class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="{{.Total}}" aria-valuenow="{{.Done}}" aria-label="Runs done"><div class="fill" style="width: {{printf "%.1f" .Percent}}%"></div></div>
+              <div class="muted">{{.Repeats}} run{{if ne .Repeats 1}}s{{end}} per model</div>
+            </td>
+            <td class="nowrap">{{template "test_status" .}}</td>
+            <td class="nowrap"><span class="tip-wrap" tabindex="0">{{ago .CreatedAt}}<span class="tip" role="tooltip">{{time .CreatedAt}}</span></span><div class="muted">by {{.CreatedBy}}</div></td>
+            <td class="actions"><a class="btn secondary small" href="/models/testing/{{.ID}}">View</a></td>
+          </tr>
+        {{end}}
+        </tbody>
+      </table>
+      </div>
+      {{end}}
+    </div>
+  </main>
+  {{template "footer" .}}
+  <dialog id="delete-template-modal" aria-labelledby="delete-template-title">
+    <form method="post" data-fill="action" data-fill-attr="action">
+      <h2 id="delete-template-title">Delete template?</h2>
+      <p>The template <strong data-fill="name"></strong> will be deleted. Tests already run from it are kept.</p>
+      <div class="dialog-actions">
+        <button type="button" class="secondary" data-dialog-close>Cancel</button>
+        <button type="submit" class="danger-solid">Delete</button>
+      </div>
+    </form>
+  </dialog>
+  <script src="{{static "tests.js"}}"></script>
+</body>
+</html>
+{{end}}
+
+{{/* A test's status badge, with its progress while it runs. */}}
+{{define "test_status"}}<span class="badge test-status {{.Status}}">{{if eq .Status "running"}}Running{{else if eq .Status "queued"}}Queued{{else if eq .Status "completed"}}Completed{{else if eq .Status "failed"}}Failed{{else}}Cancelled{{end}}</span>{{end}}

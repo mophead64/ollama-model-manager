@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mophead64/ollama-model-manager/internal/version"
 )
@@ -55,7 +56,7 @@ func TestReleaseNotesRenderedSafely(t *testing.T) {
 func TestReleasePanel(t *testing.T) {
 	render := func(t *testing.T, running, latest string) string {
 		setVersion(t, running)
-		s, err := NewServer(nil, nil, nil, nil, Config{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+		s, err := NewServer(nil, nil, nil, nil, nil, Config{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -85,5 +86,28 @@ func TestAccountHasReleasePanel(t *testing.T) {
 	h := newTestServer(t, fakeOllama(t, 1).URL)
 	if body := get(h, "/account", false).Body.String(); !strings.Contains(body, `hx-get="/version/release"`) {
 		t.Error("account page has no release panel")
+	}
+}
+
+func TestVersionStatus(t *testing.T) {
+	render := func(t *testing.T, running, latest string) string {
+		setVersion(t, running)
+		s, err := NewServer(nil, nil, nil, nil, nil, Config{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		s.updates.url = fakeGitHub(t, latest, "")
+		rec := httptest.NewRecorder()
+		s.handleVersionCheck(rec, httptest.NewRequest("GET", "/version/check", nil))
+		return rec.Body.String()
+	}
+	if cur := render(t, "v2026.09.20", "v2026.09.20"); !strings.Contains(cur, `<span class="badge on" title="Checked `) || !strings.Contains(cur, "✓ Up to date</span>") {
+		t.Errorf("up to date status:\n%s", cur)
+	}
+	if old := render(t, "v2026.09.01", "v2026.09.20"); !strings.Contains(old, "Update available: v2026.09.20") || strings.Contains(old, "Up to date") {
+		t.Errorf("update available status:\n%s", old)
+	}
+	if updateOKTTL > 2*time.Hour {
+		t.Errorf("a successful check is cached for %s; it should be re-checked every couple of hours", updateOKTTL)
 	}
 }

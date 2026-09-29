@@ -22,7 +22,11 @@
       <div class="row between">
         <h2 class="mono" style="margin:0">{{$.Name}}</h2>
         <div class="row">
-          {{if $.CanChat}}<a class="btn secondary small" href="/chat?model={{$.Name}}">Chat</a>{{end}}
+          {{if $.CanChat}}<a class="btn secondary small" href="/models/chat?model={{$.Name}}">Chat</a>{{end}}
+          {{with modelsrc $.Name}}
+          {{if .QuantsURL}}{{template "quants_opener" (quantsopener $.Name . "secondary small")}}{{end}}
+          {{if .URL}}<a class="btn secondary small" href="{{.URL}}" target="_blank" rel="noopener noreferrer">View on {{.Site}} ↗</a>{{end}}
+          {{end}}
           {{if $.AllowDelete}}<button type="button" class="danger small" data-dialog-open="delete-model-modal">Delete model</button>{{end}}
         </div>
       </div>
@@ -39,10 +43,12 @@
         {{if .Details.EmbeddingLength}}<dt>Embedding length</dt><dd>{{count .Details.EmbeddingLength}}</dd>{{end}}
         <dt>Digest</dt><dd class="mono">{{.Digest}}</dd>
         {{end}}
-        <dt>Modified</dt><dd>{{time .ModifiedAt}}</dd>
+        <dt>Downloaded</dt><dd>{{time .ModifiedAt}}</dd>
         <dt>Capabilities</dt><dd>{{with .Capabilities}}<div class="caps">{{range .}}<span class="badge cap">{{.}}</span>{{end}}</div>{{else}}<span class="muted">not reported</span>{{end}}</dd>
       </dl>
     </div>
+
+    {{with $.Usage}}{{template "model_usage" .}}{{end}}
 
     <div class="panel">
       {{if .Parameters}}<details open><summary>Parameters</summary><pre>{{.Parameters}}</pre></details>{{end}}
@@ -71,17 +77,14 @@
     {{end}}
   </main>
   {{template "footer" .}}
-  {{if .Info}}{{template "load_dialog" .}}{{end}}
+  {{if .Info}}{{template "load_dialog" .}}{{template "quants_dialog"}}{{end}}
   {{if and .AllowDelete .Info}}
   <dialog id="delete-model-modal" aria-labelledby="delete-model-title">
-    <form method="post" action="/models/delete">
+    <form method="post" action="/models/delete" data-reset-on-open>
       <h2 id="delete-model-title">Delete model?</h2>
       <input type="hidden" name="name" value="{{.Name}}">
       <p><code>{{.Name}}</code> will be removed from Ollama{{with .Model}}, freeing up to <strong>{{bytes .Size}}</strong>{{end}}. You'd have to pull it again to use it.</p>
-      <div class="dialog-actions">
-        <button type="button" class="secondary" data-dialog-close>Cancel</button>
-        <button type="submit" class="danger-solid">Delete</button>
-      </div>
+      {{template "blacklist_fields"}}
     </form>
   </dialog>
   {{end}}
@@ -105,3 +108,45 @@
 </div>
 {{end}}
 
+
+{{/* A model's use: totals, and a bar per day for the last 30 (time in use;
+     loads are in each bar's tooltip and the table), from package usage. */}}
+{{define "model_usage"}}
+<div class="panel">
+  <div class="row between">
+    <h2 style="margin:0">Usage</h2>
+    {{if not .Since.IsZero}}<span class="muted">Recorded since {{.Since.Format "2 Jan 2006"}}</span>{{end}}
+  </div>
+  {{if .Since.IsZero}}
+  <p class="muted" style="margin:12px 0 0">No use recorded yet. While it's running, this app records roughly how long each model is in use and each time Ollama loads it into memory.</p>
+  {{else}}
+  <div class="usage-stats">
+    <div><div class="value tnum">{{activefor .Active}}</div><div class="label">in use, last {{len .Days}} days</div></div>
+    <div><div class="value tnum">{{.DaysUsed}} <span class="muted">of {{len .Days}}</span></div><div class="label">days used</div></div>
+    <div><div class="value tnum">{{.Loads}}</div><div class="label">time{{if ne .Loads 1}}s{{end}} loaded, last {{len .Days}} days</div></div>
+    <div><div class="value tnum">{{.TotalLoads}}</div><div class="label">time{{if ne .TotalLoads 1}}s{{end}} loaded in all ({{activefor .TotalActive}} in use)</div></div>
+  </div>
+  <div class="usage-chart" role="group" aria-label="Time in use per day, last {{len .Days}} days">
+    {{range $i, $d := .Days}}
+    <div class="usage-col tip-wrap" tabindex="0">
+      <div class="usage-bar{{if not .ActiveSeconds}} empty{{end}}" style="height: {{printf "%.1f" .Height}}%"></div>
+      <span class="tip{{if ge $i 20}} right{{end}}" role="tooltip"><strong>{{.Date.Format "Mon 2 Jan"}}</strong> · {{if .ActiveSeconds}}{{activefor .ActiveSeconds}} in use{{else}}not used{{end}}{{if .Loads}} · loaded {{.Loads}}×{{end}}</span>
+    </div>
+    {{end}}
+  </div>
+  <div class="usage-axis muted"><span>{{(index .Days 0).Date.Format "2 Jan"}}</span><span>Today</span></div>
+  <details class="usage-table">
+    <summary>Show as a table</summary>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Day</th><th>In use</th><th>Loaded</th></tr></thead>
+      <tbody>
+      {{range .Days}}{{if or .ActiveSeconds .Loads}}<tr><td>{{.Date.Format "Mon 2 Jan"}}</td><td class="tnum">{{activefor .ActiveSeconds}}</td><td class="tnum">{{.Loads}}</td></tr>{{end}}{{end}}
+      </tbody>
+    </table>
+    </div>
+  </details>
+  <p class="muted usage-note">Recorded while this app is running, from Ollama checks every 15 seconds, so times are approximate.</p>
+  {{end}}
+</div>
+{{end}}

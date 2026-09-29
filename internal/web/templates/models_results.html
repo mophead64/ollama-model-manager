@@ -23,14 +23,15 @@
       <th>Quant</th>
       {{template "sort_th" (sortcol "Context" .Headers.context)}}
       {{template "sort_th" (sortcol "Size" .Headers.size)}}
-      <th>Modified</th>
+      <th>Downloaded</th>
       {{template "sort_th" (sortcol "Last used" .Headers.used)}}
+      {{template "sort_th" (sortcol "Loads" .Headers.loads)}}
       <th>Capabilities</th><th></th>
     </tr></thead>
     <tbody>
     {{range .Models}}
       <tr>
-        <td><span class="copy-tip-wrap"><button type="button" class="model-name" data-copy-text="{{.Name}}">{{.Name}}</button><span class="copy-tip" role="tooltip">Click to copy model name</span></span></td>
+        <td>{{template "model_name" .Name}}</td>
         <td>{{or .Details.Family "-"}}</td>
         <td>{{or .Details.ParameterSize "-"}}</td>
         <td>{{or .Details.QuantizationLevel "-"}}</td>
@@ -38,20 +39,10 @@
         <td>{{bytes .Size}}</td>
         <td>{{time .ModifiedAt}}</td>
         <td>{{with lastused $.LastUsed .Name}}<span title="{{time .}}">{{ago .}}</span>{{else}}<span class="muted" title="Not seen in use since this app started tracking">—</span>{{end}}</td>
+        <td class="tnum">{{with loadsof $.Loads .Name}}<span title="Times Ollama has loaded it into memory, since this app started tracking">{{.}}</span>{{else}}<span class="muted" title="Not seen loaded since this app started tracking">—</span>{{end}}</td>
         <td>{{with .Capabilities}}<div class="caps">{{range .}}<span class="badge cap">{{.}}</span>{{end}}</div>{{else}}<span class="muted">-</span>{{end}}</td>
         <td class="actions">
-          <div class="split">
-            <a class="btn secondary small" href="/models/{{.Name}}">View</a>
-            <details class="split-menu">
-              <summary class="btn secondary small" aria-label="More actions for {{.Name}}"><span aria-hidden="true">▾</span></summary>
-              <div class="menu">
-                {{if index $.LoadedNames .Name}}{{template "unload_button" .Name}}{{else}}{{template "load_button" .Name}}{{end}}
-                {{if canchat .Capabilities}}<a href="/chat?model={{.Name}}">Chat</a>{{end}}
-                {{if $.AllowDelete}}<button type="button" class="danger" data-dialog-open="delete-model-modal"
-                  data-fill-name="{{.Name}}" data-fill-size="{{bytes .Size}}" data-fill-return="{{$.ListURL}}">Delete</button>{{end}}
-              </div>
-            </details>
-          </div>
+          {{template "model_actions" (rowactions . (index $.LoadedNames .Name) $.AllowDelete $.ListURL)}}
         </td>
       </tr>
     {{end}}
@@ -73,4 +64,55 @@
 
 {{define "sort_th"}}
 <th aria-sort="{{.H.Aria}}"><a class="sort-link{{if .H.Arrow}} active{{end}}" href="{{.H.URL}}" hx-get="{{.H.URL}}" hx-target="#model-results" hx-swap="outerHTML" hx-push-url="true">{{.Label}}<span class="arrow">{{or .H.Arrow "↕"}}</span></a></th>
+{{end}}
+
+{{/* Opens the shared "Other quants" dialog (quants_dialog) for a model,
+     loading its list into it. Takes quantsopener. */}}
+{{define "quants_opener"}}<button type="button"{{with .Class}} class="{{.}}"{{end}} data-dialog-open="quants-modal"
+  data-fill-name="{{.Name}}" data-fill-site="{{.Src.Site}}" data-fill-url="{{.Src.URL}}" data-fill-loading="Loading…"
+  hx-get="{{.Src.QuantsURL}}" hx-target="#quants-body" hx-swap="innerHTML">Other quants…</button>{{end}}
+
+{{/* A model's other tags or quantisations, with Download buttons (Discover's
+     list), and a link to its page. Shared by every opener on the page. */}}
+{{define "quants_dialog"}}
+<dialog id="quants-modal" class="wide" aria-labelledby="quants-title">
+  <div class="dialog-body">
+    <div class="row between">
+      <h2 id="quants-title" style="margin:0">Other quants of <code data-fill="name"></code></h2>
+      <a class="hint-link" style="margin:0" data-fill="url" data-fill-attr="href" href="#" target="_blank" rel="noopener noreferrer">View on <span data-fill="site"></span> ↗</a>
+    </div>
+    <p class="muted quants-note">Download another size or quantisation to compare it with the one you have. Downloads queue in the background.</p>
+    <div id="quants-body" data-fill="loading"></div>
+    <div class="dialog-actions">
+      <button type="button" class="secondary" data-dialog-close>Close</button>
+    </div>
+  </div>
+</dialog>
+{{end}}
+
+{{/* A model's name, which copies itself on click (dialog.js). */}}
+{{define "model_name"}}<span class="copy-tip-wrap"><button type="button" class="model-name" data-copy-text="{{.}}">{{.}}</button><span class="copy-tip" role="tooltip">Click to copy model name</span></span>{{end}}
+
+{{/* A model row's split button: View, and a menu of Load/Unload, Chat and
+     Delete. Takes rowactions; Delete needs the page's delete_model_dialog and
+     returns to .Return afterwards. */}}
+{{define "model_actions"}}
+{{- with .Model}}
+<div class="split">
+  <a class="btn secondary small" href="/models/{{.Name}}">View</a>
+  <details class="split-menu">
+    <summary class="btn secondary small" aria-label="More actions for {{.Name}}"><span aria-hidden="true">▾</span></summary>
+    <div class="menu">
+      {{if $.Loaded}}{{template "unload_button" .Name}}{{else}}{{template "load_button" .Name}}{{end}}
+      {{if canchat .Capabilities}}<a href="/models/chat?model={{.Name}}">Chat</a>{{end}}
+      {{with modelsrc .Name}}
+      {{if .QuantsURL}}{{template "quants_opener" (quantsopener $.Model.Name .)}}{{end}}
+      {{if .URL}}<a href="{{.URL}}" target="_blank" rel="noopener noreferrer">View on {{.Site}} ↗</a>{{end}}
+      {{end}}
+      {{if $.AllowDelete}}<button type="button" class="danger" data-dialog-open="delete-model-modal"
+        data-fill-name="{{.Name}}" data-fill-size="{{bytes .Size}}" data-fill-return="{{$.Return}}">Delete</button>{{end}}
+    </div>
+  </details>
+</div>
+{{- end}}
 {{end}}

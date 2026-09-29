@@ -14,11 +14,13 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/mophead64/ollama-model-manager/internal/downloads"
+	"github.com/mophead64/ollama-model-manager/internal/modeltest"
 	"github.com/mophead64/ollama-model-manager/internal/ollama"
 	"github.com/mophead64/ollama-model-manager/internal/store"
 	"github.com/mophead64/ollama-model-manager/internal/sysinfo"
@@ -112,6 +114,18 @@ func main() {
 		}
 	}()
 
+	// Model tests (the Testing tab) queue and run in the background too.
+	mt := modeltest.New(st, ol, log)
+	mtDone := make(chan struct{})
+	go func() { mt.Run(ctx); close(mtDone) }()
+	defer func() {
+		select {
+		case <-mtDone:
+		case <-time.After(5 * time.Second):
+			log.Warn("model test runner didn't stop in time")
+		}
+	}()
+
 	// CPU/memory/GPU load for the System page and the models page's load
 	// tile, sampled in the background so the graphs have history.
 	sys := sysinfo.New(2*time.Second, 5*time.Minute, log)
@@ -121,11 +135,14 @@ func main() {
 	go usage.New(ol, st, 15*time.Second, log).Run(ctx)
 
 	env := describeEnv(strings.TrimPrefix(addr, ":"), ol.BaseURL(), dbPath, modelsDir, allowDelete, hfToken != "")
-	srv, err := web.NewServer(ol, st, dl, sys, web.Config{ModelsDir: modelsDir, AllowDelete: allowDelete, HFToken: hfToken, Env: env}, log)
+	srv, err := web.NewServer(ol, st, dl, mt, sys, web.Config{ModelsDir: modelsDir, AllowDelete: allowDelete, HFToken: hfToken, Env: env}, log)
 	if err != nil {
 		log.Error("failed to initialize web server", "error", err)
 		os.Exit(1)
 	}
+
+	// Whether Ollama itself has an update, for the nav and the System page.
+	go srv.RunOllamaUpdateChecks(ctx)
 
 	httpServer := &http.Server{
 		Addr:              addr,
@@ -210,19 +227,25 @@ func printCredentials(title, username, password string) {
 
 // findModelsDir locates Ollama's model store for the free-space dashlet:
 // MODELS_DIR if set, else the container mount point /models, else Ollama's
-// default locations for a native run. Returns "" if none exist.
+// default locations for a native run (on Windows, %USERPROFILE%\.ollama\models).
+// Returns "" if none exist.
 func findModelsDir() string {
 	if v := os.Getenv("MODELS_DIR"); v != "" {
 		return v
 	}
-	candidates := []string{"/models"}
+	var candidates []string
+	if runtime.GOOS != "windows" { // "/models" there is \models on the current drive
+		candidates = append(candidates, "/models")
+	}
 	if v := os.Getenv("OLLAMA_MODELS"); v != "" {
 		candidates = append(candidates, v)
 	}
 	if home, err := os.UserHomeDir(); err == nil {
 		candidates = append(candidates, filepath.Join(home, ".ollama", "models"))
 	}
-	candidates = append(candidates, "/usr/share/ollama/.ollama/models") // Linux service install
+	if runtime.GOOS == "linux" {
+		candidates = append(candidates, "/usr/share/ollama/.ollama/models") // the systemd service's install
+	}
 	for _, c := range candidates {
 		if fi, err := os.Stat(c); err == nil && fi.IsDir() {
 			return c

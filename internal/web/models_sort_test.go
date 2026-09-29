@@ -55,7 +55,7 @@ func TestSortModels(t *testing.T) {
 	}
 	for _, c := range cases {
 		ms := models()
-		sortModels(ms, c.key, c.desc, nil)
+		sortModels(ms, c.key, c.desc, modelUsage{})
 		if got := names(ms); got != c.want {
 			t.Errorf("sort %q desc=%v = %s, want %s", c.key, c.desc, got, c.want)
 		}
@@ -64,9 +64,15 @@ func TestSortModels(t *testing.T) {
 
 func TestSortHeaders(t *testing.T) {
 	st := parseListState(url.Values{"q": {"llama"}, "cap": {"tools"}})
+	if st.Sort != "used" || !st.Desc {
+		t.Errorf("default should be most recently used first: %+v", st)
+	}
 	h := st.headers()
-	if h["name"].Arrow != "▲" || h["name"].URL != "/models?cap=tools&dir=desc&q=llama&sort=name" {
-		t.Errorf("default name header = %+v", h["name"])
+	if h["used"].Arrow != "▼" || h["used"].URL != "/models?cap=tools&dir=asc&q=llama&sort=used" {
+		t.Errorf("default last used header = %+v", h["used"])
+	}
+	if h["name"].Arrow != "" || h["name"].URL != "/models?cap=tools&dir=asc&q=llama&sort=name" {
+		t.Errorf("inactive name header should start ascending, keeping filters: %+v", h["name"])
 	}
 	if h["size"].Arrow != "" || h["size"].URL != "/models?cap=tools&dir=desc&q=llama&sort=size" {
 		t.Errorf("inactive size header should start descending, keeping filters: %+v", h["size"])
@@ -77,11 +83,14 @@ func TestSortHeaders(t *testing.T) {
 	if h["size"].Arrow != "▼" || h["size"].URL != "/models?dir=asc&sort=size" {
 		t.Errorf("active size header should flip to ascending on page 1: %+v", h["size"])
 	}
-	if h["name"].URL != "/models" {
-		t.Errorf("name header should reset to the default URL, got %q", h["name"].URL)
+	if h["used"].URL != "/models" {
+		t.Errorf("last used header should reset to the default URL, got %q", h["used"].URL)
 	}
 
-	if st := parseListState(url.Values{"sort": {"bogus"}, "dir": {"desc"}}); st.Sort != "" || st.Desc {
-		t.Errorf("unknown sort key should fall back to name ascending: %+v", st)
+	if st := parseListState(url.Values{"sort": {"bogus"}, "dir": {"asc"}}); st.Sort != "used" || !st.Desc {
+		t.Errorf("unknown sort key should fall back to the default: %+v", st)
+	}
+	if u := parseListState(url.Values{"sort": {"name"}}).URL(); u != "/models?dir=asc&sort=name" {
+		t.Errorf("name ascending is no longer the default, so it needs its URL: %q", u)
 	}
 }

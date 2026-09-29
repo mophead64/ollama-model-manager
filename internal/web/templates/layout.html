@@ -43,6 +43,9 @@
     }
   }
   * { box-sizing: border-box; }
+  /* The hidden attribute always hides, even on elements given a display
+     below (e.g. the chat picker's filtered-out .dropdown-items, which are flex). */
+  [hidden] { display: none !important; }
   /* A column so main can grow and keep the footer at the bottom on short pages. */
   body {
     margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -75,6 +78,7 @@
   }
   .panel h2 { margin-top: 0; font-size: 16px; }
   .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
+  .stat-grid.three { grid-template-columns: repeat(3, 1fr); }
   .stat { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
   .stat .value { font-size: 22px; font-weight: 700; }
   .stat .label { color: var(--muted); font-size: 13px; margin-top: 2px; }
@@ -199,6 +203,7 @@
   }
   footer.app-footer a { color: var(--accent); text-decoration: none; }
   footer.app-footer a:hover { text-decoration: underline; }
+  footer.app-footer .badge { font-size: 11px; padding: 1px 7px; vertical-align: 1px; }
   .nav-user { display: flex; align-items: center; gap: 12px; }
   button.small { padding: 4px 10px; font-size: 13px; }
   .auth-box { max-width: 380px; margin: 8vh auto 0; }
@@ -254,11 +259,18 @@
     width: min(440px, calc(100% - 32px)); padding: 0; border: 1px solid var(--border);
     border-radius: var(--radius); background: var(--panel); color: var(--text);
     box-shadow: 0 20px 50px rgb(0 0 0 / .25);
+    /* A dialog can sit inside a table cell (Discover's "download anyway?"),
+       whose alignment and no-wrap it mustn't inherit. */
+    text-align: left; white-space: normal; font-size: 15px; font-weight: 400; overflow-wrap: anywhere;
   }
   dialog::backdrop { background: rgb(15 18 24 / .45); }
   dialog form { padding: 22px; }
   dialog h2 { margin: 0 0 14px; font-size: 16px; }
   dialog .form-grid { max-width: none; }
+  dialog.wide { width: min(820px, calc(100% - 32px)); }
+  dialog .dialog-body { padding: 22px; }
+  .quants-note { font-size: 13px; margin: 8px 0 12px; }
+  #quants-body:not(:has(table)) { color: var(--muted); font-size: 14px; }
   ul.concerns { margin: 0 0 14px; padding-left: 20px; font-size: 14px; line-height: 1.5; color: var(--b-amber); }
   ul.concerns li + li { margin-top: 6px; }
   .memory-strip {
@@ -333,8 +345,9 @@
   button.model-name { all: unset; cursor: pointer; color: var(--text); font-weight: 600; border-radius: 4px; }
   button.model-name:hover { color: var(--accent); }
   button.model-name:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .copy-tip-wrap { position: relative; display: inline-block; }
-  .copy-tip {
+  /* .tip-wrap/.tip: the same tooltip, for plain hover text. */
+  .copy-tip-wrap, .tip-wrap { position: relative; display: inline-block; }
+  .copy-tip, .tip {
     position: absolute; left: 0; bottom: calc(100% + 6px);
     width: max-content; max-width: 300px; padding: 5px 9px; border-radius: 7px;
     background: var(--panel); color: var(--muted);
@@ -343,8 +356,143 @@
     z-index: 70; opacity: 0; visibility: hidden; pointer-events: none;
     transition: opacity .12s;
   }
-  .copy-tip-wrap:hover .copy-tip, .copy-tip-wrap:focus-within .copy-tip, .copy-tip-wrap.copied .copy-tip { opacity: 1; visibility: visible; }
+  .copy-tip-wrap:hover .copy-tip, .copy-tip-wrap:focus-within .copy-tip, .copy-tip-wrap.copied .copy-tip,
+  .tip-wrap:hover .tip, .tip-wrap:focus .tip { opacity: 1; visibility: visible; }
   .copy-tip-wrap.copied .copy-tip { color: var(--good); }
+  /* A tooltip with sentences in it (blacklist reasons), hanging leftwards. */
+  .tip.wide { width: max-content; max-width: 320px; white-space: normal; text-align: left; color: var(--text); }
+  .tip.right { left: auto; right: 0; }
+  .bl-tip { display: block; }
+  .bl-tip + .bl-tip { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+  .bl-tip-reason { display: block; color: var(--muted); white-space: pre-wrap; }
+  /* Model tests (the Testing tab). */
+  .test-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 340px); gap: 20px; align-items: start; }
+  .test-layout > .panel, .test-side > .panel:last-child { margin-bottom: 0; }
+  .test-side { display: grid; gap: 20px; position: sticky; top: 76px; }
+  .test-side .panel { margin-bottom: 0; }
+  @media (max-width: 1000px) { .test-layout { grid-template-columns: minmax(0, 1fr); } .test-side { position: static; } }
+  .test-layout + .panel { margin-top: 20px; }
+  .test-intro { font-size: 13px; margin: -4px 0 16px; max-width: 70ch; }
+  .test-form { display: grid; gap: 18px; }
+  .test-field { display: grid; gap: 6px; align-content: start; }
+  .test-label-row { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .test-label { font-size: 13px; color: var(--muted); padding: 0; }
+  .test-label.strong { color: var(--text); font-weight: 600; font-size: 14px; }
+  .test-label .optional { font-weight: 400; font-size: 12px; margin-left: 4px; }
+  .test-label-row .tnum { font-size: 12px; }
+  .test-links { margin-left: auto; display: inline-flex; gap: 12px; }
+  button.link { background: none; border: none; color: var(--accent); padding: 0; font-size: 13px; font-weight: 500; }
+  button.link:hover { text-decoration: underline; background: none; }
+  .test-form textarea, .test-form input[type=text], .test-form input[type=search] { width: 100%; }
+  .test-form textarea {
+    resize: vertical; min-height: 140px; padding: 10px 12px; font: inherit; font-size: 14px; line-height: 1.5;
+    border: 1px solid var(--border); border-radius: 6px; background: var(--panel); color: var(--text);
+  }
+  .test-form textarea:focus { border-color: var(--accent); outline: 2px solid color-mix(in srgb, var(--accent) 25%, transparent); }
+  .test-filter { padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; background: var(--panel); color: var(--text); }
+  .test-form-row { display: flex; gap: 24px; flex-wrap: wrap; align-items: start; }
+  .test-form-row .grow { flex: 1 1 280px; }
+  .test-runs { display: flex; gap: 6px; align-items: center; }
+  .test-runs button.on { background: var(--accent); border-color: var(--accent); color: white; }
+  .test-runs input[type=number] { width: 80px; }
+  .test-runs input[aria-invalid="true"] { border-color: var(--danger); }
+  .test-hint { font-size: 12px; }
+  .test-hint.error { color: var(--danger); }
+  .test-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .test-actions button:disabled { opacity: .5; cursor: not-allowed; pointer-events: none; } /* so the wrapper gets the hover */
+  .test-reset { margin-left: auto; }
+  .why-wrap { cursor: not-allowed; }
+  .why-wrap:has(button:enabled) { cursor: auto; }
+  .why-wrap .tip:empty { display: none; }
+  .test-models { border: none; padding: 0; margin: 0; min-width: 0; display: grid; gap: 8px; }
+  /* One column of fixed-height rows: long names are cut short (full name in the tooltip). */
+  .test-model-list { display: grid; max-height: 344px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; }
+  .test-model {
+    display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 12px;
+    height: 48px; padding: 0 12px; cursor: pointer; border-bottom: 1px solid var(--border);
+  }
+  .test-model:last-child { border-bottom: none; }
+  .test-model:hover { background: var(--hover); }
+  .test-model:has(input:checked) { background: var(--b-blue-bg); box-shadow: inset 3px 0 0 var(--accent); }
+  .test-model.limit { cursor: not-allowed; opacity: .55; }
+  .test-model input[type=checkbox] { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); cursor: inherit; }
+  .test-model-text { display: grid; min-width: 0; line-height: 1.25; }
+  .test-model-name, .test-model-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .test-model-name { font-weight: 600; font-size: 14px; }
+  .test-model-sub, .test-model-meta { font-size: 12px; color: var(--muted); }
+  .test-model-meta { white-space: nowrap; text-align: right; }
+  .tnum { font-variant-numeric: tabular-nums; }
+  .test-sum-runs { font-weight: 600; margin: 0 0 8px; }
+  .test-sum-line { font-size: 13px; margin: 0 0 6px; }
+  .test-sum-warn { margin: 8px 0 0; padding-left: 18px; font-size: 13px; color: var(--b-amber); }
+  .test-sum-warn:empty { display: none; }
+  /* The Tests list: progress, status and created stay on their lines; name and models take the rest. */
+  .tests-table td { vertical-align: top; }
+  .tests-table td:first-child { min-width: 160px; }
+  .tests-progress { width: 150px; white-space: nowrap; }
+  .tests-progress .progress-bar { height: 6px; margin: 6px 0 4px; }
+  .tests-progress .muted { font-size: 12px; }
+  .nowrap { white-space: nowrap; }
+  .badge.test-status { white-space: nowrap; }
+  .test-tpls { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+  .test-tpls li { display: grid; gap: 2px; }
+  .test-tpls .muted { font-size: 12px; }
+  .test-tpl-actions { display: flex; gap: 6px; margin-top: 4px; }
+  ::placeholder { color: var(--muted); opacity: 1; }
+  .test-h3 { font-size: 13px; color: var(--muted); margin: 14px 0 6px; font-weight: 600; }
+  .test-text { white-space: pre-wrap; overflow-wrap: anywhere; margin: 8px 0 0; padding: 10px 12px; font-size: 13px;
+    background: var(--code-bg); border-radius: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .test-run { border-top: 1px solid var(--border); padding: 8px 0; }
+  .test-run:first-of-type { border-top: none; }
+  .test-run > summary { display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 500; flex-wrap: wrap; }
+  .test-run > summary .muted { font-weight: 400; font-size: 13px; }
+  .test-run details.thinking { margin-top: 8px; font-size: 13px; color: var(--muted); }
+  .test-run .error-box { margin: 8px 0 0; }
+  /* A model's usage chart (model page): one bar per day, time in use. */
+  .usage-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin: 16px 0 18px; }
+  .usage-stats .value { font-size: 20px; font-weight: 700; }
+  .usage-stats .value .muted { font-size: 14px; font-weight: 400; }
+  .usage-stats .label { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  @media (max-width: 720px) { .usage-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .usage-chart { display: grid; grid-template-columns: repeat(30, minmax(0, 1fr)); gap: 2px; align-items: end;
+    height: 120px; border-bottom: 1px solid var(--border); }
+  .usage-col { display: flex; align-items: flex-end; height: 100%; cursor: default; outline: none; }
+  .usage-col:focus-visible .usage-bar { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .usage-bar { width: 100%; min-height: 3px; background: var(--accent); border-radius: 4px 4px 0 0; }
+  .usage-bar.empty { background: var(--border); min-height: 2px; border-radius: 0; }
+  .usage-col:hover .usage-bar:not(.empty) { background: var(--accent-dark); }
+  .usage-axis { display: flex; justify-content: space-between; font-size: 12px; margin-top: 4px; }
+  .usage-table { margin-top: 12px; font-size: 14px; }
+  .usage-table summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+  .usage-table table { margin-top: 8px; max-width: 420px; }
+  .usage-note { font-size: 12px; margin: 10px 0 0; }
+  /* The System page's top: this machine beside Ollama and its updates. */
+  .system-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; margin-bottom: 20px; }
+  .system-top > .panel { margin-bottom: 0; }
+  .system-left { display: grid; gap: 20px; min-width: 0; }
+  .system-left .panel { margin-bottom: 0; }
+  .system-left #system-live { display: grid; gap: 20px; }
+  @media (max-width: 1000px) { .system-top { grid-template-columns: minmax(0, 1fr); } }
+  dl.kv.kv-2 { grid-template-columns: max-content minmax(0, 1fr) max-content minmax(0, 1fr); }
+  @media (max-width: 720px) { dl.kv.kv-2 { grid-template-columns: max-content minmax(0, 1fr); } }
+  .system-note { font-size: 13px; margin: 14px 0 0; }
+  .ollama-panel dl.kv { margin-top: 12px; }
+  .ollama-panel dd .badge { margin-left: 6px; }
+  .ollama-update-lead { font-size: 14px; line-height: 1.5; margin: 16px 0 8px; }
+  .ollama-update-lead p { margin: 0 0 8px; }
+  .ollama-update-lead ul { margin: 0 0 10px; padding-left: 20px; display: grid; gap: 4px; }
+  .ollama-how { margin-top: 14px; }
+  .ollama-how > summary, .update-steps summary { cursor: pointer; font-weight: 500; font-size: 14px; }
+  .update-steps { display: grid; gap: 8px; margin-top: 8px; }
+  .update-steps details { border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; }
+  .update-steps details[open] summary { margin-bottom: 8px; }
+  .update-steps p { font-size: 13px; line-height: 1.5; margin: 0 0 8px; }
+  .update-steps .copy-row { margin-bottom: 8px; }
+  .update-warn { color: var(--b-amber); }
+  .update-tips { font-size: 12px !important; margin-top: 4px !important; }
+  .nav-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-left: 4px; vertical-align: 2px; }
+  .nav-dot.warn { background: #f59e0b; box-shadow: 0 0 0 2px var(--panel); }
+  .loaded-dot { display: inline-block; width: 8px; height: 8px; margin-right: 7px; border-radius: 50%; background: var(--good); vertical-align: middle; }
   .badge.cap { background: var(--b-blue-bg); color: var(--b-blue); }
   .caps { display: flex; flex-wrap: wrap; gap: 4px; }
   .cap-filter { margin-top: 12px; gap: 6px; }
@@ -371,7 +519,10 @@
   .disc-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; }
   .disc-tags summary { font-size: 14px; color: var(--accent); }
   .disc-tags[open] summary { margin-bottom: 8px; }
-  .disc-tag-table { max-height: 360px; overflow-y: auto; }
+  /* An expanded card takes the whole row, so its tag table isn't squeezed into one column of the grid. */
+  .disc-card:has(details.disc-tags[open]) { grid-column: 1 / -1; }
+  .disc-tag-table { max-height: 360px; overflow: auto; }
+  .disc-tag-table td.mono, .disc-tag-table th { white-space: nowrap; }
   .disc-tag-table td { vertical-align: top; }
   .disc-tag-table .badge { cursor: help; white-space: nowrap; }
   .disc-alias { font-family: inherit; font-size: 12px; }
@@ -390,6 +541,21 @@
   .disc-tab { padding: 8px 14px; color: var(--muted); text-decoration: none; font-weight: 500; border-bottom: 2px solid transparent; margin-bottom: -1px; }
   .disc-tab:hover { color: var(--text); }
   .disc-tab[aria-current] { color: var(--text); border-bottom-color: var(--accent); }
+  .disc-tabs.page-tabs { margin: 0 0 16px; }
+  .bl-check { display: flex; align-items: center; gap: 8px; margin: 4px 0 12px; }
+  .bl-reason { display: none; margin-bottom: 12px; }
+  .bl-reason label { display: block; font-size: 13px; margin-bottom: 6px; }
+  .bl-reason textarea {
+    width: 100%; box-sizing: border-box; resize: vertical; padding: 8px 10px; font: inherit; font-size: 14px;
+    border: 1px solid var(--border); border-radius: 6px; background: var(--panel); color: var(--text);
+  }
+  form:has(.bl-toggle:checked) .bl-reason, .bl-reason.edit { display: block; }
+  .bl-on, form:has(.bl-toggle:checked) .bl-off { display: none; }
+  form:has(.bl-toggle:checked) .bl-on { display: inline; }
+  .reason { white-space: pre-wrap; max-width: 420px; }
+  .bl-confirm { margin: -6px 0 16px; padding: 10px 12px; border-left: 3px solid var(--danger); background: var(--code-bg); border-radius: 0 6px 6px 0; font-size: 14px; line-height: 1.5; }
+  .bl-confirm .muted { font-size: 12px; margin-bottom: 4px; }
+  .bl-confirm .reason { max-width: none; }
   a.badge { text-decoration: none; }
   a.badge:hover { filter: brightness(.95); text-decoration: underline; }
   .disc-dl-note { font-size: 12px; white-space: normal; text-align: left; max-width: 280px; margin: 4px 0 0 auto; }
@@ -397,8 +563,9 @@
   .disc-dl-note.warn { color: var(--b-amber); }
   /* System load: the models page's tile, GPU table meters and live graphs. */
   .progress-bar .fill.warn { background: var(--warn); }
-  a.load-tile { display: flex; flex-direction: column; gap: 6px; color: inherit; text-decoration: none; }
-  a.load-tile:hover { border-color: var(--accent); }
+  a.stat { color: inherit; text-decoration: none; }
+  a.stat:hover { border-color: var(--accent); }
+  a.load-tile { display: flex; flex-direction: column; gap: 6px; }
   a.load-tile .label { margin-top: auto; }
   .meter-row { display: grid; grid-template-columns: 40px 1fr 52px; align-items: center; gap: 8px; font-size: 13px; }
   .stat .meter-row .progress-bar { margin: 0; height: 6px; }
@@ -427,13 +594,12 @@
   }
   .chart-tip strong { display: block; font-size: 14px; color: var(--text); }
   .chart-tip-bytes { display: block; color: var(--text); margin-bottom: 2px; }
-  .chart-tip-bytes[hidden] { display: none; }
   @media (max-width: 900px) { .chart-grid { grid-template-columns: 1fr; } }
   @media (max-width: 720px) {
     nav { flex-wrap: wrap; gap: 12px; padding: 12px 16px; }
     main { padding: 16px; }
     footer.app-footer { padding: 8px 16px; }
-    .stat-grid { grid-template-columns: repeat(2, 1fr); }
+    .stat-grid, .stat-grid.three { grid-template-columns: repeat(2, 1fr); }
     .table-wrap { overflow-x: auto; }
   }
 </style>
@@ -452,11 +618,11 @@
 {{define "nav"}}
 <nav>
   <span class="brand"><img src="{{navlogo}}" alt="" width="33" height="32">Ollama Model Manager</span>
-  {{if .User}}<a href="/models"{{template "nav_current" (eq .Nav "models")}}>Models</a>
+  {{if .User}}<a href="/"{{template "nav_current" (eq .Nav "dashboard")}}>Dashboard</a>
+  <a href="/models"{{template "nav_current" (eq .Nav "models")}}>Models</a>
   <a href="/discover"{{template "nav_current" (eq .Nav "discover")}}>Discover</a>
-  <a href="/chat"{{template "nav_current" (eq .Nav "chat")}}>Chat</a>
   <a href="/downloads"{{template "nav_current" (eq .Nav "downloads")}}>Downloads {{template "nav_dl_badge" .}}</a>
-  <a href="/system"{{template "nav_current" (eq .Nav "system")}}>System</a>{{end}}
+  <a href="/system"{{template "nav_current" (eq .Nav "system")}}>System{{with .OllamaUpdate}}{{if .Available}} <span class="nav-dot warn" role="img" aria-label="Ollama update available" title="Ollama {{.Latest}} is available (running {{.Running}})"></span>{{end}}{{end}}</a>{{end}}
   <div class="theme-switch" role="group" aria-label="Colour theme">
     <button type="button" class="secondary" data-theme-choice="auto">Auto</button>
     <button type="button" class="secondary" data-theme-choice="dark">Dark</button>
@@ -511,7 +677,7 @@
 {{define "footer"}}
 <footer class="app-footer">
   Ollama Model Manager <a href="https://github.com/mophead64/ollama-model-manager/releases" target="_blank" rel="noopener noreferrer">{{.Version}}</a>
-  {{if .User}}<span hx-get="/version/check" hx-trigger="load, every 360m" hx-swap="innerHTML"></span>
+  {{if .User}}<span hx-get="/version/check" hx-trigger="load, every 120m" hx-swap="innerHTML"></span>
   {{template "state_watch" .}}{{end}}
 </footer>
 {{end}}

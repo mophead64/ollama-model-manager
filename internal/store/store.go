@@ -1,5 +1,6 @@
 // Package store persists app state (users, login sessions, the download
-// queue and when models were last used) to SQLite.
+// queue, when models were last used, the model blacklist and model tests)
+// to SQLite.
 package store
 
 import (
@@ -57,7 +58,7 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
-	if _, err := db.ExecContext(ctx, schema+downloadsSchema+usageSchema); err != nil {
+	if _, err := db.ExecContext(ctx, schema+downloadsSchema+usageSchema+blacklistSchema+modelTestsSchema); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("apply schema: %w", err)
 	}

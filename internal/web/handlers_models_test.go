@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/mophead64/ollama-model-manager/internal/downloads"
+	"github.com/mophead64/ollama-model-manager/internal/modeltest"
 	"github.com/mophead64/ollama-model-manager/internal/ollama"
 	"github.com/mophead64/ollama-model-manager/internal/store"
 	"github.com/mophead64/ollama-model-manager/internal/sysinfo"
@@ -82,6 +83,9 @@ func fakeOllama(t *testing.T, n int) *httptest.Server {
 				return
 			}
 			w.Write([]byte(`{"parameters":"stop \"<eot>\"","details":{"family":"qwen"},"model_info":{"general.parameter_count":3212749888,"tokenizer.ggml.tokens":[]}}`))
+		case "/api/chat": // a short reply, for model tests
+			w.Write([]byte(`{"message":{"content":"Pong"},"done":false}` + "\n" +
+				`{"message":{"content":""},"done":true,"total_duration":1500000000,"load_duration":900000000,"eval_count":30,"eval_duration":500000000}` + "\n"))
 		}
 	}))
 	t.Cleanup(srv.Close)
@@ -92,11 +96,14 @@ func fakeOllama(t *testing.T, n int) *httptest.Server {
 // signed-in user. Set by newTestServer.
 var testSession *http.Cookie
 
-// testManager, testStore and testSampler are the download manager, store and
-// hardware sampler behind the last newTestServer; the manager isn't running
-// unless a test starts it, and the sampler never runs (set its snapshot).
+// testManager, testRunner, testStore and testSampler are the download
+// manager, model test runner, store and hardware sampler behind the last
+// newTestServer; the manager and runner aren't running unless a test starts
+// them, and the sampler never runs (set its snapshot).
 var (
 	testManager *downloads.Manager
+	testRunner  *modeltest.Runner
+	testServer  *Server
 	testStore   *store.Store
 	testSampler *sysinfo.Sampler
 )
@@ -147,10 +154,14 @@ func newTestServer(t *testing.T, base string, opts ...func(*Config)) http.Handle
 		o(&cfg)
 	}
 	testSampler = sysinfo.New(time.Second, time.Minute, log)
-	s, err := NewServer(ollama.New(base), st, testManager, testSampler, cfg, log)
+	testRunner = modeltest.New(st, ollama.New(base), log)
+	s, err := NewServer(ollama.New(base), st, testManager, testRunner, testSampler, cfg, log)
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Never GitHub itself; a test that needs a release sets testServer's.
+	s.updates.url, s.ollamaUp.releases.url = "http://127.0.0.1:1", "http://127.0.0.1:1"
+	testServer = s
 	return s.Routes()
 }
 
@@ -169,7 +180,7 @@ func TestModelsPagination(t *testing.T) {
 	h := newTestServer(t, fakeOllama(t, 30).URL) // 31 models -> 2 pages
 
 	body := get(h, "/models", false).Body.String()
-	for _, want := range []string{"31 model(s)", "Page 1 of 2", "model-000:latest", "Next →", "<!doctype html>", "on the models disk"} {
+	for _, want := range []string{"31 model(s)", "Page 1 of 2", "model-000:latest", "Next →", "<!doctype html>"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("page 1 missing %q", want)
 		}
@@ -276,5 +287,39 @@ func TestModelsTableCopyNameAndActions(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Errorf("models table missing %q", want)
 		}
+	}
+}
+
+func TestModelsTabs(t *testing.T) {
+	h := newTestServer(t, fakeOllama(t, 1).URL)
+	for path, want := range map[string]string{
+		"/models":           `<a href="/models" class="disc-tab" aria-current="true">All Models</a>`,
+		"/models/blacklist": `<a href="/models/blacklist" class="disc-tab" aria-current="true">Blacklist</a>`,
+		"/models/testing":   `<a href="/models/testing" class="disc-tab" aria-current="true">Testing</a>`,
+		"/models/chat":      `<a href="/models/chat" class="disc-tab" aria-current="true">Chat</a>`,
+	} {
+		rec := get(h, path, false)
+		body := rec.Body.String()
+		if rec.Code != http.StatusOK || !strings.Contains(body, want) || strings.Count(body, `aria-current="true"`) != 1 {
+			t.Errorf("%s: %d, want just %s current", path, rec.Code, want)
+		}
+	}
+	// Every tab has the same overview above the tabs.
+	for _, path := range []string{"/models/blacklist", "/models/testing"} {
+		body := get(h, path, false).Body.String()
+		overview, tabs := strings.Index(body, "on the models disk"), strings.Index(body, `class="disc-tabs page-tabs"`)
+		if overview < 0 || overview > tabs || !strings.Contains(body, `id="running-panel"`) {
+			t.Errorf("%s should have the overview above its tabs", path)
+		}
+	}
+	// On All Models the tabs sit between the overview and the filters.
+	body := get(h, "/models", false).Body.String()
+	overview, tabs, filters := strings.Index(body, `id="running-panel"`), strings.Index(body, `class="disc-tabs page-tabs"`), strings.Index(body, `id="f-q"`)
+	if overview < 0 || !(overview < tabs && tabs < filters) {
+		t.Errorf("tabs should be below the overview and above the filters: %d, %d, %d", overview, tabs, filters)
+	}
+	// Model detail pages are unaffected.
+	if rec := get(h, "/models/user/custom:v1", false); rec.Code != http.StatusOK {
+		t.Errorf("model detail = %d", rec.Code)
 	}
 }

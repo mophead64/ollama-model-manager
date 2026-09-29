@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html/template"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -40,14 +41,59 @@ var templateFuncs = template.FuncMap{
 	"unloads":    unloadsPhrase,
 	"ago":        timeAgo,
 	"lastused":   lastUsedOf,
+	"activefor":  formatActive,
+	"loadsof":    func(loads map[string]int, name string) int { return loads[name] },
 	"canchat":    canChat,
 	"pickeritem": func(m ollama.Model, loaded bool) map[string]any { return map[string]any{"Model": m, "Loaded": loaded} },
-	"add":        func(a, b int) int { return a + b },
-	"compact":    formatCompact,
-	"tokens":     formatTokens,
-	"sub":        func(a, b int) int { return a - b },
-	"static":     staticURL,
-	"navlogo":    func() template.URL { return navLogo },
+	"rowactions": func(m ollama.Model, loaded, allowDelete bool, ret string) map[string]any {
+		return map[string]any{"Model": m, "Loaded": loaded, "AllowDelete": allowDelete, "Return": ret}
+	},
+	"ms": formatMS,
+	"copycmd": func(id, cmd string) map[string]string {
+		return map[string]string{"ID": id, "Cmd": cmd}
+	},
+	"modelsrc": sourceOf,
+	"quantsopener": func(name string, src modelSource, class ...string) map[string]any {
+		return map[string]any{"Name": name, "Src": src, "Class": strings.Join(class, " ")}
+	},
+	"modeltabs": func(tab string, activeTests any) map[string]any {
+		return map[string]any{"Tab": tab, "ActiveTests": activeTests}
+	},
+	"has":     func(list []string, s string) bool { return slices.Contains(list, s) },
+	"add":     func(a, b int) int { return a + b },
+	"compact": formatCompact,
+	"tokens":  formatTokens,
+	"sub":     func(a, b int) int { return a - b },
+	"static":  staticURL,
+	"navlogo": func() template.URL { return navLogo },
+}
+
+// formatActive renders roughly how long a model was in use, from the usage
+// tracker's seconds: "≈ 45 s", "≈ 12 min", "≈ 2.5 h".
+func formatActive(seconds int) string {
+	switch {
+	case seconds < 60:
+		return fmt.Sprintf("≈ %d s", seconds)
+	case seconds < 3600:
+		return fmt.Sprintf("≈ %d min", (seconds+30)/60)
+	}
+	return fmt.Sprintf("≈ %.1f h", float64(seconds)/3600)
+}
+
+// formatMS renders a duration in milliseconds (an int64 or float64, e.g. an
+// average) briefly: "850 ms", "12.3s".
+func formatMS(v any) string {
+	var ms float64
+	switch x := v.(type) {
+	case int64:
+		ms = float64(x)
+	case float64:
+		ms = x
+	}
+	if ms < 1000 {
+		return fmt.Sprintf("%.0f ms", ms)
+	}
+	return fmt.Sprintf("%.1fs", ms/1000)
 }
 
 func formatBytes(n int64) string {

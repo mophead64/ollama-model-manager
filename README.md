@@ -5,98 +5,98 @@
 <h1 align="center">Ollama Model Manager</h1>
 
 <p align="center">
-  A self-hosted web app for managing a local <a href="https://ollama.com">Ollama</a> instance: see what's installed and
-  what's in memory, find and download new models that fit your hardware, and watch your system while they run.
+  A self-hosted, signed-in web app for running your <a href="https://ollama.com">Ollama</a> models: find and queue
+  downloads that fit your hardware, see what you actually use, test models against each other, and keep a record of the
+  ones that weren't worth keeping.
 </p>
 
-![The Models page: installed models, what's loaded in memory, disk space and system load](docs/home.png)
+![The dashboard: library totals, free disk space, live system load, the models loaded in memory, and the most recently used models](docs/images/dashboard.png)
 
-## Why use it?
+## What it adds to Ollama
 
-Ollama is great at running models, but leaves a couple of everyday jobs to you:
+Ollama is great at running models. Managing them is left to its command line, on the machine it runs on. Ollama Model
+Manager fills in the rest:
 
-- **It doesn't track which models you use.** `ollama list` shows when each model was downloaded, not when it was last
-  used, so a big library soon fills with models you tried once and forgot. Ollama Model Manager records when each
-  model was last in memory, so you can see what earns its disk space.
-- **It has no download queue.** `ollama pull` downloads one model at a time in your terminal, and you have to keep that
-  terminal open until it finishes. Here you queue as many models as you like from the browser. They download one after
-  another in the background, keep going when you close the tab, and pick up where they left off after a restart.
-
-It also puts everything else in one place: finding models that fit your hardware on ollama.com and Hugging Face,
-loading and unloading them, and watching CPU, GPU and memory while they run.
+| | Ollama on its own | With Ollama Model Manager |
+|---|---|---|
+| **Managing models** | `ollama list`, `ps` and `rm` in a terminal on the server | A web app you sign in to from any browser: what's installed, what's in memory and on the GPU, load, unload and delete |
+| **Finding models** | Browse ollama.com or Hugging Face yourself, and guess what will fit | Search both from the app, with every size and quantisation checked against your memory and GPU |
+| **Downloading** | `ollama pull`, one at a time, with the terminal kept open | A queue that runs in the background, carries on after a restart, and explains failures |
+| **Knowing what you use** | When a model was downloaded | When it was last used, how often it's loaded, and how long it's in use each day |
+| **Comparing models** | Try each one by hand and eyeball it | Tests: one prompt, many models, many runs, with speed and replies side by side |
+| **Remembering what didn't work** | Nothing | A blacklist that keeps why you deleted a model, and warns you before you download it again |
+| **Staying up to date** | Check the releases yourself | An orange dot when Ollama has an update, with how to install it |
 
 ## Features
 
-### Your models at a glance
-- Every installed model with its family, parameter count, quantisation, context length, size, capabilities and when it
-  was last used. Filter by name, family or capability, and sort by any column.
-- Totals for your library, free space on the disk Ollama stores models on, and a live CPU, memory, GPU and VRAM tile.
-- Delete models you no longer need (this can be turned off with `ALLOW_MODEL_DELETE=false`).
+### Your models, at a glance
+The **dashboard** shows your library's size, free space on the disk Ollama uses, live CPU, memory, GPU and VRAM, what's
+loaded in memory (and how much of it is on the GPU), and the models you've used most recently. The **Models** page lists
+everything installed, with its family, size, quantisation, context length, capabilities, when it was last used and how
+many times it's been loaded. Filter and sort by any of them, and click a name to copy it.
 
-### Detailed model information
-Each model has its own page with everything Ollama knows about it: architecture details, embedding length, digest,
-parameters, prompt template and the full Modelfile.
+![The Models page: every installed model, sorted by when it was last used, with how often each has been loaded](docs/images/models.png)
 
-![A model's details page: its metadata, parameters and Modelfile](docs/view-model-info.png)
+Each model's menu loads or unloads it (choosing how long it stays loaded), opens a chat, shows its **other quants** to
+download, links to it on ollama.com or Hugging Face, or deletes it.
 
-### Load and unload models
-- See which models are in memory, how much of each is on the GPU, their context size and when Ollama will unload them.
-- Load a model ahead of time, choosing how long it stays loaded (Ollama's default, 30 minutes, 1 hour, 24 hours, or
-  until you unload it), and unload models to free memory straight away.
+### Usage history
+Ollama keeps no record of what you use. This app checks every 15 seconds and records when each model was last used, each
+time it's loaded, and roughly how long it's in use each day, so you can see which models earn their disk space. Each
+model's page has a 30-day chart alongside everything Ollama knows about it: architecture, parameters, template and
+Modelfile.
 
-### Usage tracking
-Ollama Model Manager checks Ollama every 15 seconds for the models it has in memory and records when each was last
-loaded. That's the **Last used** column: a good guide to which models you actually use, and which are just taking up
-disk space. It doesn't see individual requests passing through Ollama, so a model counts as used whenever it was in
-memory, not per prompt.
+![A model's page: its details, and a usage chart of time in use per day over the last 30 days](docs/images/model-detail.png)
 
-### Discover new models
-Search the [Ollama library](https://ollama.com/search) and GGUF models on [Hugging Face](https://huggingface.co/models?library=gguf)
-without leaving the app, and download them with one click.
+### Discover and download models
+Search the [Ollama library](https://ollama.com/search) and GGUF models on
+[Hugging Face](https://huggingface.co/models?library=gguf) without leaving the app. Every size and quantisation is marked
+✓ fits in VRAM, ◐ partly on the CPU, or ✗ too big for your machine, with its real download size. Downloads go into a
+queue that works through them in the background, with progress, speed and ETA, and suggestions for fixing any that fail.
 
-- **Checked against your hardware.** The app reads your memory and GPUs and marks every model size and quantisation as
-  ✓ fits in VRAM, ◐ runs partly on the CPU, or ✗ too big. Apple silicon's shared memory is taken into account.
-  **Runs on this machine** (on by default) hides the ones that won't fit.
-- **Every download option, with real sizes.** Expand a model to see all its tags (Ollama) or quantisations (Hugging
-  Face), each with its download size, context length and whether it fits.
-- Filter the Ollama library by capability (vision, tools, thinking, embedding, cloud); sort Hugging Face by downloads,
-  trends, likes or newest.
-- Models you've installed, queued or are downloading are marked as such.
+![Discover: the gemma3 models on ollama.com, each size checked against an Apple M4, with one blacklisted and one installed](docs/images/discover.png)
 
-![The Discover page searching Hugging Face, with each model's quantisations checked against an Apple M4](docs/discover-models.png)
+**[Discovering and downloading models →](docs/discovery.md)**, including how to get at gated and private Hugging Face
+models.
 
-Fit is an estimate (roughly the file size plus 20% for the context window and runtime). Treat ✓ as "should run
-comfortably" rather than a guarantee.
+### Model testing
+Send one prompt to several models, several times each, and compare them: tokens per second, reply length, response time
+and load time, plus every reply to read side by side. Tests run in the background, one model at a time, unloading each
+when it's done so the next gets the GPU to itself. Save a prompt, models and runs as a **template** to run the same
+comparison again later.
 
-### A download queue
-- Queue any model `ollama pull` accepts: names like `qwen3:8b`, Hugging Face repos like `hf.co/user/repo:Q4_K_M`, or
-  just paste an `ollama pull …` command or an ollama.com / huggingface.co link.
-- Each name is checked with its registry before it's queued, so typos fail straight away. If a model looks too big for
-  your disk or memory, you're asked before it's downloaded.
-- Downloads run one at a time in the background, with live progress, speed and ETA. They carry on when you close the
-  browser, and resume after a restart.
-- Failed downloads show a log and suggestions for fixing them (such as updating Ollama, or getting access to a gated
-  model), and can be retried with a corrected name.
+![A test's results: a comparison table of four models' speed and times, and each run's reply](docs/images/test-results.png)
 
-![The Downloads page: a Hugging Face model downloading, with progress, speed and ETA](docs/queue-model-downloads.png)
+**[Model testing →](docs/testing.md)**
+
+### The blacklist
+When you delete a model that wasn't any good, tick *Also add it to the blacklist* and say why. The model goes, but the
+record stays: what it was, when, and why you dropped it. Discover marks blacklisted models (and can hide them), and
+downloading one again asks first, showing the reason you gave.
+
+![The Blacklist tab: four models with the reasons they were dropped](docs/images/blacklist.png)
+
+**[The blacklist →](docs/blacklist.md)**
 
 ### Chat with a model
 A quick way to check a model works: chat with any installed model, switch models mid-conversation to compare them, and
 see tokens, tokens per second and response time for each reply. Nothing is saved.
 
-![The Chat page: a reply from llama3.2 with its token count and speed](docs/chat-with-model.png)
+![Chat: a reply from qwen3:8b, with its thinking folded away and its speed underneath](docs/images/chat.png)
 
-### System monitoring
-Live graphs of CPU, memory, GPU and VRAM use over the last five minutes, each GPU's memory and utilisation, and what's
-loaded, so you can watch what happens as models load and run. NVIDIA GPUs are read with `nvidia-smi`, AMD and Intel
-GPUs from `/sys`, and Apple silicon natively.
+### System monitoring and Ollama updates
+Live graphs of CPU, memory, GPU and VRAM use, each GPU's memory and utilisation, and what's loaded. NVIDIA GPUs are read
+with `nvidia-smi`, AMD and Intel GPUs from `/sys`, and Apple silicon natively. The System page also checks for new
+Ollama releases, says why they matter (new models often need them), and shows how to update for Docker, the Linux
+install script (backing up your `ollama.service` settings first), macOS and Windows.
 
-![The System page: CPU, memory, GPU and VRAM graphs for an Apple M4, and the models loaded in memory](docs/view-sys-info.png)
+![The System page: this machine, GPUs and loaded models beside Ollama's version and update steps, then the live graphs](docs/images/system.png)
 
 ### And also
-- Sign-in required, with a username and password you can change from the Account page.
+- Sign-in required, with a username and password you can change from Settings.
 - Light, dark or automatic theme.
-- A notice in the footer when a newer release is out.
+- A green ✓ in the footer when you're running the latest release of this app, or a link to the new one.
+- Deleting models can be turned off with `ALLOW_MODEL_DELETE=false`.
 
 ## Running it
 
@@ -204,31 +204,22 @@ Everything is set with environment variables:
 |---|---|---|
 | `PORT` | `8080` | Port the web UI listens on |
 | `OLLAMA_HOST` | `http://localhost:11434` | The Ollama server to manage |
-| `DB_PATH` | `omm.db` beside the binary (`/data/omm.db` in Docker) | Where the database (accounts and download history) is kept |
+| `DB_PATH` | `omm.db` beside the binary (`/data/omm.db` in Docker) | Where the database is kept: accounts, downloads, usage history, tests and the blacklist |
 | `MODELS_DIR` | auto-detected | Ollama's models folder, for the free disk space tile. Found automatically in the usual places and at `/models` |
 | `ALLOW_MODEL_DELETE` | `true` | `false` hides the Delete buttons and refuses deletions |
-| `HF_TOKEN` | not set | Optional Hugging Face read token (see below) |
+| `HF_TOKEN` | not set | Optional Hugging Face read token, for browsing private repos (see [the guide](docs/discovery.md#gated-and-private-hugging-face-models)) |
 
 Hardware stats and fit estimates are for the machine running this app. If you point `OLLAMA_HOST` at Ollama on another
 machine, model management works as normal, but the System page and Discover's fit checks describe this machine, not
 Ollama's.
 
+Settings → Configuration shows each of these as it took effect: set, defaulted or auto-detected.
+
 ## Gated and private Hugging Face models
 
-Public Hugging Face models work with no setup. **Gated** models (such as Google's official Gemma GGUFs) and your
-**private** repos need access set up in two places, for two different jobs:
-
-1. **Ollama's key: needed to download them.** Ollama downloads models itself, and proves who it is to Hugging Face with
-   its own key. Signed in as the admin, open **Account → Hugging Face**: it shows Ollama's public key to copy into your
-   Hugging Face account under *Settings → SSH and GPG Keys*. Gated models also need their terms accepted once on the
-   model's Hugging Face page. After that, Ollama can download everything that account can access.
-2. **`HF_TOKEN`: optional, for browsing.** On its own, this app talks to Hugging Face anonymously, so Discover can't list
-   private repos. Set `HF_TOKEN` to a Hugging Face *read* access token
-   ([create one here](https://huggingface.co/settings/tokens)) and restart the app: Discover then includes the private
-   repos it can see, and downloads are checked with it. The Account page confirms which account the token belongs to.
-
-Both apply to everyone using the app: anyone who can sign in can download what the linked account can access, and see
-what the token can see.
+Public Hugging Face models work with no setup. Gated models (such as Google's official Gemma GGUFs) and private repos
+need Ollama linking to a Hugging Face account with access, and gated ones need access granted on Hugging Face first. See
+[Gated and private models](docs/discovery.md#gated-and-private-hugging-face-models) for the steps.
 
 ## Resetting the password
 

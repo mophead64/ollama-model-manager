@@ -13,6 +13,7 @@ import (
 
 	"github.com/mophead64/ollama-model-manager/internal/disk"
 	"github.com/mophead64/ollama-model-manager/internal/ollama"
+	"github.com/mophead64/ollama-model-manager/internal/store"
 )
 
 const modelsPageSize = 25
@@ -24,14 +25,18 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 	st := parseListState(r.URL.Query())
 
 	data := map[string]any{
-		"Query":      st.Query,
-		"Caps":       st.Caps,
-		"Sort":       st.Sort,
-		"Dir":        st.Dir(),
-		"Page":       st.Page,
-		"TotalPages": 1,
-		"OllamaURL":  s.ol.BaseURL(),
-		"Deleted":    r.URL.Query().Get("deleted"),
+		"Query":       st.Query,
+		"Caps":        st.Caps,
+		"Dir":         st.Dir(),
+		"Page":        st.Page,
+		"TotalPages":  1,
+		"OllamaURL":   s.ol.BaseURL(),
+		"Deleted":     r.URL.Query().Get("deleted"),
+		"Blacklisted": r.URL.Query().Get("blacklisted") == "1",
+	}
+
+	if !st.isDefaultSort() {
+		data["Sort"] = st.Sort // kept by the filter form; the default is left out
 	}
 
 	all, err := s.ol.List(r.Context())
@@ -41,13 +46,14 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 	} else {
 		lastUsed := s.lastUsed(r)
 		models := filterModels(all, st.Query, st.Caps)
-		sortModels(models, st.Sort, st.Desc, lastUsed)
-		data["LastUsed"] = lastUsed
-
-		var totalBytes int64
-		for _, m := range all {
-			totalBytes += m.Size
+		loads, err := s.st.ModelLoadCounts(r.Context())
+		if err != nil {
+			s.log.Warn("read model load counts failed", "error", err) // only costs the column
 		}
+		sortModels(models, st.Sort, st.Desc, modelUsage{LastUsed: lastUsed, Loads: loads})
+		data["LastUsed"] = lastUsed
+		data["Loads"] = loads
+
 		totalPages := max(1, (len(models)+modelsPageSize-1)/modelsPageSize)
 		st.Page = min(st.Page, totalPages)
 		start := (st.Page - 1) * modelsPageSize
@@ -55,19 +61,12 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 
 		data["Models"] = models[start:end]
 		data["Total"] = len(models)
-		data["Count"] = len(all)
-		data["TotalBytes"] = totalBytes
 		data["Page"] = st.Page
 		data["TotalPages"] = totalPages
 		data["AllCaps"] = capabilityOptions(all, st.Caps)
 		data["Headers"] = st.headers()
 		data["ListURL"] = st.URL()
-		data["Disk"] = s.diskUsage()
-		data["Load"] = s.sys.Latest().Sample()
-		data["PollEvery"] = pollEvery(s.sys.Interval())
-		running, runErr := s.runningModels(r)
-		data["Running"], data["RunningErr"] = running, runErr
-		data["Compact"] = true
+		running := s.addOverview(r, all, data)
 		loaded := make(map[string]bool, len(running))
 		for _, m := range running {
 			loaded[m.Name] = true
@@ -90,6 +89,18 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.render(w, r, "models.html", data)
+}
+
+// addModelsOverview adds the overview to a models tab that doesn't list the
+// models itself. If Ollama can't be reached, Error hides it.
+func (s *Server) addModelsOverview(r *http.Request, data map[string]any) {
+	all, err := s.ol.List(r.Context())
+	if err != nil {
+		s.log.Error("list models failed", "error", err)
+		data["Error"] = err.Error()
+		return
+	}
+	s.addOverview(r, all, data)
 }
 
 // lastUsed is when each model was last seen in use (see package usage). A
@@ -172,8 +183,13 @@ func capabilityOptions(models []ollama.Model, selected []string) []capOption {
 	return out
 }
 
+// blacklistReasonMax caps a blacklist reason, in characters.
+const blacklistReasonMax = 2000
+
 // handleDeleteModel removes a model from Ollama, then goes back to the list
-// (with the filters/sort/page it was deleted from, if it came from there).
+// (with the filters/sort/page it was deleted from, if it came from there) or
+// the dashboard. With blacklist=on it also adds the model to the blacklist,
+// with the form's reason and a copy of its details, which go with it.
 func (s *Server) handleDeleteModel(w http.ResponseWriter, r *http.Request) {
 	if !s.cfg.AllowDelete {
 		w.WriteHeader(http.StatusForbidden)
@@ -185,8 +201,18 @@ func (s *Server) handleDeleteModel(w http.ResponseWriter, r *http.Request) {
 		s.badRequest(w, r, errMsg("model name required"))
 		return
 	}
+	blacklist := r.FormValue("blacklist") == "on"
+	reason, err := blacklistReason(r)
+	if err != nil {
+		s.badRequest(w, r, err)
+		return
+	}
+	var entry store.BlacklistEntry
+	if blacklist {
+		entry = s.blacklistEntry(r, name, reason) // before its details are gone
+	}
 
-	err := s.ol.Delete(r.Context(), name)
+	err = s.ol.Delete(r.Context(), name)
 	var se *ollama.StatusError
 	if errors.As(err, &se) && se.StatusCode == http.StatusNotFound {
 		err = nil // already gone; the outcome the user wanted
@@ -201,14 +227,34 @@ func (s *Server) handleDeleteModel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.log.Info("model deleted", "model", name, "by", currentUser(r).Username)
-
-	back := parseListState(nil)
-	if ret, err := url.Parse(r.FormValue("return")); err == nil && ret.Path == "/models" {
-		back = parseListState(ret.Query())
+	if blacklist {
+		if err := s.st.BlacklistModel(r.Context(), entry); err != nil {
+			s.log.Error("blacklist model failed", "model", name, "error", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			s.render(w, r, "model_detail.html", map[string]any{
+				"Name":  name,
+				"Error": fmt.Sprintf("Deleted %s, but couldn't add it to the blacklist: %v", name, err),
+			})
+			return
+		}
+		s.log.Info("model blacklisted", "model", name, "by", entry.By)
 	}
-	target, _ := url.Parse(back.URL())
+
+	back := parseListState(nil).URL()
+	if ret, err := url.Parse(r.FormValue("return")); err == nil {
+		switch ret.Path {
+		case "/models":
+			back = parseListState(ret.Query()).URL()
+		case "/": // the dashboard
+			back = "/"
+		}
+	}
+	target, _ := url.Parse(back)
 	q := target.Query()
 	q.Set("deleted", name)
+	if blacklist {
+		q.Set("blacklisted", "1")
+	}
 	target.RawQuery = q.Encode()
 	http.Redirect(w, r, target.String(), http.StatusSeeOther)
 }
@@ -242,6 +288,7 @@ func (s *Server) handleModelDetail(w http.ResponseWriter, r *http.Request) {
 		data["Meta"] = flattenModelInfo(info.ModelInfo)
 		s.addMemoryState(r, name, data)
 		data["CanChat"] = canChat(info.Capabilities)
+		data["Usage"] = s.usageHistory(r, name)
 		// /api/show doesn't report size or digest; pick them up from the list.
 		if all, err := s.ol.List(r.Context()); err == nil {
 			for _, m := range all {
@@ -314,4 +361,154 @@ func metaValue(v any) string {
 	default:
 		return fmt.Sprint(x)
 	}
+}
+
+// blacklistReason is the form's reason for blacklisting, trimmed.
+func blacklistReason(r *http.Request) (string, error) {
+	reason := strings.TrimSpace(r.FormValue("reason"))
+	if len([]rune(reason)) > blacklistReasonMax {
+		return "", errMsg(fmt.Sprintf("the reason can be at most %d characters", blacklistReasonMax))
+	}
+	return reason, nil
+}
+
+// blacklistEntry describes the model for its blacklist entry. If Ollama can't
+// say what it is, the entry just has its name.
+func (s *Server) blacklistEntry(r *http.Request, name, reason string) store.BlacklistEntry {
+	e := store.BlacklistEntry{Model: name, Reason: reason, By: currentUser(r).Username, At: time.Now()}
+	all, err := s.ol.List(r.Context())
+	if err != nil {
+		s.log.Warn("list models for blacklist entry failed", "model", name, "error", err)
+	}
+	for _, m := range all {
+		if m.Name == name || m.Model == name {
+			e.Family, e.ParameterSize, e.Quantization = m.Details.Family, m.Details.ParameterSize, m.Details.QuantizationLevel
+			e.Size, e.Digest = m.Size, m.Digest
+			break
+		}
+	}
+	return e
+}
+
+// handleBlacklist is the models section's Blacklist tab.
+func (s *Server) handleBlacklist(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	data := map[string]any{"Removed": q.Get("removed"), "Updated": q.Get("updated")}
+	s.addModelsOverview(r, data)
+	entries, err := s.st.Blacklist(r.Context())
+	if err != nil {
+		s.log.Error("read blacklist failed", "error", err)
+		data["BlacklistErr"] = err.Error()
+	}
+	data["Entries"] = entries
+	s.render(w, r, "blacklist.html", data)
+}
+
+// handleUnblacklist takes a model off the blacklist.
+func (s *Server) handleUnblacklist(w http.ResponseWriter, r *http.Request) {
+	name := strings.TrimSpace(r.FormValue("name"))
+	if name == "" {
+		s.badRequest(w, r, errMsg("model name required"))
+		return
+	}
+	if err := s.st.UnblacklistModel(r.Context(), name); err != nil {
+		s.log.Error("unblacklist model failed", "model", name, "error", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		s.render(w, r, "error_fragment.html", map[string]any{"Error": fmt.Sprintf("Couldn't remove %s from the blacklist: %v", name, err)})
+		return
+	}
+	s.log.Info("model unblacklisted", "model", name, "by", currentUser(r).Username)
+	http.Redirect(w, r, "/models/blacklist?removed="+url.QueryEscape(name), http.StatusSeeOther)
+}
+
+// handleBlacklistReason changes why a model is blacklisted (the Edit dialog).
+func (s *Server) handleBlacklistReason(w http.ResponseWriter, r *http.Request) {
+	name := strings.TrimSpace(r.FormValue("name"))
+	if name == "" {
+		s.badRequest(w, r, errMsg("model name required"))
+		return
+	}
+	reason, err := blacklistReason(r)
+	if err != nil {
+		s.badRequest(w, r, err)
+		return
+	}
+	ok, err := s.st.UpdateBlacklistReason(r.Context(), name, reason)
+	if err != nil {
+		s.log.Error("update blacklist reason failed", "model", name, "error", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		s.render(w, r, "error_fragment.html", map[string]any{"Error": fmt.Sprintf("Couldn't update %s's reason: %v", name, err)})
+		return
+	}
+	if !ok {
+		w.WriteHeader(http.StatusNotFound)
+		s.render(w, r, "error_fragment.html", map[string]any{"Error": fmt.Sprintf("%s isn't on the blacklist.", name)})
+		return
+	}
+	s.log.Info("blacklist reason updated", "model", name, "by", currentUser(r).Username)
+	http.Redirect(w, r, "/models/blacklist?updated="+url.QueryEscape(name), http.StatusSeeOther)
+}
+
+// usageDays is how far back a model's page charts its use.
+const usageDays = 30
+
+// usageDay is one day of a model's use, for its page's chart.
+type usageDay struct {
+	Date          time.Time
+	ActiveSeconds int
+	Loads         int
+	Height        float64 // the bar's height, as a percentage of the busiest day
+}
+
+// usageHistory is a model's use over the last usageDays days (every day,
+// oldest first, so the chart has a gap where it wasn't used) and in all.
+type usageHistory struct {
+	Days        []usageDay
+	DaysUsed    int // in those days
+	Active      int // seconds, in those days
+	Loads       int // in those days
+	TotalActive int // seconds, ever
+	TotalLoads  int
+	Since       time.Time // the first day any use was recorded; zero if none
+}
+
+func (s *Server) usageHistory(r *http.Request, name string) *usageHistory {
+	today := time.Now()
+	start := today.AddDate(0, 0, -(usageDays - 1))
+	rows, err := s.st.ModelDailyUsage(r.Context(), name, start.Format(time.DateOnly))
+	if err != nil {
+		s.log.Warn("read model usage history failed", "model", name, "error", err)
+		return nil
+	}
+	h := &usageHistory{}
+	byDay := map[string]store.DailyUsage{}
+	for _, d := range rows {
+		byDay[d.Day] = d
+	}
+	busiest := 0
+	for i := range usageDays {
+		date := start.AddDate(0, 0, i)
+		d := byDay[date.Format(time.DateOnly)]
+		h.Days = append(h.Days, usageDay{Date: date, ActiveSeconds: d.ActiveSeconds, Loads: d.Loads})
+		busiest = max(busiest, d.ActiveSeconds)
+		if d.ActiveSeconds > 0 || d.Loads > 0 {
+			h.DaysUsed++
+		}
+		h.Active += d.ActiveSeconds
+		h.Loads += d.Loads
+	}
+	for i := range h.Days {
+		if busiest > 0 {
+			h.Days[i].Height = 100 * float64(h.Days[i].ActiveSeconds) / float64(busiest)
+		}
+	}
+	var since string
+	h.TotalActive, h.TotalLoads, since, err = s.st.ModelUsageTotals(r.Context(), name)
+	if err != nil {
+		s.log.Warn("read model usage totals failed", "model", name, "error", err)
+	}
+	if t, err := time.ParseInLocation(time.DateOnly, since, time.Local); err == nil {
+		h.Since = t
+	}
+	return h
 }

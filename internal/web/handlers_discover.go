@@ -23,6 +23,7 @@ type discoverState struct {
 	Caps   []string // ollama.com only
 	Order  string   // "popular"/"newest" for ollama.com; a key of library.HFSorts for Hugging Face
 	Fit    bool     // only models that should run on this machine; on unless fit=0
+	HideBL bool     // leave out models with any tag or quant on the blacklist (bl=hide)
 	Page   int      // ollama.com's page, 1-based
 	Cursor string   // Hugging Face's position; "" for the first page
 }
@@ -31,7 +32,7 @@ func parseDiscoverState(q url.Values) discoverState {
 	// The form sends fit=0 from a hidden input, plus fit=1 when the box is
 	// ticked, so a bare /discover (no fit at all) gets the default: on.
 	fit := !q.Has("fit") || slices.Contains(q["fit"], "1")
-	st := discoverState{Source: "ollama", Query: strings.TrimSpace(q.Get("q")), Order: "popular", Fit: fit, Page: 1}
+	st := discoverState{Source: "ollama", Query: strings.TrimSpace(q.Get("q")), Order: "popular", Fit: fit, HideBL: q.Get("bl") == "hide", Page: 1}
 	if q.Get("src") == "hf" {
 		st.Source, st.Order, st.Cursor = "hf", "downloads", q.Get("cursor")
 		if _, ok := library.HFSorts[q.Get("o")]; ok {
@@ -75,6 +76,9 @@ func (st discoverState) URL() string {
 	if !st.Fit {
 		v.Set("fit", "0")
 	}
+	if st.HideBL {
+		v.Set("bl", "hide")
+	}
 	if st.Page > 1 {
 		v.Set("page", strconv.Itoa(st.Page))
 	}
@@ -95,9 +99,10 @@ type sizeChip struct {
 // discoverCard is an ollama.com search result with what's known about it here.
 type discoverCard struct {
 	library.Model
-	Sizes     []sizeChip
-	Installed bool      // some tag of it is installed
-	Active    *activeDL // some tag of it is queued or downloading
+	Sizes       []sizeChip
+	Installed   bool                   // some tag of it is installed
+	Active      *activeDL              // some tag of it is queued or downloading
+	Blacklisted []store.BlacklistEntry // its tags on the blacklist
 }
 
 // runnable reports whether some size of the model should run here.
@@ -108,10 +113,11 @@ func (c discoverCard) runnable() bool {
 // hfCard is a Hugging Face search result with what's known about it here.
 type hfCard struct {
 	library.HFModel
-	Size      *sizeChip // estimated from the parameter count; nil if unknown
-	Installed bool
-	Active    *activeDL
-	CanLink   bool // the viewer is the admin, who can link Ollama to Hugging Face for gated repos
+	Size        *sizeChip // estimated from the parameter count; nil if unknown
+	Installed   bool
+	Active      *activeDL
+	Blacklisted []store.BlacklistEntry // its quants on the blacklist
+	CanLink     bool                   // the viewer is the admin, who can link Ollama to Hugging Face for gated repos
 }
 
 // activeDL is a queued or running download, for a status badge.
@@ -171,8 +177,13 @@ func (s *Server) discoverOllama(r *http.Request, st discoverState, filter bool, 
 		return err
 	}
 	cards := make([]discoverCard, 0, len(page.Models))
+	hiddenBL := 0
 	for _, m := range page.Models {
-		c := discoverCard{Model: m, Installed: local.installed[m.Name], Active: local.active[m.Name]}
+		c := discoverCard{Model: m, Installed: local.installed[m.Name], Active: local.active[m.Name], Blacklisted: local.blacklisted[m.Name]}
+		if st.HideBL && len(c.Blacklisted) > 0 {
+			hiddenBL++
+			continue
+		}
 		for _, label := range m.Sizes {
 			c.Sizes = append(c.Sizes, sizeChip{Label: label, Fit: sizeFit(label, snap)})
 		}
@@ -184,7 +195,8 @@ func (s *Server) discoverOllama(r *http.Request, st discoverState, filter bool, 
 		cards = append(cards, c)
 	}
 	data["Cards"] = cards
-	data["Hidden"] = len(page.Models) - len(cards)
+	data["Hidden"] = len(page.Models) - len(cards) - hiddenBL
+	data["HiddenBL"] = hiddenBL
 	if page.NextPage > 0 {
 		next := st
 		next.Page = page.NextPage
@@ -200,9 +212,14 @@ func (s *Server) discoverHF(r *http.Request, st discoverState, filter bool, loca
 	}
 	admin := s.isAdmin(r)
 	cards := make([]hfCard, 0, len(page.Models))
+	hiddenBL := 0
 	for _, m := range page.Models {
 		key := hfKey(m.Repo)
-		c := hfCard{HFModel: m, Installed: local.installed[key], Active: local.active[key], CanLink: admin}
+		c := hfCard{HFModel: m, Installed: local.installed[key], Active: local.active[key], Blacklisted: local.blacklisted[key], CanLink: admin}
+		if st.HideBL && len(c.Blacklisted) > 0 {
+			hiddenBL++
+			continue
+		}
 		if m.Params > 0 {
 			f := estimateFit(int64(float64(m.Params)*bytesPerParam), snap)
 			if f.Level != "unknown" {
@@ -216,7 +233,8 @@ func (s *Server) discoverHF(r *http.Request, st discoverState, filter bool, loca
 		cards = append(cards, c)
 	}
 	data["HFCards"] = cards
-	data["Hidden"] = len(page.Models) - len(cards)
+	data["Hidden"] = len(page.Models) - len(cards) - hiddenBL
+	data["HiddenBL"] = hiddenBL
 	if page.NextCursor != "" {
 		next := st
 		next.Cursor = page.NextCursor
@@ -228,11 +246,12 @@ func (s *Server) discoverHF(r *http.Request, st discoverState, filter bool, loca
 // tagRow is a downloadable tag (or Hugging Face file) with its state here.
 type tagRow struct {
 	library.Tag
-	Label     string // what the row shows: the full name for ollama.com, the quant for Hugging Face
-	Fit       fit
-	Installed bool
-	Active    *activeDL
-	AliasOf   string // an earlier tag with the same digest, e.g. latest -> 8b
+	Label       string // what the row shows: the full name for ollama.com, the quant for Hugging Face
+	Fit         fit
+	Installed   bool
+	Active      *activeDL
+	Blacklisted *store.BlacklistEntry
+	AliasOf     string // an earlier tag with the same digest, e.g. latest -> 8b
 }
 
 // handleDiscoverTags lists a library model's tags, for expanding its card.
@@ -283,13 +302,15 @@ func (s *Server) handleDiscoverHFFiles(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, "discover_tags", map[string]any{"Model": repo, "Tags": rows, "HF": true})
 }
 
-// tagRows pairs tags with their fit here and whether they're installed or
-// downloading. Tags sharing a digest are the same download, so each is
-// labelled with the first such tag, preferring a descriptive one ("8b") over
-// "latest", and counts as installed if any of them is.
+// tagRows pairs tags with their fit here and whether they're installed,
+// downloading or blacklisted. Tags sharing a digest are the same download, so
+// each is labelled with the first such tag, preferring a descriptive one
+// ("8b") over "latest", and counts as installed or blacklisted if any of them
+// is.
 func tagRows(tags []library.Tag, local localModels, snap sysinfo.Snapshot) []tagRow {
 	canon := map[string]string{}
 	haveDigest := map[string]bool{}
+	banned := map[string]*store.BlacklistEntry{} // by digest
 	for _, latest := range []bool{false, true} {
 		for _, t := range tags {
 			if t.Digest == "" || strings.HasSuffix(t.Name, ":latest") != latest {
@@ -301,12 +322,18 @@ func tagRows(tags []library.Tag, local localModels, snap sysinfo.Snapshot) []tag
 			if local.installed[tagKey(t.Name)] {
 				haveDigest[t.Digest] = true
 			}
+			if e := local.blacklistedTag(t); e != nil && banned[t.Digest] == nil {
+				banned[t.Digest] = e
+			}
 		}
 	}
 	rows := make([]tagRow, len(tags))
 	for i, t := range tags {
 		k := tagKey(t.Name)
 		rows[i] = tagRow{Tag: t, Label: t.Name, Fit: tagFit(t, snap), Installed: local.installed[k] || haveDigest[t.Digest], Active: local.active[k]}
+		if rows[i].Blacklisted = local.blacklistedTag(t); rows[i].Blacklisted == nil && t.Digest != "" {
+			rows[i].Blacklisted = banned[t.Digest]
+		}
 		if c := canon[t.Digest]; c != t.Name {
 			rows[i].AliasOf = c
 		}
@@ -314,16 +341,43 @@ func tagRows(tags []library.Tag, local localModels, snap sysinfo.Snapshot) []tag
 	return rows
 }
 
-// localModels is what's installed and what's downloading, keyed by model
-// (e.g. "qwen3", "hf.co/owner/repo") and by tag ("qwen3:8b",
+// localModels is what's installed, downloading and blacklisted, keyed by
+// model (e.g. "qwen3", "hf.co/owner/repo") and by tag ("qwen3:8b",
 // "hf.co/owner/repo:q4_k_m"; Hugging Face names are case-insensitive).
+// blacklisted has every entry under its model's key, and blacklistedTags
+// each under its tag's.
 type localModels struct {
-	installed map[string]bool
-	active    map[string]*activeDL
+	installed       map[string]bool
+	active          map[string]*activeDL
+	blacklisted     map[string][]store.BlacklistEntry
+	blacklistedTags map[string]*store.BlacklistEntry
+	blacklist       []store.BlacklistEntry
+}
+
+// blacklistedTag is t's blacklist entry: by name, or else by digest, which
+// catches an entry made under an alias (a model pulled as "qwen3" but
+// ollama.com listing it as "qwen3:8b"). ollama.com's digests are a prefix of
+// the full one Ollama reports.
+func (l localModels) blacklistedTag(t library.Tag) *store.BlacklistEntry {
+	if e := l.blacklistedTags[tagKey(t.Name)]; e != nil {
+		return e
+	}
+	if t.Digest == "" {
+		return nil
+	}
+	for i, e := range l.blacklist {
+		if strings.HasPrefix(e.Digest, t.Digest) {
+			return &l.blacklist[i]
+		}
+	}
+	return nil
 }
 
 func (s *Server) localModels(r *http.Request) localModels {
-	l := localModels{installed: map[string]bool{}, active: map[string]*activeDL{}}
+	l := localModels{
+		installed: map[string]bool{}, active: map[string]*activeDL{},
+		blacklisted: map[string][]store.BlacklistEntry{}, blacklistedTags: map[string]*store.BlacklistEntry{},
+	}
 	if all, err := s.ol.List(r.Context()); err == nil {
 		for _, m := range all {
 			if model, tag, ok := modelKeys(m.Name); ok {
@@ -334,7 +388,25 @@ func (s *Server) localModels(r *http.Request) localModels {
 	if dls, err := s.st.ActiveDownloads(r.Context()); err == nil {
 		l.addActive(dls, s.dl.Live())
 	}
+	if bl, err := s.st.Blacklist(r.Context()); err != nil {
+		s.log.Warn("read blacklist failed", "error", err)
+	} else {
+		l.addBlacklist(bl)
+	}
 	return l
+}
+
+// addBlacklist records blacklist entries, most recent first as given.
+func (l *localModels) addBlacklist(entries []store.BlacklistEntry) {
+	l.blacklist = entries
+	for i, e := range entries {
+		model, tag, ok := modelKeys(e.Model)
+		if !ok {
+			continue
+		}
+		l.blacklisted[model] = append(l.blacklisted[model], e)
+		l.blacklistedTags[tag] = &entries[i]
+	}
 }
 
 // addActive records queued and running downloads, with live's progress.
@@ -450,11 +522,12 @@ func formatCompact(n int) string {
 // a confirmation dialog if the model looks too big for this machine.
 func (s *Server) queueFromDiscover(w http.ResponseWriter, r *http.Request) {
 	input := r.FormValue("model")
+	unblacklist := strings.TrimSpace(r.FormValue("unblacklist"))
 	data := map[string]any{"Name": input, "Fragment": true} // Fragment: refresh the nav badge
 	c, err := s.dl.Check(r.Context(), input)
 	if err == nil && r.FormValue("confirm") == "" {
-		if concerns := s.resourceConcerns(c); len(concerns) > 0 {
-			data["Confirm"] = map[string]any{"Name": c.Name, "Size": c.Size, "Concerns": concerns}
+		if confirm := s.downloadConfirm(r, c, unblacklist); confirm != nil {
+			data["Confirm"] = confirm
 			s.render(w, r, "discover_dl_action", data)
 			return
 		}
@@ -475,5 +548,6 @@ func (s *Server) queueFromDiscover(w http.ResponseWriter, r *http.Request) {
 	s.log.Info("download queued", "model", c.Name, "by", currentUser(r).Username)
 	data["Queued"] = &activeDL{ID: id, Status: store.DownloadQueued, Percent: -1}
 	data["Warning"] = c.Warning
+	data["Unblacklisted"] = s.unblacklistQueued(r, unblacklist)
 	s.render(w, r, "discover_dl_action", data)
 }
