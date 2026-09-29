@@ -13,7 +13,10 @@
   {{template "nav" .}}
   <main>
     {{template "flash" .}}
+    {{/* This machine and what it's running, beside Ollama (whose update steps
+         can run long), then the graphs full width. */}}
     <div class="system-top">
+      <div class="system-left">
       <div class="panel">
         <h2>This machine</h2>
         <dl class="kv kv-2">
@@ -25,6 +28,8 @@
         </dl>
         <p class="muted system-note">Hardware figures are for the machine running this app. If Ollama runs somewhere else, they won't reflect its load; the loaded models list always comes from Ollama itself.</p>
       </div>
+      {{template "system_live.html" .}}
+      </div>
       {{template "ollama_panel" .}}
     </div>
 
@@ -35,8 +40,6 @@
       {{template "chart_card" (chartcard "gpu" "GPU" "Average utilisation across GPUs")}}
       {{template "chart_card" (chartcard "vram" "VRAM" "Memory in use across all GPUs")}}
     </div>
-
-    {{template "system_live.html" .}}
   </main>
   {{template "footer" .}}
   <script src="{{static "charts.js"}}"></script>

@@ -469,6 +469,9 @@
   /* The System page's top: this machine beside Ollama and its updates. */
   .system-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; margin-bottom: 20px; }
   .system-top > .panel { margin-bottom: 0; }
+  .system-left { display: grid; gap: 20px; min-width: 0; }
+  .system-left .panel { margin-bottom: 0; }
+  .system-left #system-live { display: grid; gap: 20px; }
   @media (max-width: 1000px) { .system-top { grid-template-columns: minmax(0, 1fr); } }
   dl.kv.kv-2 { grid-template-columns: max-content minmax(0, 1fr) max-content minmax(0, 1fr); }
   @media (max-width: 720px) { dl.kv.kv-2 { grid-template-columns: max-content minmax(0, 1fr); } }
@@ -516,7 +519,10 @@
   .disc-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; }
   .disc-tags summary { font-size: 14px; color: var(--accent); }
   .disc-tags[open] summary { margin-bottom: 8px; }
-  .disc-tag-table { max-height: 360px; overflow-y: auto; }
+  /* An expanded card takes the whole row, so its tag table isn't squeezed into one column of the grid. */
+  .disc-card:has(details.disc-tags[open]) { grid-column: 1 / -1; }
+  .disc-tag-table { max-height: 360px; overflow: auto; }
+  .disc-tag-table td.mono, .disc-tag-table th { white-space: nowrap; }
   .disc-tag-table td { vertical-align: top; }
   .disc-tag-table .badge { cursor: help; white-space: nowrap; }
   .disc-alias { font-family: inherit; font-size: 12px; }
