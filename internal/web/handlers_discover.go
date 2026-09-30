@@ -235,6 +235,7 @@ func (s *Server) discoverHF(r *http.Request, st discoverState, filter bool, loca
 	data["HFCards"] = cards
 	data["Hidden"] = len(page.Models) - len(cards) - hiddenBL
 	data["HiddenBL"] = hiddenBL
+	data["Unpullable"] = page.Unpullable
 	if page.NextCursor != "" {
 		next := st
 		next.Cursor = page.NextCursor

@@ -209,6 +209,11 @@ func fakeHF(t *testing.T) *httptest.Server {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/models":
+			if r.URL.Query().Get("search") == "layers" { // only a repo Ollama can't pull
+				fmt.Fprint(w, `[{"id":"someone/Big-Q2_K-layers","downloads":3,"likes":0,"gated":false,"gguf":{"total":400000000},
+					"siblings":[{"rfilename":"README.md"},{"rfilename":"layers/layer-000.gguf"},{"rfilename":"layers/layer-001.gguf"}]}]`)
+				return
+			}
 			if r.URL.Query().Get("cursor") == "" {
 				w.Header().Set("Link", `<`+"http://"+r.Host+`/api/models?cursor=p2>; rel="next"`)
 				fmt.Fprint(w, `[
@@ -378,5 +383,17 @@ func TestDiscoverAllBlacklisted(t *testing.T) {
 		if strings.Contains(body, `<h3 class="disc-name">`+name+`</h3>`) {
 			t.Errorf("%s should be hidden", name)
 		}
+	}
+}
+
+func TestDiscoverHidesUnpullableHFRepos(t *testing.T) {
+	hf := fakeHF(t)
+	h := newTestServer(t, fakeOllama(t, 1).URL, func(c *Config) { c.HFURL = hf.URL })
+	body := get(h, "/discover?src=hf&q=layers&fit=0", false).Body.String()
+	if strings.Contains(body, "someone/Big-Q2_K-layers") {
+		t.Error("a repo with no GGUF Ollama can pull shouldn't get a card")
+	}
+	if !strings.Contains(body, "Found 1 repo for “layers”, but none has a GGUF file Ollama can pull") {
+		t.Errorf("the page should say why nothing's shown:\n%s", body)
 	}
 }

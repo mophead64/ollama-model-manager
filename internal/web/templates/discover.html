@@ -97,6 +97,8 @@
   <div class="panel muted">None of the models found would run on this machine. Untick <em>Runs on this machine</em> to see them.</div>
   {{else if .HiddenBL}}
   <div class="panel muted">Every model found is on your blacklist. Untick <em>Hide blacklisted</em> to see them.</div>
+  {{else if .Unpullable}}
+  <div class="panel muted">Found {{.Unpullable}} {{if eq .Unpullable 1}}repo{{else}}repos{{end}}{{with .State.Query}} for “{{.}}”{{end}}, but none has a GGUF file Ollama can pull (for example, a model split into per-layer files for other tools).</div>
   {{else}}
   <div class="panel muted">No models found{{with .State.Query}} for “{{.}}”{{end}}.</div>
   {{end}}
