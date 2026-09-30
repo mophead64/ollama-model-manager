@@ -168,6 +168,9 @@
   .live-stats strong { color: var(--text); font-weight: 600; }
   .dl-form { display: flex; gap: 10px; flex-wrap: wrap; }
   .dl-form input[type=text] { flex: 1 1 320px; }
+  /* Discover's search box: room for a repo name, while the order picker and
+     button stay on the same line; it wraps below them on narrow screens. */
+  #d-q { flex: 1 1 280px; max-width: 520px; }
   /* Fixed layout so one long line (e.g. a signed URL in an error) wraps
      instead of stretching the table off the page. */
   .hints { border-left: 4px solid var(--b-amber); }
