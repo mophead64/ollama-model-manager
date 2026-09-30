@@ -21,7 +21,7 @@ func (s *Server) isAdmin(r *http.Request) bool {
 	return ok
 }
 
-// handleHuggingFace is the Account page's Hugging Face section, loaded after
+// handleHuggingFace is the Settings page's Hugging Face section, loaded after
 // the page since it asks Ollama and Hugging Face: Ollama's public key, for
 // linking Ollama to a Hugging Face account, and the state of HF_TOKEN.
 func (s *Server) handleHuggingFace(w http.ResponseWriter, r *http.Request) {

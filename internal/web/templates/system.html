@@ -325,7 +325,7 @@
     <p>The Ollama app updates itself: when an update's ready, choose <em>Restart to update</em> from its menu bar or tray icon. Or download the latest from <a href="https://ollama.com/download" target="_blank" rel="noopener noreferrer">ollama.com/download ↗</a>. With Homebrew:</p>
     {{template "copy_cmd" (copycmd "upd-brew" "brew upgrade ollama && brew services restart ollama")}}
   </details>
-  <p class="muted update-tips">Updating restarts Ollama: loaded models are unloaded, and downloads in progress pause (this app resumes them). Downloaded models are kept. It's worth a look at the <a href="https://github.com/ollama/ollama/releases" target="_blank" rel="noopener noreferrer">release notes ↗</a> for anything that's changed, and running <code>ollama --version</code> afterwards to check.</p>
+  <p class="muted update-tips">Updating restarts Ollama: loaded models are unloaded, and downloads in progress pause and pick up where they left off once Ollama is back. Downloaded models are kept. It's worth a look at the <a href="https://github.com/ollama/ollama/releases" target="_blank" rel="noopener noreferrer">release notes ↗</a> for anything that's changed, and running <code>ollama --version</code> afterwards to check.</p>
 </div>
 {{end}}
 

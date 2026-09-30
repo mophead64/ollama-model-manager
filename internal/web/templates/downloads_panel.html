@@ -3,6 +3,12 @@
   {{if .Fragment}}{{template "nav_dl_badge" .}}{{end}}
   <div class="panel">
     <h2>Queue</h2>
+    {{with .Waiting}}
+    <div class="notice warning queue-held" role="status">
+      <span><strong>Waiting for Ollama.</strong> Ollama at <code>{{$.OllamaURL}}</code> isn't answering (since {{ago .Since}}), so the queue is on hold. It carries on by itself once Ollama is back, and a download that was cut off resumes where it stopped.
+      <span class="queue-held-err">{{.Err}}</span></span>
+    </div>
+    {{end}}
     {{if not .Active}}
       <p class="muted" style="margin:0">Nothing queued. Models download one at a time in the background, so you can close the page once they're queued.</p>
     {{else}}
@@ -52,7 +58,7 @@
       </table>
       </div>
       {{else if eq (index .Active 0).Status "queued"}}
-      <p class="muted" style="margin:0"><span class="mono">{{(index .Active 0).Model}}</span> is next; starting shortly.</p>
+      <p class="muted" style="margin:0"><span class="mono">{{(index .Active 0).Model}}</span> is next; {{if .Waiting}}it starts once Ollama is back{{else}}starting shortly{{end}}.</p>
       {{end}}
     {{end}}
   </div>

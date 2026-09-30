@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strings"
 	"sync"
@@ -97,7 +98,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		s.render(w, r, "login.html", map[string]any{"Next": next, "Username": username, "Error": msg})
 	}
 
-	ip := clientIP(r)
+	ip := s.clientIP(r)
 	if !s.logins.allow(ip) {
 		fail(http.StatusTooManyRequests, "Too many failed attempts. Wait a few minutes and try again.")
 		return
@@ -135,8 +136,14 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
 }
 
+// accountData is what the Settings page needs whatever else it shows: the
+// admin-only panels depend on IsAdmin and Env.
+func (s *Server) accountData(r *http.Request) map[string]any {
+	return map[string]any{"ErrorForm": "", "IsAdmin": s.isAdmin(r), "Env": s.cfg.Env}
+}
+
 func (s *Server) handleAccount(w http.ResponseWriter, r *http.Request) {
-	data := map[string]any{"ErrorForm": "", "IsAdmin": s.isAdmin(r), "Env": s.cfg.Env}
+	data := s.accountData(r)
 	switch r.URL.Query().Get("done") {
 	case "username":
 		data["Notice"] = "Username updated."
@@ -180,15 +187,13 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/account?done=password", http.StatusSeeOther)
 }
 
-// accountError re-renders the account page with an error against one form,
+// accountError re-renders the Settings page with an error against one form,
 // keeping what the user typed in the username field.
 func (s *Server) accountError(w http.ResponseWriter, r *http.Request, form, msg, username string) {
+	data := s.accountData(r)
+	data["ErrorForm"], data["Error"], data["NewUsername"] = form, msg, username
 	w.WriteHeader(http.StatusBadRequest)
-	s.render(w, r, "account.html", map[string]any{
-		"ErrorForm":   form,
-		"Error":       msg,
-		"NewUsername": username,
-	})
+	s.render(w, r, "account.html", data)
 }
 
 func setSessionCookie(w http.ResponseWriter, r *http.Request, token string) {
@@ -225,12 +230,76 @@ func safeNext(next string) string {
 	return next
 }
 
-func clientIP(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
+// clientIP is the address a request came from. Behind a trusted reverse proxy
+// (TRUSTED_PROXIES) that's the nearest address in X-Forwarded-For that isn't
+// one of the proxies: each proxy appends the address it got the request from,
+// so the header is read from the right, and anything further left than the
+// first untrusted address could have been made up by the client. Otherwise
+// it's the connection's own address, since anyone can send the header.
+func (s *Server) clientIP(r *http.Request) string {
+	remote := r.RemoteAddr
+	if host, _, err := net.SplitHostPort(remote); err == nil {
+		remote = host
 	}
-	return host
+	if !s.trustedProxy(remote) {
+		return remote
+	}
+	var hops []string
+	for _, v := range r.Header.Values("X-Forwarded-For") {
+		for _, h := range strings.Split(v, ",") {
+			if h = strings.TrimSpace(h); h != "" {
+				hops = append(hops, h)
+			}
+		}
+	}
+	for i := len(hops) - 1; i >= 0; i-- {
+		if !s.trustedProxy(hops[i]) {
+			return hops[i]
+		}
+	}
+	if len(hops) > 0 {
+		return hops[0] // every hop is a trusted proxy: the first is the furthest back
+	}
+	return remote
+}
+
+// trustedProxy reports whether addr (an IP, maybe with a port) is in TRUSTED_PROXIES.
+func (s *Server) trustedProxy(addr string) bool {
+	if len(s.cfg.TrustedProxies) == 0 {
+		return false
+	}
+	ip, err := netip.ParseAddr(addr)
+	if err != nil {
+		ap, err := netip.ParseAddrPort(addr)
+		if err != nil {
+			return false
+		}
+		ip = ap.Addr()
+	}
+	ip = ip.Unmap()
+	for _, p := range s.cfg.TrustedProxies {
+		if p.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+// ParseTrustedProxies reads TRUSTED_PROXIES: IP addresses and CIDR ranges,
+// separated by commas or spaces (e.g. "172.18.0.0/16, 10.0.0.5"). Entries it
+// can't read are returned separately, to be reported.
+func ParseTrustedProxies(v string) (proxies []netip.Prefix, invalid []string) {
+	for _, f := range strings.FieldsFunc(v, func(r rune) bool { return r == ',' || r == ' ' || r == '\t' }) {
+		if p, err := netip.ParsePrefix(f); err == nil {
+			proxies = append(proxies, p.Masked())
+		} else if ip, err := netip.ParseAddr(f); err == nil {
+			ip = ip.Unmap()
+			proxies = append(proxies, netip.PrefixFrom(ip, ip.BitLen()))
+		} else {
+			invalid = append(invalid, f)
+		}
+	}
+	return proxies, invalid
 }
 
 func capitalise(s string) string {

@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strings"
 
@@ -33,6 +34,9 @@ type Config struct {
 	HFURL       string   // Hugging Face; "" for the real one
 	HFToken     string   // optional Hugging Face access token (HF_TOKEN)
 	Env         []EnvVar // the environment settings in effect, for the Settings page
+	// Reverse proxies whose X-Forwarded-For is believed (TRUSTED_PROXIES), so
+	// logins are rate limited and logged by the browser's address, not the proxy's.
+	TrustedProxies []netip.Prefix
 }
 
 // EnvVar describes one environment variable the app reads, as it took effect.

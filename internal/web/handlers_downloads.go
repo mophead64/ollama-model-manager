@@ -81,6 +81,9 @@ func (s *Server) downloadsData(r *http.Request) (map[string]any, error) {
 		"HistoryTotal": total,
 		"Page":         page,
 		"TotalPages":   totalPages,
+		// Set while the queue is held because Ollama isn't answering.
+		"Waiting":   s.dl.Waiting(),
+		"OllamaURL": s.ol.BaseURL(),
 		// Poll quickly while something's happening, lazily otherwise (to pick
 		// up downloads queued from another browser).
 		"PollEvery": map[bool]string{true: "2s", false: "15s"}[len(active) > 0],

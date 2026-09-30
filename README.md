@@ -108,7 +108,7 @@ However you run it, the first start creates an `admin` account with a random pas
   Initial admin account created
     username: admin
     password: <24 random characters>
-  Change these from the Account page after logging in.
+  Change these from the Settings page after logging in.
   This password won't be shown again.
 ==============================================================
 ```
@@ -146,6 +146,7 @@ With Docker Desktop (macOS, Windows) or similar, where `host.docker.internal` re
 ```sh
 docker run -d --name ollama-model-manager -p 8080:8080 \
   -e OLLAMA_HOST=http://host.docker.internal:11434 \
+  -e TZ=Europe/London \
   -v omm-data:/data \
   -v ~/.ollama/models:/models:ro \
   ghcr.io/mophead64/ollama-model-manager:latest
@@ -158,12 +159,14 @@ On a Linux server with Ollama installed natively, share the host's network so th
 
 ```sh
 docker run -d --name ollama-model-manager --network host \
+  -e TZ=Europe/London \
   -v omm-data:/data \
   -v /usr/share/ollama/.ollama/models:/models:ro \
   ghcr.io/mophead64/ollama-model-manager:latest
 ```
 
-The models folder mount is optional and read-only: it's only used to show free disk space.
+The models folder mount is optional and read-only: it's only used to show free disk space. Set `TZ` to your time zone:
+containers run on UTC otherwise, so times and usage history's days would be off.
 
 ### Docker Compose on Linux (with NVIDIA GPUs)
 
@@ -209,6 +212,8 @@ Everything is set with environment variables:
 | `MODELS_DIR` | auto-detected | Ollama's models folder, for the free disk space tile. Found automatically in the usual places and at `/models` |
 | `ALLOW_MODEL_DELETE` | `true` | `false` hides the Delete buttons and refuses deletions |
 | `HF_TOKEN` | not set | Optional Hugging Face read token, for browsing private repos (see [the guide](docs/discovery.md#gated-and-private-hugging-face-models)) |
+| `TZ` | the system's (UTC in Docker) | Time zone for the times shown and usage history's days, e.g. `Europe/London` |
+| `TRUSTED_PROXIES` | not set | Behind a reverse proxy, its address or range (e.g. `172.18.0.0/16`, comma-separated for several), so logins are rate limited and logged by the browser's address rather than the proxy's |
 
 Hardware stats and fit estimates are for the machine running this app. If you point `OLLAMA_HOST` at Ollama on another
 machine, model management works as normal, but the System page and Discover's fit checks describe this machine, not

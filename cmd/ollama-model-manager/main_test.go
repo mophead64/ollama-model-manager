@@ -24,8 +24,10 @@ func TestDescribeEnvHidesTokenAndReportsSources(t *testing.T) {
 	t.Setenv("MODELS_DIR", "")
 	t.Setenv("ALLOW_MODEL_DELETE", "maybe")
 	t.Setenv("HF_TOKEN", "hf_supersecret")
+	t.Setenv("TRUSTED_PROXIES", "172.18.0.0/16, nonsense")
+	t.Setenv("TZ", "")
 
-	env := describeEnv("8080", "http://gpu-box:11434", "/data/omm.db", "", true, true)
+	env := describeEnv("8080", "http://gpu-box:11434", "/data/omm.db", "", true, true, true)
 	got := map[string][2]string{}
 	for _, e := range env {
 		if strings.Contains(e.Value, "hf_") {
@@ -39,9 +41,13 @@ func TestDescribeEnvHidesTokenAndReportsSources(t *testing.T) {
 		"MODELS_DIR":         {"", "not found"},
 		"ALLOW_MODEL_DELETE": {"true", "invalid, using default"},
 		"HF_TOKEN":           {"set", "set"},
+		"TRUSTED_PROXIES":    {"172.18.0.0/16, nonsense", "invalid entries ignored"},
 	} {
 		if got[name] != want {
 			t.Errorf("%s = %v, want %v", name, got[name], want)
 		}
+	}
+	if tz := got["TZ"]; tz[1] != "not set" || !strings.Contains(tz[0], "(UTC") {
+		t.Errorf("TZ = %v, want the zone in effect and \"not set\"", tz)
 	}
 }

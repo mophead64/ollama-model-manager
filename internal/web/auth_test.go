@@ -181,6 +181,25 @@ func TestCrossOriginPostRejected(t *testing.T) {
 	}
 }
 
+func TestAccountErrorKeepsAdminPanels(t *testing.T) {
+	h := authServer(t)
+	c := login(t, h, "admin", "test-password")
+	if body := do(h, "GET", "/account", nil, c).Body.String(); !strings.Contains(body, `id="huggingface"`) {
+		t.Fatal("the admin's Settings page should have the Hugging Face panel")
+	}
+	// A failed change re-renders the page: it should still be the admin's.
+	for _, path := range []string{"/account/username", "/account/password"} {
+		rec := do(h, "POST", path, url.Values{"username": {"x"}, "current_password": {"wrong"}}, c)
+		body := rec.Body.String()
+		if rec.Code != http.StatusBadRequest || !strings.Contains(body, "Current password is incorrect.") {
+			t.Fatalf("%s: %d, want the error re-rendered", path, rec.Code)
+		}
+		if !strings.Contains(body, `id="huggingface"`) || strings.Contains(body, "account-layout single") {
+			t.Errorf("%s: the error page lost the admin panels", path)
+		}
+	}
+}
+
 func TestAccountDialogs(t *testing.T) {
 	h := authServer(t)
 	c := login(t, h, "admin", "test-password")
@@ -229,5 +248,57 @@ func TestAccountConfigurationPanel(t *testing.T) {
 	token, _ := testStore.CreateSession(ctx, other.ID)
 	if acct := do(h, "GET", "/account", nil, &http.Cookie{Name: sessionCookie, Value: token}).Body.String(); strings.Contains(acct, `id="configuration"`) {
 		t.Error("non-admin sees the configuration panel")
+	}
+}
+
+func TestClientIP(t *testing.T) {
+	proxies, invalid := ParseTrustedProxies("10.0.0.0/8, ::1")
+	if len(invalid) != 0 {
+		t.Fatal(invalid)
+	}
+	behind := &Server{cfg: Config{TrustedProxies: proxies}}
+	direct := &Server{}
+	for _, c := range []struct {
+		name   string
+		s      *Server
+		remote string
+		xff    []string
+		want   string
+	}{
+		{"no proxies configured: the header is ignored", direct, "10.0.0.2:5000", []string{"1.2.3.4"}, "10.0.0.2"},
+		{"untrusted connection: the header is ignored", behind, "192.168.1.9:5000", []string{"1.2.3.4"}, "192.168.1.9"},
+		{"via a trusted proxy", behind, "10.0.0.2:5000", []string{"1.2.3.4"}, "1.2.3.4"},
+		{"a made-up address from the client is skipped", behind, "10.0.0.2:5000", []string{"6.6.6.6, 1.2.3.4"}, "1.2.3.4"},
+		{"through two trusted proxies", behind, "10.0.0.2:5000", []string{"1.2.3.4, 10.0.0.9"}, "1.2.3.4"},
+		{"headers split over several lines", behind, "10.0.0.2:5000", []string{"6.6.6.6", "1.2.3.4"}, "1.2.3.4"},
+		{"trusted proxy, no header", behind, "10.0.0.2:5000", nil, "10.0.0.2"},
+		{"IPv6 proxy", behind, "[::1]:5000", []string{"2001:db8::7"}, "2001:db8::7"},
+	} {
+		r := httptest.NewRequest("POST", "/login", nil)
+		r.RemoteAddr = c.remote
+		for _, v := range c.xff {
+			r.Header.Add("X-Forwarded-For", v)
+		}
+		if got := c.s.clientIP(r); got != c.want {
+			t.Errorf("%s: clientIP = %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
+func TestParseTrustedProxies(t *testing.T) {
+	proxies, invalid := ParseTrustedProxies(" 172.18.3.4/16, 10.0.0.5 ::1,,nonsense ")
+	if len(proxies) != 3 || len(invalid) != 1 || invalid[0] != "nonsense" {
+		t.Fatalf("proxies = %v, invalid = %v", proxies, invalid)
+	}
+	s := &Server{cfg: Config{TrustedProxies: proxies}}
+	for addr, want := range map[string]bool{
+		"172.18.200.1": true, "172.19.0.1": false, // the range, masked
+		"10.0.0.5": true, "10.0.0.6": false, // a single address
+		"::1": true, "[::1]:8080": true, "::ffff:10.0.0.5": true, // with a port, and IPv4-mapped
+		"not-an-ip": false,
+	} {
+		if got := s.trustedProxy(addr); got != want {
+			t.Errorf("trustedProxy(%q) = %v, want %v", addr, got, want)
+		}
 	}
 }
