@@ -16,7 +16,7 @@ func TestOllamaUpdate(t *testing.T) {
 	}
 
 	// A newer release.
-	testServer.ollamaUp.releases.url = fakeGitHub(t, "v0.12.5", "")
+	testServer.ollamaUp.releases.url = fakeGitHub(t, "v0.12.5", "Some **notes**.")
 	testServer.refreshOllamaUpdate(context.Background(), true)
 	if body := get(h, "/models", false).Body.String(); !strings.Contains(body, `<span class="nav-dot warn" role="img" aria-label="Ollama update available" title="Ollama v0.12.5 is available (running 0.12.3)">`) {
 		t.Error("the nav's System link should have an orange dot")
@@ -24,6 +24,7 @@ func TestOllamaUpdate(t *testing.T) {
 	page := get(h, "/system", false).Body.String()
 	for _, want := range []string{
 		`<span class="mono">0.12.3</span>`, "Update available: v0.12.5", "Ollama <strong>v0.12.5</strong> is out",
+		"<summary>Release notes for v0.12.5</summary>", "<strong>notes</strong>", "How to update depends on how Ollama was installed",
 		`hx-get="/system/ollama" hx-trigger="load"`, "check now",
 		`value="docker compose pull ollama &amp;&amp; docker compose up -d ollama"`, `value="docker pull ollama/ollama:latest"`,
 		`value="curl -fsSL https://ollama.com/install.sh | sh"`,
@@ -35,7 +36,7 @@ func TestOllamaUpdate(t *testing.T) {
 			t.Errorf("system page missing %q", want)
 		}
 	}
-	if strings.Contains(page, `<details class="ollama-how">`) {
+	if strings.Contains(page, "<summary>How to update Ollama</summary>") {
 		t.Error("with an update out, the steps should be shown, not folded away")
 	}
 
@@ -43,7 +44,7 @@ func TestOllamaUpdate(t *testing.T) {
 	testServer.ollamaUp.releases.url = fakeGitHub(t, "v0.12.3", "")
 	testServer.ollamaUp.releases.expiry = time.Time{} // as if the cache had run out ("check now" is rate limited)
 	frag := get(h, "/system/ollama?force=1", true).Body.String()
-	for _, want := range []string{`<span class="badge on">✓ Up to date</span>`, `<details class="ollama-how"><summary>How to update Ollama</summary>`, "Checked"} {
+	for _, want := range []string{`<span class="badge on">✓ Up to date</span>`, "<summary>Release notes for v0.12.3</summary>", `<details class="status-more"><summary>How to update Ollama</summary>`, "Checked"} {
 		if !strings.Contains(frag, want) {
 			t.Errorf("up to date panel missing %q", want)
 		}

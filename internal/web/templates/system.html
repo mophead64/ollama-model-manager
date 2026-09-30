@@ -13,10 +13,10 @@
   {{template "nav" .}}
   <main>
     {{template "flash" .}}
-    {{/* This machine and what it's running, beside Ollama (whose update steps
-         can run long), then the graphs full width. */}}
+    {{/* This machine beside the model library, then GPUs, what's loaded and
+         the graphs, then Ollama beside this app (with their update steps full
+         width beneath when there's an update). */}}
     <div class="system-top">
-      <div class="system-left">
       <div class="panel">
         <h2>This machine</h2>
         <dl class="kv kv-2">
@@ -28,10 +28,9 @@
         </dl>
         <p class="muted system-note">Hardware figures are for the machine running this app. If Ollama runs somewhere else, they won't reflect its load; the loaded models list always comes from Ollama itself.</p>
       </div>
-      {{template "system_live.html" .}}
-      </div>
-      {{template "ollama_panel" .}}
+      {{template "library_panel" .}}
     </div>
+    {{template "system_live.html" .}}
 
     {{/* Drawn and kept live by static/charts.js from /system/history. */}}
     <div class="chart-grid" data-charts="/system/history">
@@ -40,11 +39,41 @@
       {{template "chart_card" (chartcard "gpu" "GPU" "Average utilisation across GPUs")}}
       {{template "chart_card" (chartcard "vram" "VRAM" "Memory in use across all GPUs")}}
     </div>
+
+    <div class="system-versions">
+      {{template "ollama_panel" .}}
+      {{template "app_panel" .}}
+    </div>
   </main>
   {{template "footer" .}}
   <script src="{{static "charts.js"}}"></script>
 </body>
 </html>
+{{end}}
+
+{{/* How many models Ollama has and the space they take, with the free space
+     on the disk they're on when that's known (MODELS_DIR). */}}
+{{define "library_panel"}}
+<div class="panel">
+  <div class="row between">
+    <h2 style="margin:0">Models</h2>
+    <a class="hint-link" style="margin:0" href="/models">All models →</a>
+  </div>
+  {{if .LibraryErr}}
+  <div class="error-box" style="margin:14px 0 0">Couldn't ask Ollama for its models: {{.LibraryErr}}</div>
+  {{else}}
+  <div class="library-stats">
+    <div><div class="value">{{.Count}}</div><div class="label">models installed</div></div>
+    <div><div class="value">{{bytes .TotalBytes}}</div><div class="label">storage used by models</div></div>
+  </div>
+  {{with .Disk}}
+  <div class="library-disk">
+    <div class="row between"><span class="muted">{{bytes (int64 .Free)}} free of {{bytes (int64 .Total)}} on the models disk</span><strong>{{printf "%.0f" .UsedPercent}}% used</strong></div>
+    <div class="progress-bar"><div class="fill{{if gt .UsedPercent 90.0}} low{{end}}" style="width: {{printf "%.1f" .UsedPercent}}%"></div></div>
+  </div>
+  {{end}}
+  {{end}}
+</div>
 {{end}}
 
 {{define "chart_card"}}
@@ -163,12 +192,15 @@
 </div>
 {{end}}
 
-{{/* Ollama's version, whether there's a newer release, and how to update.
-     Checked in the background (RunOllamaUpdateChecks); re-checks itself when
-     the page loads, and on "check now". */}}
+{{/* Ollama's version, whether there's a newer release, its release notes and
+     how to update. Checked in the background (RunOllamaUpdateChecks); re-checks
+     itself when the page loads, and on "check now". The section is display:
+     contents, so the panel sits in the page's grid and the update panel (when
+     there's an update) spans the row beneath. app_panel is laid out the same. */}}
 {{define "ollama_panel"}}
 {{$u := .OllamaUpdate}}
-<div class="panel ollama-panel" id="ollama-panel"{{if not .Fragment}} hx-get="/system/ollama" hx-trigger="load" hx-swap="outerHTML"{{end}}>
+<div class="system-section" id="ollama-section"{{if not .Fragment}} hx-get="/system/ollama" hx-trigger="load" hx-swap="outerHTML"{{end}}>
+<div class="panel status-panel" id="ollama-panel">
   <div class="row between">
     <h2 style="margin:0">Ollama</h2>
     <a class="hint-link" style="margin:0" href="https://github.com/ollama/ollama/releases" target="_blank" rel="noopener noreferrer">Releases ↗</a>
@@ -185,24 +217,85 @@
     <dt>Checked</dt>
     <dd>
       {{if $u.CheckedAt.IsZero}}<span class="muted">not yet</span>{{else}}<span class="tip-wrap" tabindex="0">{{ago $u.CheckedAt}}<span class="tip" role="tooltip">{{time $u.CheckedAt}}</span></span>{{end}}
-      · <button type="button" class="link" hx-get="/system/ollama?force=1" hx-target="#ollama-panel" hx-swap="outerHTML">check now</button>
+      · <button type="button" class="link" hx-get="/system/ollama?force=1" hx-target="#ollama-section" hx-swap="outerHTML">check now</button>
     </dd>
   </dl>
-  {{if $u.Available}}
-  <div class="ollama-update-lead">
-    <p>Ollama <strong>{{$u.Latest}}</strong> is out{{if not $u.Published.IsZero}} ({{ago $u.Published}}){{end}}. Keeping Ollama up to date matters more than for most apps:</p>
+  {{if not $u.Available}}
+  {{if $u.Latest}}{{template "release_notes" $u}}{{end}}
+  <details class="status-more"><summary>How to update Ollama</summary>{{template "ollama_update_steps" $u}}</details>
+  {{end}}
+</div>
+{{if $u.Available}}
+<div class="panel system-update-panel">
+  <h2>Update Ollama to {{$u.Latest}}</h2>
+  <div class="update-lead">
+    <p>Ollama <strong>{{$u.Latest}}</strong> is out{{if not $u.Published.IsZero}} ({{ago $u.Published}}){{end}}, and you're running <span class="mono">{{$u.Running}}</span>. Keeping Ollama up to date matters more than for most apps:</p>
     <ul>
       <li><strong>New models need it.</strong> Recently released models often use architectures older versions can't load, so they fail to download or run (“requires a newer version of Ollama”, “unknown model architecture”).</li>
       <li><strong>Downloads from Hugging Face</strong> rely on it too: older versions can't follow some of its newer download hosts.</li>
       <li><strong>Speed, memory use and GPU support</strong> improve from release to release, along with fixes for tool calling, templates and bugs.</li>
     </ul>
-    <p>The <a href="{{$u.URL}}" target="_blank" rel="noopener noreferrer">release notes ↗</a> say what's changed in this one. How to update depends on how Ollama was installed:</p>
   </div>
+  {{template "release_notes" $u}}
+  <p class="update-how">How to update depends on how Ollama was installed:</p>
   {{template "ollama_update_steps" $u}}
-  {{else}}
-  <details class="ollama-how"><summary>How to update Ollama</summary>{{template "ollama_update_steps" $u}}</details>
+</div>
+{{end}}
+</div>
+{{end}}
+
+{{/* This app's version, whether there's a newer release, its release notes
+     and how to update, laid out as ollama_panel. The page renders the last
+     check without asking GitHub; the panel then re-checks itself, and on
+     "check now". */}}
+{{define "app_panel"}}
+{{$u := .AppUpdate}}
+<div class="system-section" id="app-section"{{if not .Fragment}} hx-get="/system/app" hx-trigger="load" hx-swap="outerHTML"{{end}}>
+<div class="panel status-panel" id="app-panel">
+  <div class="row between">
+    <h2 style="margin:0">Ollama Model Manager</h2>
+    <a class="hint-link" style="margin:0" href="https://github.com/mophead64/ollama-model-manager/releases" target="_blank" rel="noopener noreferrer">Releases ↗</a>
+  </div>
+  <dl class="kv">
+    <dt>Version</dt>
+    <dd>
+      <span class="mono">{{.Version}}</span>
+      {{if $u.Available}}<a class="badge update" href="{{$u.URL}}" target="_blank" rel="noopener noreferrer" title="Release notes">Update available: {{$u.Latest}}</a>
+      {{else if $u.Current}}<span class="badge on">✓ Up to date</span>
+      {{else if and .Fragment (not $u.Checked)}}<span class="muted">(couldn't check GitHub for the latest release)</span>{{end}}
+    </dd>
+    <dt>Checked</dt>
+    <dd>
+      {{if $u.CheckedAt.IsZero}}<span class="muted">not yet</span>{{else}}<span class="tip-wrap" tabindex="0">{{ago $u.CheckedAt}}<span class="tip" role="tooltip">{{time $u.CheckedAt}}</span></span>{{end}}
+      · <button type="button" class="link" hx-get="/system/app?force=1" hx-target="#app-section" hx-swap="outerHTML">check now</button>
+    </dd>
+  </dl>
+  {{if not $u.Available}}
+  {{if $u.Latest}}{{template "release_notes" $u}}{{end}}
+  <details class="status-more"><summary>How to update Ollama Model Manager</summary>{{template "app_update_steps" $u}}</details>
   {{end}}
 </div>
+{{if $u.Available}}
+<div class="panel system-update-panel">
+  <h2>Update Ollama Model Manager to {{$u.Latest}}</h2>
+  <div class="update-lead">
+    <p>Ollama Model Manager <strong>{{$u.Latest}}</strong> is out{{if not $u.Published.IsZero}} ({{ago $u.Published}}){{end}}, and you're running <span class="mono">{{.Version}}</span>. Accounts, downloads, usage history, tests and the blacklist are all kept across updates.</p>
+  </div>
+  {{template "release_notes" $u}}
+  <p class="update-how">How to update depends on how you run it:</p>
+  {{template "app_update_steps" $u}}
+</div>
+{{end}}
+</div>
+{{end}}
+
+{{/* A release's notes, folded away. Takes an ollamaUpdate or updateInfo. */}}
+{{define "release_notes"}}
+<details class="status-more">
+  <summary>Release notes for {{.Latest}}</summary>
+  <p class="muted release-meta">{{if not .Published.IsZero}}<span title="{{time .Published}}">Published {{ago .Published}}</span> · {{end}}<a href="{{.URL}}" target="_blank" rel="noopener noreferrer">View on GitHub ↗</a></p>
+  {{with .Notes}}<div class="release-notes">{{.}}</div>{{else}}<p class="muted">This release has no notes.</p>{{end}}
+</details>
 {{end}}
 
 {{define "ollama_update_steps"}}
@@ -233,6 +326,40 @@
     {{template "copy_cmd" (copycmd "upd-brew" "brew upgrade ollama && brew services restart ollama")}}
   </details>
   <p class="muted update-tips">Updating restarts Ollama: loaded models are unloaded, and downloads in progress pause (this app resumes them). Downloaded models are kept. It's worth a look at the <a href="https://github.com/ollama/ollama/releases" target="_blank" rel="noopener noreferrer">release notes ↗</a> for anything that's changed, and running <code>ollama --version</code> afterwards to check.</p>
+</div>
+{{end}}
+
+{{/* How to update this app, however it's run (as in each release's notes,
+     ci.yml). Takes updateInfo, for the release's downloads. */}}
+{{define "app_update_steps"}}
+<div class="update-steps">
+  <details open>
+    <summary>Docker Compose</summary>
+    <p>From the folder with your compose file, pull the new image and recreate the container:</p>
+    {{template "copy_cmd" (copycmd "app-compose" "docker compose pull && docker compose up -d")}}
+    <p>With <code>docker-compose-deploy-linux.yml</code>, which always pulls, running <code>up -d</code> again is enough:</p>
+    {{template "copy_cmd" (copycmd "app-compose-linux" "docker compose -f docker-compose-deploy-linux.yml up -d")}}
+    <p>If your compose file builds from source (<code>docker-compose.yml</code> in a checkout), pull the code and rebuild instead:</p>
+    {{template "copy_cmd" (copycmd "app-compose-build" "git pull && docker compose up -d --build")}}
+  </details>
+  <details>
+    <summary>docker run</summary>
+    <p>Pull the new image, then remove the container and run your same <code>docker run</code> command again. The database is in the <code>/data</code> volume, so it carries over.</p>
+    {{template "copy_cmd" (copycmd "app-docker" "docker pull ghcr.io/mophead64/ollama-model-manager:latest")}}
+    {{template "copy_cmd" (copycmd "app-docker-rm" "docker rm -f ollama-model-manager")}}
+  </details>
+  <details>
+    <summary>Standalone binary</summary>
+    <p>Download the archive for your system from the {{if .URL}}<a href="{{.URL}}" target="_blank" rel="noopener noreferrer">release ↗</a>{{else}}<a href="https://github.com/mophead64/ollama-model-manager/releases" target="_blank" rel="noopener noreferrer">releases ↗</a>{{end}}, stop the app, replace the old executable with the new one and start it again. Leave <code>omm.db</code> where it is.</p>
+    <p>The binaries aren't code-signed yet, so the new one needs the same nudge as the first: on Windows, choose <em>More info</em> → <em>Run anyway</em> if SmartScreen stops it; on macOS, clear the quarantine flag in its folder:</p>
+    {{template "copy_cmd" (copycmd "app-xattr" "xattr -d com.apple.quarantine ollama-model-manager")}}
+  </details>
+  <details>
+    <summary>From source</summary>
+    <p>Pull the code, then build and start it again (<code>run-local.bat</code> on Windows):</p>
+    {{template "copy_cmd" (copycmd "app-source" "git pull && ./run-local.sh")}}
+  </details>
+  <p class="muted update-tips">Updating restarts this app. You stay signed in, and downloads and tests in progress carry on once it's back. Ollama and its models aren't affected. The version in the footer confirms the update.</p>
 </div>
 {{end}}
 

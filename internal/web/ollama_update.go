@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"html/template"
 	"net/http"
 	"strings"
 	"sync"
@@ -20,9 +21,10 @@ const (
 
 // ollamaUpdate is whether the Ollama server has a newer release to update to.
 type ollamaUpdate struct {
-	Running   string // Ollama's version, e.g. "0.12.3"; "" if it couldn't be asked
-	Latest    string // the latest release's tag, e.g. "v0.12.5"; "" if GitHub couldn't be asked
-	URL       string // its release notes
+	Running   string        // Ollama's version, e.g. "0.12.3"; "" if it couldn't be asked
+	Latest    string        // the latest release's tag, e.g. "v0.12.5"; "" if GitHub couldn't be asked
+	URL       string        // its release notes
+	Notes     template.HTML // them, rendered from Markdown
 	Published time.Time
 	Available bool // Latest is newer than Running
 	Current   bool // Running is the latest release
@@ -85,7 +87,7 @@ func (s *Server) refreshOllamaUpdate(ctx context.Context, force bool) ollamaUpda
 		u.Running = strings.TrimSpace(v)
 	}
 	if rel := s.ollamaUp.releases.check(ctx, force); rel.Checked {
-		u.Latest, u.URL, u.Published = rel.Latest, rel.URL, rel.Published
+		u.Latest, u.URL, u.Notes, u.Published = rel.Latest, rel.URL, rel.Notes, rel.Published
 	}
 	u.compare()
 	s.ollamaUp.mu.Lock()

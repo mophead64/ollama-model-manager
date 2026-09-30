@@ -47,7 +47,20 @@ func (s *Server) handleSystem(w http.ResponseWriter, r *http.Request) {
 	// The latest release as last checked, against Ollama's version now; the
 	// panel re-checks GitHub itself once shown, if that's due.
 	data["OllamaUpdate"] = s.withRunning(r.Context())
+	// This app's last check, likewise re-checked by its panel once shown.
+	data["AppUpdate"] = s.updates.last()
 	data["WindowMinutes"] = int(s.sys.Window() / time.Minute)
+	if all, err := s.ol.List(r.Context()); err != nil {
+		s.log.Warn("list models failed", "error", err)
+		data["LibraryErr"] = err.Error()
+	} else {
+		var total int64
+		for _, m := range all {
+			total += m.Size
+		}
+		data["Count"], data["TotalBytes"] = len(all), total
+		data["Disk"] = s.diskUsage()
+	}
 	s.render(w, r, "system.html", data)
 }
 

@@ -84,13 +84,14 @@ see tokens, tokens per second and response time for each reply. Nothing is saved
 
 ![Chat: a reply from qwen3:8b, with its thinking folded away and its speed underneath](docs/images/chat.png)
 
-### System monitoring and Ollama updates
-Live graphs of CPU, memory, GPU and VRAM use, each GPU's memory and utilisation, and what's loaded. NVIDIA GPUs are read
-with `nvidia-smi`, AMD and Intel GPUs from `/sys`, and Apple silicon natively. The System page also checks for new
-Ollama releases, says why they matter (new models often need them), and shows how to update for Docker, the Linux
-install script (backing up your `ollama.service` settings first), macOS and Windows.
+### System monitoring and updates
+Live graphs of CPU, memory, GPU and VRAM use, each GPU's memory and utilisation, what's loaded, and how many models you
+have and the space they take. NVIDIA GPUs are read with `nvidia-smi`, AMD and Intel GPUs from `/sys`, and Apple silicon
+natively. The System page also checks for new releases of Ollama and of this app. For Ollama, it says why they matter
+(new models often need them) and shows how to update for Docker, the Linux install script (backing up your
+`ollama.service` settings first), macOS and Windows; for this app, it shows the release notes, which say how to update.
 
-![The System page: this machine, GPUs and loaded models beside Ollama's version and update steps, then the live graphs](docs/images/system.png)
+![The System page: this machine and the model library, GPUs, loaded models and live graphs, then Ollama's and this app's versions](docs/images/system.png)
 
 ### And also
 - Sign-in required, with a username and password you can change from Settings.

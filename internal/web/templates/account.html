@@ -60,11 +60,6 @@
       </div>
     </div>
     {{end}}
-    {{/* Filled in after the page loads: it asks GitHub. */}}
-    <div class="panel account-panel" id="release">
-      <h2>Latest release</h2>
-      <div hx-get="/version/release" hx-trigger="load" hx-swap="outerHTML"><p class="muted">Checking GitHub…</p></div>
-    </div>
     </div>
     {{if .IsAdmin}}
     {{/* Filled in after the page loads: it asks Ollama and Hugging Face. */}}
@@ -160,28 +155,5 @@
     set it as <code>HF_TOKEN</code> in this app's environment, and restart it. Everyone using this app will see what the token can.
     Ollama's downloads don't need it: they use the key above.</p>
   {{end}}
-</div>
-{{end}}
-
-{{/* The release panel (update.go): the latest release's notes, flagged as
-     this release or a newer one. The notes carry the update steps (ci.yml). */}}
-{{define "release_panel"}}
-<div class="release-body">
-{{if not .Update.Checked}}
-  <p class="muted">Couldn't reach GitHub to check for releases.
-    <button type="button" class="link" hx-get="/version/release?force=1" hx-target="closest .release-body" hx-swap="outerHTML">Try again</button></p>
-{{else}}
-  <div class="release-head">
-    <strong>{{or .Update.Name .Update.Latest}}</strong>
-    {{if .Update.Current}}<span class="badge on">This release</span>{{else if .Update.Available}}<span class="badge update">New release</span>{{end}}
-    <span class="muted">{{if and .Update.Name (ne .Update.Name .Update.Latest)}}<span class="mono">{{.Update.Latest}}</span> · {{end}}{{if not .Update.Published.IsZero}}<span title="{{time .Update.Published}}">published {{ago .Update.Published}}</span> · {{end}}<a class="hint-link inline" href="{{.Update.URL}}" target="_blank" rel="noopener noreferrer">View on GitHub ↗</a></span>
-  </div>
-  {{if .Update.Available}}
-  <p class="release-running">You're running <span class="mono">{{.Version}}</span>. The notes below say how to update.</p>
-  {{else if not .Update.Current}}
-  <p class="muted release-running">You're running <span class="mono">{{.Version}}</span>.</p>
-  {{end}}
-  {{with .Update.Notes}}<div class="release-notes">{{.}}</div>{{else}}<p class="muted">This release has no notes.</p>{{end}}
-{{end}}
 </div>
 {{end}}

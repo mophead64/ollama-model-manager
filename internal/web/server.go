@@ -88,7 +88,6 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /{$}", s.handleDashboard)
 
 	mux.HandleFunc("GET /version/check", s.handleVersionCheck)
-	mux.HandleFunc("GET /version/release", s.handleRelease)
 
 	mux.HandleFunc("GET /models", s.handleModels)
 	mux.HandleFunc("GET /models/blacklist", s.handleBlacklist)
@@ -130,6 +129,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /system/load", s.handleSystemLoad)
 	mux.HandleFunc("GET /system/running", s.handleRunningModels)
 	mux.HandleFunc("GET /system/ollama", s.handleOllamaUpdate)
+	mux.HandleFunc("GET /system/app", s.handleAppUpdate)
 
 	mux.HandleFunc("GET /downloads", s.handleDownloads)
 	mux.HandleFunc("POST /downloads", s.handleQueueDownload)
