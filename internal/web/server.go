@@ -63,6 +63,9 @@ type Server struct {
 	// Ollama's own updates; kept fresh by RunOllamaUpdateChecks.
 	ollamaUp *ollamaUpdates
 	logins   *loginLimiter
+	// This machine's network addresses, for checking whether Ollama answers
+	// on them (localNetworkAddrs; tests substitute their own).
+	lanAddrs func() []string
 }
 
 func NewServer(ol *ollama.Client, st *store.Store, dl *downloads.Manager, mt *modeltest.Runner, sys *sysinfo.Sampler, cfg Config, log *slog.Logger) (*Server, error) {
@@ -73,6 +76,7 @@ func NewServer(ol *ollama.Client, st *store.Store, dl *downloads.Manager, mt *mo
 	return &Server{
 		ol: ol, st: st, dl: dl, mt: mt, sys: sys, lib: library.New(cfg.LibraryURL, cfg.HFURL, cfg.HFToken), cfg: cfg, log: log,
 		tmpl: tmpl, updates: newUpdateChecker(), ollamaUp: newOllamaUpdates(), logins: newLoginLimiter(),
+		lanAddrs: localNetworkAddrs,
 	}, nil
 }
 
@@ -88,6 +92,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /account/username", s.handleChangeUsername)
 	mux.HandleFunc("POST /account/password", s.handleChangePassword)
 	mux.HandleFunc("GET /account/huggingface", s.handleHuggingFace)
+	mux.HandleFunc("GET /account/ollama", s.handleOllamaSettings)
 
 	mux.HandleFunc("GET /{$}", s.handleDashboard)
 

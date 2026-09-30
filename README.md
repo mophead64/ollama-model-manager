@@ -95,6 +95,9 @@ natively. The System page also checks for new releases of Ollama and of this app
 
 ### And also
 - Sign-in required, with a username and password you can change from Settings.
+- **Settings → Ollama settings** checks whether Ollama is open to your network, suggests a context length, flash
+  attention, KV cache and parallel requests for your hardware, and gives copyable steps to apply them with systemd,
+  Docker, the macOS app or Windows.
 - Light, dark or automatic theme.
 - A green ✓ in the footer when you're running the latest release of this app, or a link to the new one.
 - Deleting models can be turned off with `ALLOW_MODEL_DELETE=false`.
