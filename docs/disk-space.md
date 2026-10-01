@@ -30,8 +30,8 @@ works the figures out from the files themselves:
 
 This needs this app to see Ollama's models folder (`MODELS_DIR`; it's found automatically in the usual places, and at
 `/models` in Docker). Without it, tags of the same model are still counted once, but files shared between different
-models can't be seen, so totals may be a little high and the delete dialogs say "freeing *up to*". The ⓘ beside the
-total says which applies.
+models can't be seen, so totals may be a little high: the total is marked *(estimate)* and the delete dialogs say
+"freeing *up to*".
 
 ## Models you don't use
 
