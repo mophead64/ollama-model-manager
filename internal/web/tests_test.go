@@ -109,7 +109,7 @@ func TestModelTestFlow(t *testing.T) {
 	done := get(h, detailURL, false).Body.String()
 	for _, want := range []string{
 		`<span class="badge test-status completed">Completed</span>`, "4 of 4 done", `<div class="test-reply md"><p>Pong</p>`,
-		"30 tokens · 60.0 tokens/s · 1.5s (loading 900 ms)", // eval 30 tokens in 0.5s
+		"30 tokens · 60.0 tokens/s · 1.5s (loading " + nbsp("900 ms") + ")", // eval 30 tokens in 0.5s
 		`<a class="model-link" href="#model-1">user/custom:v1</a>`,
 		// The id carries the status, so a run that finished since the last
 		// refresh isn't swapped back to how it looked while it ran.

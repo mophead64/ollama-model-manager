@@ -96,7 +96,7 @@ func TestChatPage(t *testing.T) {
 	page := get(h, "/models/chat", false).Body.String()
 	for _, want := range []string{
 		`data-value="model-000:latest"`, `data-value="user/custom:v1"`,
-		`<span class="item-meta">2.0 KB`, "Choose a model…", "Pick a model first",
+		`<span class="item-meta">` + nbsp("2.0 KB"), "Choose a model…", "Pick a model first",
 		// A models tab, under the same overview as the others.
 		`<a href="/models" class="active" aria-current="page">Models</a>`,
 		`<a href="/models/chat" class="disc-tab" aria-current="true">Chat</a>`,

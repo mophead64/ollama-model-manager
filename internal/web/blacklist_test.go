@@ -50,7 +50,7 @@ func TestDeleteAndBlacklist(t *testing.T) {
 		t.Error("notice should mention the blacklist")
 	}
 	body := get(h, "/models/blacklist", false).Body.String()
-	for _, want := range []string{`data-copy-text="user/custom:v1"`, "Poor at code.\nSlow too.", "2.0 KB", "by admin", "1 model(s)"} {
+	for _, want := range []string{`data-copy-text="user/custom:v1"`, "Poor at code.\nSlow too.", nbsp("2.0 KB"), "by admin", "1 model(s)"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("blacklist page missing %q", want)
 		}

@@ -56,7 +56,9 @@
     display: flex; align-items: center; gap: 24px; padding: 14px 24px;
     background: var(--panel); border-bottom: 1px solid var(--border);
     position: sticky; top: 0; z-index: 10;
+    flex-wrap: wrap; row-gap: 10px; /* when it runs out of room, items move to a second row rather than squashing */
   }
+  nav > *, nav a, nav button { white-space: nowrap; }
   .theme-switch { margin-left: auto; display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
   .theme-switch button {
     background: var(--panel); color: var(--muted); border: none; border-radius: 0;
@@ -82,6 +84,7 @@
   .stat { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; display: flex; flex-direction: column; justify-content: center; }
   .stat .value { font-size: 22px; font-weight: 700; }
   .stat .label { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .stat .label strong, .library-disk strong { white-space: nowrap; } /* "running low" */
   table { width: 100%; border-collapse: collapse; font-size: 14px; }
   th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
   th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; }
@@ -383,11 +386,12 @@
   footer.app-footer button.link:hover { text-decoration: underline; }
   dl.kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 20px; margin: 0; font-size: 14px; }
   dl.kv dt { color: var(--muted); }
-  dl.kv dd { margin: 0; word-break: break-all; }
+  /* Values wrap between words; only a single long one (a digest, a path) breaks mid-word. */
+  dl.kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
   pre { background: var(--code-bg); padding: 12px; border-radius: 6px; font-size: 12px; overflow-x: auto; white-space: pre-wrap; word-break: break-word; max-height: 480px; margin: 10px 0 0; }
   details > summary { cursor: pointer; font-weight: 600; }
   details + details { margin-top: 14px; }
-  td.mono, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; word-break: break-all; }
+  td.mono, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; overflow-wrap: anywhere; }
   a.model-link { color: var(--text); font-weight: 600; text-decoration: none; }
   a.model-link:hover { color: var(--accent); }
   /* Model name that copies itself on click, with a hover/focus tooltip

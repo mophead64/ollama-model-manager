@@ -15,18 +15,18 @@ import (
 )
 
 var templateFuncs = template.FuncMap{
-	"bytes":     formatBytes,
+	"bytes":     keepTogether(formatBytes),
 	"time":      formatTime,
 	"shorthash": shortHash,
 	"count":     formatCount,
 	"sortcol":   func(label string, h sortHeader) map[string]any { return map[string]any{"Label": label, "H": h} },
 	"int64":     func(n uint64) int64 { return int64(n) },
-	"speed":     formatSpeed,
+	"speed":     keepTogether(formatSpeed),
 	"elideurls": elideURLQueries,
 	"hasprefix": strings.HasPrefix,
 	"contains":  strings.Contains,
-	"eta":       humanDuration,
-	"took":      took,
+	"eta":       keepTogether(humanDuration),
+	"took":      func(start, end *time.Time) string { return nbsp(took(start, end)) },
 	"pct":       func(f float64) string { return fmt.Sprintf("%.1f", f) },
 	"progress": func(completed, total int64) float64 {
 		if total <= 0 {
@@ -40,18 +40,18 @@ var templateFuncs = template.FuncMap{
 	},
 	"sev":        severity,
 	"keepalives": func() []keepAliveOption { return keepAliveOptions },
-	"until":      formatUntil,
-	"unloads":    unloadsPhrase,
-	"ago":        timeAgo,
+	"until":      keepTogether(formatUntil),
+	"unloads":    keepTogether(unloadsPhrase),
+	"ago":        keepTogether(timeAgo),
 	"lastused":   lastUsedOf,
-	"activefor":  formatActive,
+	"activefor":  keepTogether(formatActive),
 	"loadsof":    func(loads map[string]int, name string) int { return loads[name] },
 	"canchat":    canChat,
 	"pickeritem": func(m ollama.Model, loaded bool) map[string]any { return map[string]any{"Model": m, "Loaded": loaded} },
 	"rowactions": func(m ollama.Model, loaded, allowDelete bool, ret string, st *libraryStorage) map[string]any {
 		return map[string]any{"Model": m, "Loaded": loaded, "AllowDelete": allowDelete, "Return": ret, "Storage": st}
 	},
-	"ms": formatMS,
+	"ms": keepTogether(formatMS),
 	"copycmd": func(id, cmd string) map[string]string {
 		return map[string]string{"ID": id, "Cmd": cmd}
 	},
@@ -79,6 +79,17 @@ var templateFuncs = template.FuncMap{
 		return string(b), err
 	},
 }
+
+// keepTogether wraps a formatter for templates so its value stays on one
+// line: "4.4 GB" or "10 minutes ago" shouldn't split across two in a narrow
+// table cell or tile. Go code calls the formatters directly and gets plain
+// spaces.
+func keepTogether[T any](format func(T) string) func(T) string {
+	return func(v T) string { return nbsp(format(v)) }
+}
+
+// nbsp replaces s's spaces with no-break spaces.
+func nbsp(s string) string { return strings.ReplaceAll(s, " ", "\u00a0") }
 
 // formatActive renders roughly how long a model was in use, from the usage
 // tracker's seconds: "≈ 45 s", "≈ 12 min", "≈ 2.5 h".

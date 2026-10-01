@@ -101,7 +101,7 @@ func TestSystemPageLayout(t *testing.T) {
 	body := get(h, "/system", false).Body.String()
 	for _, want := range []string{
 		`<div class="value">2</div><div class="label">models installed</div>`,
-		`<div class="value">` + formatBytes(3072) + `</div><div class="label">storage used by models (estimate)</div>`,
+		`<div class="value">` + nbsp(formatBytes(3072)) + `</div><div class="label">storage used by models (estimate)</div>`,
 		`hx-get="/system/ollama" hx-trigger="load"`, `hx-get="/system/app" hx-trigger="load"`,
 	} {
 		if !strings.Contains(body, want) {

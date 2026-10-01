@@ -17,7 +17,7 @@ func TestSystemPage(t *testing.T) {
 	for _, want := range []string{
 		"<!doctype html>", `<span class="mono">0.12.3</span>`, `data-charts="/system/history"`, `data-metric="vram"`,
 		"Collecting the first sample", // the test sampler never runs
-		"Loaded in memory", "2 model(s) in use", "50%/50% CPU/GPU", "100% GPU", "8,192", "never (kept loaded)",
+		"Loaded in memory", "2 model(s) in use", "50%/50% CPU/GPU", "100% GPU", "8,192", nbsp("never (kept loaded)"),
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("system page missing %q", want)

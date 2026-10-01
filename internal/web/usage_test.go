@@ -58,7 +58,7 @@ func TestLastUsedColumn(t *testing.T) {
 	testStore.MarkModelUsed(t.Context(), "user/custom:v1", time.Now().Add(-10*time.Minute))
 
 	body := get(h, "/models", true).Body.String()
-	for _, want := range []string{">Last used<", "3 hours ago", "10 minutes ago", "Not seen in use since this app started tracking"} {
+	for _, want := range []string{">Last used<", nbsp("3 hours ago"), nbsp("10 minutes ago"), "Not seen in use since this app started tracking"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("models table missing %q", want)
 		}
@@ -76,7 +76,7 @@ func TestLastUsedColumn(t *testing.T) {
 	}
 
 	detail := get(h, "/models/user/custom:v1", false).Body.String()
-	if !strings.Contains(detail, `id="model-memory"`) || !strings.Contains(detail, "10 minutes ago</span>") {
+	if !strings.Contains(detail, `id="model-memory"`) || !strings.Contains(detail, nbsp("10 minutes ago</span>")) {
 		t.Error("detail page should show when the model was last used")
 	}
 }
@@ -140,12 +140,12 @@ func TestModelUsagePanel(t *testing.T) {
 	body := get(h, "/models/user/custom:v1", false).Body.String()
 	for _, want := range []string{
 		"<h2 style=\"margin:0\">Usage</h2>", "Recorded since " + now.AddDate(0, 0, -40).Format("2 Jan 2006"),
-		`≈ 13 min</div><div class="label">in use, last 30 days`, // 750 s
+		nbsp("≈ 13 min") + `</div><div class="label">in use, last 30 days`, // 750 s
 		`2 <span class="muted">of 30</span>`, `>3</div><div class="label">times loaded, last 30 days`,
-		`>7</div><div class="label">times loaded in all (≈ 1.2 h in use)`,
+		`>7</div><div class="label">times loaded in all (` + nbsp("≈ 1.2 h") + ` in use)`,
 		`style="height: 100.0%"`, `style="height: 25.0%"`, // today, and three days ago
-		"<strong>" + now.Format("Mon 2 Jan") + "</strong> · ≈ 10 min in use · loaded 2×",
-		"Show as a table", "<td class=\"tnum\">≈ 3 min</td><td class=\"tnum\">1</td>",
+		"<strong>" + now.Format("Mon 2 Jan") + "</strong> · " + nbsp("≈ 10 min") + " in use · loaded 2×",
+		"Show as a table", "<td class=\"tnum\">" + nbsp("≈ 3 min") + "</td><td class=\"tnum\">1</td>",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("usage panel missing %q", want)
