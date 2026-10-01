@@ -122,7 +122,10 @@ type chatEvent struct {
 	Thinking string     `json:"thinking,omitempty"`
 	Done     bool       `json:"done,omitempty"`
 	Stats    *chatStats `json:"stats,omitempty"`
-	Error    string     `json:"error,omitempty"`
+	// With Done: the whole reply rendered from Markdown (renderReply), to
+	// replace the plain text it streamed in as.
+	HTML  string `json:"html,omitempty"`
+	Error string `json:"error,omitempty"`
 }
 
 type chatStats struct {
@@ -166,12 +169,14 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		rc.Flush()
 	}
 
+	var reply strings.Builder
 	err := s.ol.Chat(r.Context(), req.Model, req.Messages, func(ch ollama.ChatChunk) {
 		if ch.Message.Content != "" || ch.Message.Thinking != "" {
+			reply.WriteString(ch.Message.Content)
 			send(chatEvent{Content: ch.Message.Content, Thinking: ch.Message.Thinking})
 		}
 		if ch.Done {
-			send(chatEvent{Done: true, Stats: chatStatsFrom(ch)})
+			send(chatEvent{Done: true, Stats: chatStatsFrom(ch), HTML: string(renderReply(reply.String()))})
 		}
 	})
 	switch {

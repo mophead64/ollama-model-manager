@@ -117,7 +117,7 @@ func (m *Manager) Enqueue(ctx context.Context, input, requestedBy string) (id in
 // EnqueueChecked adds a model that Check has already vetted to the queue, so
 // a caller can look at the check (e.g. the download size) before committing.
 func (m *Manager) EnqueueChecked(ctx context.Context, c Checked, requestedBy string) (int64, error) {
-	id, err := m.st.EnqueueDownload(ctx, c.Name, requestedBy)
+	id, err := m.st.EnqueueDownload(ctx, c.Name, requestedBy, c.diskNeed())
 	if err != nil {
 		return 0, err
 	}
@@ -134,6 +134,16 @@ type Checked struct {
 	Installed bool   // already downloaded, so pulling only fetches updates
 	Warning   string // for the user, when the registry couldn't be asked
 	note      string // for the download's log
+}
+
+// diskNeed is roughly the disk space the download takes: its size, or
+// nothing for a model that's installed already (pulling it again only
+// fetches what's changed).
+func (c Checked) diskNeed() int64 {
+	if c.Installed {
+		return 0
+	}
+	return c.Size
 }
 
 // Check normalises a requested name, asks its registry whether it exists
@@ -291,7 +301,7 @@ func (m *Manager) Retry(ctx context.Context, id int64, by, newInput string) (nam
 	}
 
 	if c != nil {
-		if err := m.st.SetDownloadModel(ctx, id, c.Name); err != nil {
+		if err := m.st.SetDownloadModel(ctx, id, c.Name, c.diskNeed()); err != nil {
 			return name, "", err
 		}
 	}

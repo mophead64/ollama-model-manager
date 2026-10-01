@@ -63,13 +63,14 @@
   <div class="error-box" style="margin:14px 0 0">Couldn't ask Ollama for its models: {{.LibraryErr}}</div>
   {{else}}
   <div class="library-stats">
-    <div><div class="value">{{.Count}}</div><div class="label">models installed</div></div>
-    <div><div class="value">{{bytes .TotalBytes}}</div><div class="label">storage used by models</div></div>
+    <div><div class="value">{{.Count}}</div><div class="label">models installed{{template "tag_count" .Storage}}</div></div>
+    <div><div class="value">{{bytes .TotalBytes}}</div><div class="label">storage used by models{{template "storage_basis" .Storage}}</div></div>
   </div>
   {{with .Disk}}
-  <div class="library-disk">
-    <div class="row between"><span class="muted">{{bytes (int64 .Free)}} free of {{bytes (int64 .Total)}} on the models disk</span><strong>{{printf "%.0f" .UsedPercent}}% used</strong></div>
-    <div class="progress-bar"><div class="fill{{if gt .UsedPercent 90.0}} low{{end}}" style="width: {{printf "%.1f" .UsedPercent}}%"></div></div>
+  {{$lvl := .Level}}
+  <div class="library-disk{{with $lvl}} disk-{{.}}{{end}}">
+    <div class="row between"><span class="muted">{{bytes (int64 .Free)}} free of {{bytes (int64 .Total)}} on the models disk{{if eq $lvl "low"}}: <strong>nearly full</strong>{{else if eq $lvl "warn"}}: <strong>running low</strong>{{end}}</span><strong>{{printf "%.0f" .UsedPercent}}% used</strong></div>
+    <div class="progress-bar"><div class="fill {{$lvl}}" style="width: {{printf "%.1f" .UsedPercent}}%"></div></div>
   </div>
   {{end}}
   {{end}}
@@ -260,7 +261,8 @@
     <dt>Version</dt>
     <dd>
       <span class="mono">{{.Version}}</span>
-      {{if $u.Available}}<a class="badge update" href="{{$u.URL}}" target="_blank" rel="noopener noreferrer" title="Release notes">Update available: {{$u.Latest}}</a>
+      {{if devbuild .Version}}<span class="badge info" title="Built from source rather than a release, so there's no release to compare it with">Development build</span>
+      {{else if $u.Available}}<a class="badge update" href="{{$u.URL}}" target="_blank" rel="noopener noreferrer" title="Release notes">Update available: {{$u.Latest}}</a>
       {{else if $u.Current}}<span class="badge on">✓ Up to date</span>
       {{else if and .Fragment (not $u.Checked)}}<span class="muted">(couldn't check GitHub for the latest release)</span>{{end}}
     </dd>

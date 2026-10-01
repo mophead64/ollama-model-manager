@@ -1,6 +1,9 @@
 package main
 
 import (
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -49,5 +52,31 @@ func TestDescribeEnvHidesTokenAndReportsSources(t *testing.T) {
 	}
 	if tz := got["TZ"]; tz[1] != "not set" || !strings.Contains(tz[0], "(UTC") {
 		t.Errorf("TZ = %v, want the zone in effect and \"not set\"", tz)
+	}
+}
+
+func TestHealthcheck(t *testing.T) {
+	status := http.StatusOK
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/healthz" {
+			http.NotFound(w, r)
+			return
+		}
+		w.WriteHeader(status)
+		w.Write([]byte(`{"status":"ok"}`))
+	}))
+	defer srv.Close()
+	u, _ := url.Parse(srv.URL)
+
+	if got := healthcheck(u.Port()); got != 0 {
+		t.Errorf("healthy app: exit %d, want 0", got)
+	}
+	status = http.StatusServiceUnavailable
+	if got := healthcheck(u.Port()); got != 1 {
+		t.Errorf("unhealthy app: exit %d, want 1", got)
+	}
+	srv.Close()
+	if got := healthcheck(u.Port()); got != 1 {
+		t.Errorf("app not running: exit %d, want 1", got)
 	}
 }

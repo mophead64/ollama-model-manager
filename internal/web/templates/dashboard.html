@@ -18,6 +18,15 @@
     <div class="panel"><div class="error-box" style="margin:0">Couldn't list models from Ollama: {{.Error}}</div></div>
     {{else}}
     {{template "overview" .}}
+    {{with .UnusedSummary}}
+    <div class="panel reclaim">
+      <div>
+        <strong>{{.Models}} model{{if ne .Models 1}}s{{end}} unused for {{.Days}}+ days{{if .Bytes}}, {{bytes .Bytes}}{{end}}</strong>
+        <div class="muted">Not loaded in {{.Days}} days{{if not .Since.IsZero}} (usage has been recorded since {{.Since.Local.Format "2 Jan 2006"}}){{end}}. {{if .Bytes}}Deleting {{if eq .Models 1}}it{{else}}them{{end}} would free {{bytes .Bytes}}.{{end}}</div>
+      </div>
+      <a class="btn secondary small" href="/models?unused={{.Days}}">Review →</a>
+    </div>
+    {{end}}
     {{/* Re-fetched when model state changes, so last used and the loaded dot keep up. */}}
     <div class="panel" id="recent-panel" hx-get="/" hx-select="#recent-panel" hx-trigger="state-changed from:body" hx-swap="outerHTML">
       <div class="row between">
@@ -37,7 +46,7 @@
             <td>{{or .Details.ParameterSize "-"}}</td>
             <td>{{bytes .Size}}</td>
             <td>{{with lastused $.LastUsed .Name}}<span class="tip-wrap" tabindex="0">{{ago .}}<span class="tip" role="tooltip">{{time .}}</span></span>{{end}}</td>
-            <td class="actions">{{template "model_actions" (rowactions . (index $.LoadedNames .Name) $.AllowDelete "/")}}</td>
+            <td class="actions">{{template "model_actions" (rowactions . (index $.LoadedNames .Name) $.AllowDelete "/" $.Storage)}}</td>
           </tr>
         {{end}}
         </tbody>

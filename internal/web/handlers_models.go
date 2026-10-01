@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -25,14 +26,16 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 	st := parseListState(r.URL.Query())
 
 	data := map[string]any{
-		"Query":       st.Query,
-		"Caps":        st.Caps,
-		"Dir":         st.Dir(),
-		"Page":        st.Page,
-		"TotalPages":  1,
-		"OllamaURL":   s.ol.BaseURL(),
-		"Deleted":     r.URL.Query().Get("deleted"),
-		"Blacklisted": r.URL.Query().Get("blacklisted") == "1",
+		"Query":         st.Query,
+		"Caps":          st.Caps,
+		"Unused":        st.Unused,
+		"UnusedChoices": unusedChoices,
+		"Dir":           st.Dir(),
+		"Page":          st.Page,
+		"TotalPages":    1,
+		"OllamaURL":     s.ol.BaseURL(),
+		"Deleted":       r.URL.Query().Get("deleted"),
+		"Blacklisted":   r.URL.Query().Get("blacklisted") == "1",
 	}
 
 	if !st.isDefaultSort() {
@@ -44,15 +47,36 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 		s.log.Error("list models failed", "error", err)
 		data["Error"] = err.Error()
 	} else {
-		lastUsed := s.lastUsed(r)
+		facts := s.usageFacts(r)
+		lastUsed := facts.LastUsed
+		storage := s.storage(all)
+		data["Storage"] = storage
 		models := filterModels(all, st.Query, st.Caps)
-		loads, err := s.st.ModelLoadCounts(r.Context())
+		if st.Unused > 0 {
+			now := time.Now()
+			models = unusedFor(models, st.Unused, facts, storage, now)
+			data["UnusedSummary"] = summarizeUnused(models, st.Unused, facts, storage, now)
+		}
+		totals, err := s.st.ModelTotals(r.Context())
 		if err != nil {
-			s.log.Warn("read model load counts failed", "error", err) // only costs the column
+			s.log.Warn("read model usage totals failed", "error", err) // only costs the column
+		}
+		loads := make(map[string]int, len(totals))
+		for name, t := range totals {
+			loads[name] = t.Loads
 		}
 		sortModels(models, st.Sort, st.Desc, modelUsage{LastUsed: lastUsed, Loads: loads})
 		data["LastUsed"] = lastUsed
 		data["Loads"] = loads
+		// Every model the filter matches, on any page, for "select all".
+		matching := make([]string, len(models))
+		for i, m := range models {
+			matching[i] = m.Name
+		}
+		data["Matching"] = matching
+		dupes := duplicateQuants(all, facts, totals, storage)
+		data["Dupes"] = dupes
+		data["OtherQuants"] = otherQuants(dupes)
 
 		totalPages := max(1, (len(models)+modelsPageSize-1)/modelsPageSize)
 		st.Page = min(st.Page, totalPages)
@@ -209,15 +233,14 @@ func (s *Server) handleDeleteModel(w http.ResponseWriter, r *http.Request) {
 	}
 	var entry store.BlacklistEntry
 	if blacklist {
-		entry = s.blacklistEntry(r, name, reason) // before its details are gone
+		all, err := s.ol.List(r.Context())
+		if err != nil {
+			s.log.Warn("list models for blacklist entry failed", "model", name, "error", err)
+		}
+		entry = s.blacklistEntry(r, all, name, reason) // before its details are gone
 	}
 
-	err = s.ol.Delete(r.Context(), name)
-	var se *ollama.StatusError
-	if errors.As(err, &se) && se.StatusCode == http.StatusNotFound {
-		err = nil // already gone; the outcome the user wanted
-	}
-	if err != nil {
+	if err := s.deleteModel(r.Context(), name); err != nil {
 		s.log.Error("delete model failed", "model", name, "error", err)
 		w.WriteHeader(http.StatusBadGateway)
 		s.render(w, r, "model_detail.html", map[string]any{
@@ -240,6 +263,24 @@ func (s *Server) handleDeleteModel(w http.ResponseWriter, r *http.Request) {
 		s.log.Info("model blacklisted", "model", name, "by", entry.By)
 	}
 
+	s.afterDelete(w, r, name, blacklist, "")
+}
+
+// deleteModel removes a model from Ollama. One that's already gone counts
+// as deleted: that's the outcome wanted.
+func (s *Server) deleteModel(ctx context.Context, name string) error {
+	err := s.ol.Delete(ctx, name)
+	var se *ollama.StatusError
+	if errors.As(err, &se) && se.StatusCode == http.StatusNotFound {
+		return nil
+	}
+	return err
+}
+
+// afterDelete goes back to the list (with the filters/sort/page it was
+// deleted from, if it came from there) or the dashboard, with a notice of
+// what was deleted, and of what couldn't be (failed).
+func (s *Server) afterDelete(w http.ResponseWriter, r *http.Request, deleted string, blacklisted bool, failed string) {
 	back := parseListState(nil).URL()
 	if ret, err := url.Parse(r.FormValue("return")); err == nil {
 		switch ret.Path {
@@ -251,9 +292,14 @@ func (s *Server) handleDeleteModel(w http.ResponseWriter, r *http.Request) {
 	}
 	target, _ := url.Parse(back)
 	q := target.Query()
-	q.Set("deleted", name)
-	if blacklist {
+	if deleted != "" {
+		q.Set("deleted", deleted)
+	}
+	if blacklisted {
 		q.Set("blacklisted", "1")
+	}
+	if failed != "" {
+		q.Set("memerror", failed)
 	}
 	target.RawQuery = q.Encode()
 	http.Redirect(w, r, target.String(), http.StatusSeeOther)
@@ -294,6 +340,9 @@ func (s *Server) handleModelDetail(w http.ResponseWriter, r *http.Request) {
 			for _, m := range all {
 				if m.Name == name || m.Model == name {
 					data["Model"] = m
+					st := s.storage(all)
+					data["DeleteEffect"] = st.DeleteEffect(m.Name)
+					data["SameAs"] = st.SameAs(m.Name)
 					break
 				}
 			}
@@ -372,14 +421,10 @@ func blacklistReason(r *http.Request) (string, error) {
 	return reason, nil
 }
 
-// blacklistEntry describes the model for its blacklist entry. If Ollama can't
-// say what it is, the entry just has its name.
-func (s *Server) blacklistEntry(r *http.Request, name, reason string) store.BlacklistEntry {
+// blacklistEntry describes the model for its blacklist entry, from all (the
+// models Ollama lists). If it isn't there, the entry just has its name.
+func (s *Server) blacklistEntry(r *http.Request, all []ollama.Model, name, reason string) store.BlacklistEntry {
 	e := store.BlacklistEntry{Model: name, Reason: reason, By: currentUser(r).Username, At: time.Now()}
-	all, err := s.ol.List(r.Context())
-	if err != nil {
-		s.log.Warn("list models for blacklist entry failed", "model", name, "error", err)
-	}
 	for _, m := range all {
 		if m.Name == name || m.Model == name {
 			e.Family, e.ParameterSize, e.Quantization = m.Details.Family, m.Details.ParameterSize, m.Details.QuantizationLevel

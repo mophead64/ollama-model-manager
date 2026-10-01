@@ -172,7 +172,7 @@ func (s *Server) handleQueueDownload(w http.ResponseWriter, r *http.Request) {
 // warned); otherwise, confirming carries the entry found, to be removed once
 // the download is queued (unblacklistQueued).
 func (s *Server) downloadConfirm(r *http.Request, c downloads.Checked, unblacklist string) map[string]any {
-	concerns := s.resourceConcerns(c)
+	concerns := s.resourceConcerns(r, c)
 	var banned *store.BlacklistEntry
 	if unblacklist == "" {
 		if banned = s.blacklistedFor(r, c.Name); banned != nil {
@@ -373,24 +373,38 @@ func (s *Server) serverError(w http.ResponseWriter, r *http.Request, err error) 
 }
 
 // resourceConcerns lists the ways a model looks too big for this machine: disk
-// space where Ollama keeps models, then memory. A model's file size is the
-// least it needs in memory (context takes more on top). Nothing is flagged
-// when the size or the hardware is unknown, or for a model that's already
-// installed, where pulling only updates it.
-func (s *Server) resourceConcerns(c downloads.Checked) []string {
-	return resourceConcerns(c, s.diskUsage(), s.sys.Latest())
+// space where Ollama keeps models (less what the downloads queued ahead of it
+// will take), then memory. A model's file size is the least it needs in
+// memory (context takes more on top). Nothing is flagged when the size or the
+// hardware is unknown, or for a model that's already installed, where pulling
+// only updates it.
+func (s *Server) resourceConcerns(r *http.Request, c downloads.Checked) []string {
+	queued, err := s.st.QueuedBytes(r.Context())
+	if err != nil {
+		s.log.Warn("read queued download sizes failed", "error", err) // checked against free space alone
+	}
+	return resourceConcerns(c, s.diskUsage(), queued, s.sys.Latest())
 }
 
-// resourceConcerns is the check itself; d is nil when the models disk isn't visible.
-func resourceConcerns(c downloads.Checked, d *disk.Usage, snap sysinfo.Snapshot) []string {
+// resourceConcerns is the check itself; d is nil when the models disk isn't
+// visible, and queued is what the downloads ahead still have to fetch.
+func resourceConcerns(c downloads.Checked, d *disk.Usage, queued int64, snap sysinfo.Snapshot) []string {
 	if c.Size <= 0 || c.Installed {
 		return nil
 	}
 	size := uint64(c.Size)
 	var out []string
-	if d != nil && size > d.Free {
-		out = append(out, fmt.Sprintf("It needs %s of disk space, but only %s is free where Ollama stores models.",
-			formatBytes(c.Size), formatBytes(int64(d.Free))))
+	if d != nil {
+		left := d.Free - min(d.Free, uint64(max(queued, 0))) // what's free once the queue's done
+		switch {
+		case size <= left:
+		case queued > 0:
+			out = append(out, fmt.Sprintf("It needs %s of disk space. %s is free where Ollama stores models, but the downloads queued ahead of it will take %s of that, leaving %s.",
+				formatBytes(c.Size), formatBytes(int64(d.Free)), formatBytes(queued), formatBytes(int64(left))))
+		default:
+			out = append(out, fmt.Sprintf("It needs %s of disk space, but only %s is free where Ollama stores models.",
+				formatBytes(c.Size), formatBytes(int64(d.Free))))
+		}
 	}
 
 	if snap.Time.IsZero() || snap.MemTotal == 0 {

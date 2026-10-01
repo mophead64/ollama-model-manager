@@ -286,3 +286,29 @@ func TestHFSearchLeavesOutUnpullableRepos(t *testing.T) {
 		t.Errorf("models = %v, unpullable = %d; want %v and 2", repos, p.Unpullable, want)
 	}
 }
+
+// A page that loads but can't be read (ollama.com changed its markup) is an
+// error where there must be results, and plain "no results" elsewhere.
+func TestUnreadablePages(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`<html><body><div class="all-new-markup">…</div></body></html>`))
+	}))
+	defer srv.Close()
+	c := New(srv.URL, "", "")
+	ctx := context.Background()
+
+	for _, q := range []Query{{}, {Order: "newest"}, {Caps: []string{"vision"}}} {
+		if _, err := c.Search(ctx, q); !errors.Is(err, ErrUnreadable) {
+			t.Errorf("blank search %+v: err = %v, want ErrUnreadable", q, err)
+		}
+	}
+	if p, err := c.Search(ctx, Query{Text: "no-such-model"}); err != nil || len(p.Models) != 0 {
+		t.Errorf("a text search can legitimately find nothing: %+v, %v", p, err)
+	}
+	if p, err := c.Search(ctx, Query{Page: 3}); err != nil || len(p.Models) != 0 {
+		t.Errorf("a later page can be empty: %+v, %v", p, err)
+	}
+	if _, err := c.Tags(ctx, "qwen3"); !errors.Is(err, ErrUnreadable) {
+		t.Errorf("tags: err = %v, want ErrUnreadable", err)
+	}
+}

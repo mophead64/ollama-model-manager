@@ -3,12 +3,15 @@
 // keeping its own state in a SQLite database at DB_PATH (default /data/omm.db).
 //
 // "ollama-model-manager reset-password" gives the admin user a new random
-// password, for when it's been forgotten.
+// password, for when it's been forgotten. "ollama-model-manager healthcheck"
+// asks the running app's /healthz, for Docker's HEALTHCHECK (the distroless
+// image has no curl).
 package main
 
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -40,8 +43,10 @@ func main() {
 		switch os.Args[1] {
 		case "reset-password":
 			os.Exit(resetPassword(dbPath))
+		case "healthcheck":
+			os.Exit(healthcheck(getenv("PORT", "8080")))
 		default:
-			fmt.Fprintf(os.Stderr, "unknown command %q (the only command is reset-password)\n", os.Args[1])
+			fmt.Fprintf(os.Stderr, "unknown command %q (the commands are reset-password and healthcheck)\n", os.Args[1])
 			os.Exit(2)
 		}
 	}
@@ -135,6 +140,9 @@ func main() {
 	go sys.Run(ctx)
 
 	// Notes when each model was last used, from what Ollama has loaded.
+	if _, err := st.UsageTrackedSince(ctx); err != nil { // records when tracking began, on the first run
+		log.Warn("failed to record when usage tracking began", "error", err)
+	}
 	go usage.New(ol, st, 15*time.Second, log).Run(ctx)
 
 	// Reverse proxies whose X-Forwarded-For is believed, for logins' addresses.
@@ -219,6 +227,26 @@ func resetPassword(dbPath string) int {
 		return 1
 	}
 	printCredentials("Password reset; all sessions signed out", username, pw)
+	return 0
+}
+
+// healthcheck implements the healthcheck command: 0 if the app on port
+// answers /healthz with 200 (its database and Ollama both reachable), 1
+// otherwise. It prints the answer, which Docker keeps with the container's
+// health status.
+func healthcheck(port string) int {
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get("http://127.0.0.1:" + port + "/healthz")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "health check failed: %v\n", err)
+		return 1
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	fmt.Println(strings.TrimSpace(string(body)))
+	if resp.StatusCode != http.StatusOK {
+		return 1
+	}
 	return 0
 }
 

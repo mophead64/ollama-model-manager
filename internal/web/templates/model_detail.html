@@ -38,7 +38,7 @@
         <dt>Format</dt><dd>{{or .Details.Format "-"}}</dd>
         {{if .Details.ParentModel}}<dt>Based on</dt><dd><a href="/models/{{.Details.ParentModel}}">{{.Details.ParentModel}}</a></dd>{{end}}
         {{with $.Model}}
-        <dt>Size on disk</dt><dd>{{bytes .Size}}</dd>
+        <dt>Size on disk</dt><dd>{{bytes .Size}}{{with $.SameAs}} <span class="muted">· the same model as {{range $i, $n := .}}{{if $i}}, {{end}}<a class="model-link" href="/models/{{$n}}">{{$n}}</a>{{end}}, so stored once</span>{{end}}</dd>
         {{if .Details.ContextLength}}<dt>Context length</dt><dd>{{count .Details.ContextLength}}</dd>{{end}}
         {{if .Details.EmbeddingLength}}<dt>Embedding length</dt><dd>{{count .Details.EmbeddingLength}}</dd>{{end}}
         <dt>Digest</dt><dd class="mono">{{.Digest}}</dd>
@@ -83,7 +83,7 @@
     <form method="post" action="/models/delete" data-reset-on-open>
       <h2 id="delete-model-title">Delete model?</h2>
       <input type="hidden" name="name" value="{{.Name}}">
-      <p><code>{{.Name}}</code> will be removed from Ollama{{with .Model}}, freeing up to <strong>{{bytes .Size}}</strong>{{end}}. You'd have to pull it again to use it.</p>
+      <p><code>{{.Name}}</code> will be removed from Ollama{{with .DeleteEffect}}, {{.}}{{end}}. You'd have to pull it again to use it.</p>
       {{template "blacklist_fields"}}
     </form>
   </dialog>

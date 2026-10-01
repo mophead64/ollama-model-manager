@@ -63,6 +63,8 @@ type Server struct {
 	// Ollama's own updates; kept fresh by RunOllamaUpdateChecks.
 	ollamaUp *ollamaUpdates
 	logins   *loginLimiter
+	// Models' layers, read from their manifests (storage.go).
+	manifests manifestCache
 	// This machine's network addresses, for checking whether Ollama answers
 	// on them (localNetworkAddrs; tests substitute their own).
 	lanAddrs func() []string
@@ -116,6 +118,9 @@ func (s *Server) Routes() http.Handler {
 	// The name goes in the form body: {name...} has to be the last path segment,
 	// so it can't be followed by /delete.
 	mux.HandleFunc("POST /models/delete", s.handleDeleteModel)
+	mux.HandleFunc("GET /models/bulk/confirm", s.handleBulkConfirm)
+	mux.HandleFunc("POST /models/bulk/delete", s.handleBulkDelete)
+	mux.HandleFunc("POST /models/bulk/unload", s.handleBulkUnload)
 	mux.HandleFunc("POST /models/load", s.handleLoadModel)
 	mux.HandleFunc("POST /models/unload", s.handleUnloadModel)
 	mux.HandleFunc("GET /discover", s.handleDiscover)
@@ -148,9 +153,13 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /downloads/{id}/retry", s.handleRetryDownload)
 	mux.HandleFunc("POST /downloads/{id}/delete", s.handleDeleteDownload)
 
+	root := http.NewServeMux()
+	// For uptime monitors and Docker's HEALTHCHECK, so it needs no session.
+	root.HandleFunc("GET /healthz", s.handleHealth)
 	// Rejects cross-site POSTs (via Sec-Fetch-Site/Origin), so another page
 	// can't submit forms here using the session cookie.
-	return http.NewCrossOriginProtection().Handler(s.requireAuth(mux))
+	root.Handle("/", http.NewCrossOriginProtection().Handler(s.requireAuth(mux)))
+	return root
 }
 
 // render executes a template. For map data it also fills in what every page's

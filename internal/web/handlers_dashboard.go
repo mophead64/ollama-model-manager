@@ -2,6 +2,7 @@ package web
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/mophead64/ollama-model-manager/internal/ollama"
 )
@@ -34,7 +35,11 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		}
 		data["LoadedNames"] = loaded
 		data["ShowEmpty"] = true // "no models loaded" is worth saying here
-		lastUsed := s.lastUsed(r)
+		facts := s.usageFacts(r)
+		if sum := summarizeUnused(all, dashboardUnusedDays, facts, data["Storage"].(*libraryStorage), time.Now()); sum.Models > 0 {
+			data["UnusedSummary"] = sum
+		}
+		lastUsed := facts.LastUsed
 		sortModels(all, "used", true, modelUsage{LastUsed: lastUsed})
 		var recent []ollama.Model
 		for _, m := range all[:min(dashboardRecent, len(all))] {
@@ -53,12 +58,13 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 // and the models page: library totals, disk space and the models loaded in
 // memory (also returned).
 func (s *Server) addOverview(r *http.Request, all []ollama.Model, data map[string]any) []ollama.RunningModel {
-	var totalBytes int64
-	for _, m := range all {
-		totalBytes += m.Size
+	storage, ok := data["Storage"].(*libraryStorage) // the page may have worked it out already
+	if !ok {
+		storage = s.storage(all)
+		data["Storage"] = storage // also for the delete dialogs' "freeing ..."
 	}
-	data["Count"] = len(all)
-	data["TotalBytes"] = totalBytes
+	data["Count"] = storage.Models
+	data["TotalBytes"] = storage.Bytes
 	data["Disk"] = s.diskUsage()
 	running, runErr := s.runningModels(r)
 	data["Running"], data["RunningErr"] = running, runErr

@@ -88,7 +88,7 @@
 {{define "discover_results"}}
 <div id="discover-results">
   {{if .Error}}
-  <div class="error-box">Search failed: {{.Error}}</div>
+  <div class="error-box">Search failed: {{.Error}}{{if .Unreadable}}. The page loaded, but none of its models could be read, which usually means ollama.com has changed its layout and this app needs an update. Searching Hugging Face, and downloading by name from the <a href="/downloads">Downloads</a> page, still work.{{end}}</div>
   {{else if or .Cards .HFCards .NextURL}}
   <div class="disc-grid">{{template "discover_cards" .}}</div>
   {{else if and .Hidden .HiddenBL}}

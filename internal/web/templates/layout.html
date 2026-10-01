@@ -197,6 +197,38 @@
   .progress-bar .fill { height: 100%; background: var(--accent); width: 0%; transition: width .3s; }
   .progress-bar .fill.low { background: var(--danger); }
   .stat .progress-bar { height: 6px; margin: 10px 0 0; }
+  /* The Models page's selection column, and the bar acting on the selection
+     (static/models.js), which floats above the footer while anything's selected. */
+  th.check, td.check { width: 28px; padding-right: 0; }
+  td.check input, th.check input { margin: 0; accent-color: var(--accent); }
+  .bulk-bar {
+    position: fixed; left: 50%; bottom: 52px; transform: translateX(-50%); z-index: 20;
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap; max-width: calc(100vw - 32px);
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 16px; box-shadow: 0 8px 28px rgb(0 0 0 / .18); font-size: 14px;
+  }
+  .bulk-bar .bulk-actions { display: flex; gap: 8px; margin-left: auto; }
+  .bulk-list { max-height: 240px; overflow-y: auto; margin: 0 0 14px; padding-left: 20px; font-size: 14px; }
+  .bulk-list li + li { margin-top: 2px; }
+  .unused-note { font-size: 14px; margin: 8px 0 12px; }
+  .unused-note .muted { font-size: 13px; }
+  /* Models installed in more than one quantisation. */
+  details.dupes > summary { cursor: pointer; line-height: 1.5; }
+  details.dupes > summary .muted { font-size: 14px; }
+  details.dupes[open] > summary { margin-bottom: 8px; }
+  .dupe-group { border-top: 1px solid var(--border); padding-top: 12px; margin-top: 12px; }
+  .dupe-group h3 { font-size: 15px; margin: 0; }
+  .dupe-group h3 .muted { font-weight: 400; font-size: 13px; }
+  .small-note { font-size: 12px; }
+  /* The dashboard's "N models unused for 60+ days" note. */
+  .panel.reclaim { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; border-left: 4px solid var(--warn); }
+  .panel.reclaim .muted { font-size: 13px; margin-top: 2px; }
+  /* Free space running low (disk.Usage.Level): the tile turns amber, then red. */
+  .stat.disk-warn { border-color: var(--warn); background: var(--b-amber-bg); }
+  .stat.disk-low { border-color: var(--danger); background: var(--b-red-bg); }
+  .stat.disk-warn .label, .library-disk.disk-warn .muted { color: var(--b-amber); }
+  .stat.disk-low .label, .library-disk.disk-low .muted { color: var(--b-red); }
+  .stat.disk-warn .progress-bar, .stat.disk-low .progress-bar { background: rgb(0 0 0 / .1); }
   .path-line { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .error-box { background: var(--danger-bg); border: 1px solid var(--err-border); color: var(--err-text); padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; }
   .pagination { display: flex; gap: 8px; align-items: center; margin-top: 12px; }
@@ -320,6 +352,25 @@
   .msg .pending { color: var(--muted); font-style: italic; }
   .msg details.thinking { margin-bottom: 8px; font-size: 13px; color: var(--muted); white-space: pre-wrap; }
   .msg details.thinking summary { font-weight: 500; }
+  /* A reply rendered from Markdown (renderReply): in chat, once it's
+     finished, and in test results. */
+  .msg.rendered { white-space: normal; }
+  .md > :first-child { margin-top: 0; }
+  .md > :last-child { margin-bottom: 0; }
+  .md p, .md ul, .md ol, .md pre, .md table, .md blockquote { margin: 0 0 10px; }
+  .md ul, .md ol { padding-left: 22px; }
+  .md li + li { margin-top: 3px; }
+  .md h1, .md h2, .md h3, .md h4, .md h5, .md h6 { font-size: 15px; margin: 14px 0 6px; }
+  .md h1 { font-size: 17px; } .md h2 { font-size: 16px; }
+  .md code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; background: var(--panel); padding: 1px 5px; border-radius: 4px; }
+  .md pre { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; overflow-x: auto; white-space: pre; }
+  .md pre code { background: none; padding: 0; }
+  .md blockquote { border-left: 3px solid var(--border); padding-left: 10px; color: var(--muted); }
+  .md table { border-collapse: collapse; }
+  .md th, .md td { border: 1px solid var(--border); padding: 4px 8px; }
+  .md a { color: var(--accent); }
+  .md p.raw-html { white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+  .test-reply { margin: 8px 0 0; padding: 10px 12px; font-size: 14px; line-height: 1.5; background: var(--code-bg); border-radius: 6px; overflow-wrap: anywhere; }
   .msg-stats { font-size: 12px; color: var(--muted); margin-top: -4px; font-variant-numeric: tabular-nums; }
   .chat-form { display: flex; gap: 10px; align-items: flex-end; }
   .chat-form textarea {
@@ -505,6 +556,11 @@
   .update-tips { font-size: 12px !important; margin-top: 4px !important; }
   .nav-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-left: 4px; vertical-align: 2px; }
   .nav-dot.warn { background: #f59e0b; box-shadow: 0 0 0 2px var(--panel); }
+  .nav-system { display: inline-flex; align-items: center; }
+  a.nav-dot-link { display: inline-flex; padding: 6px 4px; margin: -6px -4px; }
+  a.nav-dot-link .nav-dot { margin-left: 4px; vertical-align: 0; }
+  /* Linked to from the nav's dot: clear the sticky nav when scrolled to. */
+  #ollama-panel { scroll-margin-top: 80px; }
   .loaded-dot { display: inline-block; width: 8px; height: 8px; margin-right: 7px; border-radius: 50%; background: var(--good); vertical-align: middle; }
   .badge.cap { background: var(--b-blue-bg); color: var(--b-blue); }
   .caps { display: flex; flex-wrap: wrap; gap: 4px; }
@@ -628,6 +684,7 @@
   .chart-tip-bytes { display: block; color: var(--text); margin-bottom: 2px; }
   @media (max-width: 900px) { .chart-grid { grid-template-columns: 1fr; } }
   @media (max-width: 720px) {
+    .bulk-bar { left: 16px; right: 16px; transform: none; }
     nav { flex-wrap: wrap; gap: 12px; padding: 12px 16px; }
     main { padding: 16px; }
     footer.app-footer { padding: 8px 16px; }
@@ -654,7 +711,9 @@
   <a href="/models"{{template "nav_current" (eq .Nav "models")}}>Models</a>
   <a href="/discover"{{template "nav_current" (eq .Nav "discover")}}>Discover</a>
   <a href="/downloads"{{template "nav_current" (eq .Nav "downloads")}}>Downloads {{template "nav_dl_badge" .}}</a>
-  <a href="/system"{{template "nav_current" (eq .Nav "system")}}>System{{with .OllamaUpdate}}{{if .Available}} <span class="nav-dot warn" role="img" aria-label="Ollama update available" title="Ollama {{.Latest}} is available (running {{.Running}})"></span>{{end}}{{end}}</a>{{end}}
+  {{/* The dot is a link of its own, straight to the update panel (a link
+       can't go inside another). */}}
+  <span class="nav-system"><a href="/system"{{template "nav_current" (eq .Nav "system")}}>System</a>{{with .OllamaUpdate}}{{if .Available}}<a class="nav-dot-link" href="/system#ollama-panel" title="Ollama {{.Latest}} is available (running {{.Running}})"><span class="nav-dot warn" role="img" aria-label="Ollama update available"></span></a>{{end}}{{end}}</span>{{end}}
   <div class="theme-switch" role="group" aria-label="Colour theme">
     <button type="button" class="secondary" data-theme-choice="auto">Auto</button>
     <button type="button" class="secondary" data-theme-choice="dark">Dark</button>

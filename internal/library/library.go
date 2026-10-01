@@ -4,7 +4,10 @@
 //
 // ollama.com has no API for this, so its pages are fetched and their HTML read
 // for the few facts shown on them. If the site's markup changes, parsing finds
-// nothing rather than failing, and the caller shows that as "no models".
+// nothing rather than failing. Where there has to be something (a search with
+// no text, a model's tags), finding nothing is ErrUnreadable, so it isn't
+// mistaken for "no models"; the weekly live test (live_test.go) catches the
+// rest.
 package library
 
 import (
@@ -140,7 +143,14 @@ func (c *Client) Search(ctx context.Context, q Query) (Page, error) {
 	if err != nil {
 		return Page{}, err
 	}
-	return parseSearch(resp.body, max(q.Page, 1)), nil
+	p := parseSearch(resp.body, max(q.Page, 1))
+	// Without search text, the first page lists the library's most popular
+	// (or newest) models, so it's never empty unless it couldn't be read.
+	// Capability filters narrow it, but every capability has models.
+	if len(p.Models) == 0 && strings.TrimSpace(q.Text) == "" && q.Page <= 1 {
+		return Page{}, ErrUnreadable
+	}
+	return p, nil
 }
 
 // Tags lists a library model's tags, in the order ollama.com shows them.
@@ -152,11 +162,21 @@ func (c *Client) Tags(ctx context.Context, model string) ([]Tag, error) {
 	if err != nil {
 		return nil, err
 	}
-	return parseTags(resp.body), nil
+	tags := parseTags(resp.body)
+	if len(tags) == 0 { // every model has at least one
+		return nil, ErrUnreadable
+	}
+	return tags, nil
 }
 
-// ErrNotFound is returned when a page doesn't exist (e.g. no such model).
-var ErrNotFound = errors.New("not found")
+var (
+	// ErrNotFound is returned when a page doesn't exist (e.g. no such model).
+	ErrNotFound = errors.New("not found")
+	// ErrUnreadable is returned when an ollama.com page loaded but nothing
+	// could be read from it where there has to be something: most likely
+	// the site's layout has changed and the parser needs updating.
+	ErrUnreadable = errors.New("couldn't read ollama.com (its layout may have changed)")
+)
 
 // fetch GETs url, from the cache if it was fetched within ttl. site names the
 // host in errors.

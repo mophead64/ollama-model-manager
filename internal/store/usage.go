@@ -23,7 +23,45 @@ CREATE TABLE IF NOT EXISTS model_usage_daily (
     loads          INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (model, day)
 );
+
+-- Odds and ends the app keeps about itself, e.g. usage_since (UsageTrackedSince).
+CREATE TABLE IF NOT EXISTS app_meta (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
 `
+
+// UsageTrackedSince is when usage tracking began: the app's first start with
+// it. A model not seen in use can only be said to have gone unused since
+// then. Recorded on first asking; a database from before this was kept
+// counts from its earliest recorded use.
+func (s *Store) UsageTrackedSince(ctx context.Context) (time.Time, error) {
+	var v string
+	err := s.db.QueryRowContext(ctx, `SELECT value FROM app_meta WHERE key = 'usage_since'`).Scan(&v)
+	if err == nil {
+		return time.Parse(time.RFC3339, v)
+	}
+	if err != sql.ErrNoRows {
+		return time.Time{}, err
+	}
+	since := time.Now().UTC()
+	var first time.Time
+	if err := s.db.QueryRowContext(ctx, `SELECT last_used_at FROM model_usage ORDER BY last_used_at LIMIT 1`).Scan(&first); err == nil && first.Before(since) {
+		since = first.UTC()
+	}
+	var day sql.NullString
+	if err := s.db.QueryRowContext(ctx, `SELECT MIN(day) FROM model_usage_daily`).Scan(&day); err == nil && day.Valid {
+		if t, err := time.ParseInLocation(time.DateOnly, day.String, time.Local); err == nil && t.Before(since) {
+			since = t.UTC()
+		}
+	}
+	since = since.Truncate(time.Second)
+	if _, err := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO app_meta (key, value) VALUES ('usage_since', ?)`,
+		since.Format(time.RFC3339)); err != nil {
+		return time.Time{}, err
+	}
+	return since, nil
+}
 
 // MarkModelUsed records that model was in use at the given time.
 func (s *Store) MarkModelUsed(ctx context.Context, model string, at time.Time) error {
@@ -65,22 +103,28 @@ func (s *Store) AddModelUsage(ctx context.Context, model, day string, activeSeco
 	return err
 }
 
-// ModelLoadCounts is how many times each model has been seen loaded, in all.
-// Models with no usage recorded aren't included.
-func (s *Store) ModelLoadCounts(ctx context.Context) (map[string]int, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT model, SUM(loads) FROM model_usage_daily GROUP BY model COLLATE NOCASE`)
+// ModelTotal is a model's usage in all.
+type ModelTotal struct {
+	ActiveSeconds int
+	Loads         int
+}
+
+// ModelTotals is each model's usage in all. Models with none recorded aren't
+// included.
+func (s *Store) ModelTotals(ctx context.Context) (map[string]ModelTotal, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT model, SUM(active_seconds), SUM(loads) FROM model_usage_daily GROUP BY model COLLATE NOCASE`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	out := map[string]int{}
+	out := map[string]ModelTotal{}
 	for rows.Next() {
 		var m string
-		var n int
-		if err := rows.Scan(&m, &n); err != nil {
+		var t ModelTotal
+		if err := rows.Scan(&m, &t.ActiveSeconds, &t.Loads); err != nil {
 			return nil, err
 		}
-		out[m] = n
+		out[m] = t
 	}
 	return out, rows.Err()
 }

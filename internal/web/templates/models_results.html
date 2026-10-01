@@ -1,5 +1,7 @@
 {{define "models_results.html"}}
-<div class="panel" id="model-results"{{with .ListURL}} hx-get="{{.}}" hx-trigger="state-changed from:body" hx-swap="outerHTML"{{end}}>
+{{/* data-matching lists every model the filter matches, on any page, for
+     the bulk bar's "select all" (static/models.js). */}}
+<div class="panel" id="model-results"{{with .ListURL}} hx-get="{{.}}" hx-trigger="state-changed from:body" hx-swap="outerHTML"{{end}}{{if not .Error}} data-matching="{{json .Matching}}"{{end}}>
   {{/* Read by the filter form (hx-include) so filtering keeps the sort. */}}
   <div id="sort-state" hidden>
     {{if .Sort}}<input type="hidden" name="sort" value="{{.Sort}}"><input type="hidden" name="dir" value="{{.Dir}}">{{end}}
@@ -8,15 +10,19 @@
     <div class="error-box">Couldn't list models from Ollama: {{.Error}}</div>
   {{else}}
   <div class="row between">
-    <span class="muted">{{.Total}} model(s){{if .Query}} matching “{{.Query}}”{{end}}{{with .Caps}} with {{range $i, $c := .}}{{if $i}} + {{end}}{{$c}}{{end}}{{end}}</span>
+    <span class="muted">{{.Total}} model(s){{if .Query}} matching “{{.Query}}”{{end}}{{with .Caps}} with {{range $i, $c := .}}{{if $i}} + {{end}}{{$c}}{{end}}{{end}}{{if .Unused}} not used in {{.Unused}}+ days{{end}}</span>
     <span class="muted">Page {{.Page}} of {{.TotalPages}}</span>
   </div>
+  {{with .UnusedSummary}}{{if .Models}}
+  <p class="unused-note">Deleting {{if eq $.Total 1}}it{{else}}all {{$.Total}}{{end}} would free <strong>{{bytes .Bytes}}</strong>. Tick the ones to go (or <button type="button" class="link" data-bulk-select-all>select all</button>), then Delete; you can add them to the blacklist as you do.{{if not .Since.IsZero}} <span class="muted">Usage has been recorded since {{.Since.Local.Format "2 Jan 2006"}}; a model downloaded since counts from its download.</span>{{end}}</p>
+  {{end}}{{end}}
   {{if not .Models}}
-    <p class="muted">{{if or .Query .Caps}}No models match that filter.{{else}}No models on this Ollama server yet.{{end}}</p>
+    <p class="muted">{{if or .Query .Caps .Unused}}No models match that filter.{{else}}No models on this Ollama server yet.{{end}}</p>
   {{else}}
   <div class="table-wrap">
   <table>
     <thead><tr>
+      <th class="check"><input type="checkbox" data-bulk-page aria-label="Select all models on this page"></th>
       {{template "sort_th" (sortcol "Name" .Headers.name)}}
       <th>Family</th>
       {{template "sort_th" (sortcol "Params" .Headers.params)}}
@@ -31,7 +37,8 @@
     <tbody>
     {{range .Models}}
       <tr>
-        <td>{{template "model_name" .Name}}</td>
+        <td class="check"><input type="checkbox" class="bulk-check" value="{{.Name}}" aria-label="Select {{.Name}}"></td>
+        <td>{{template "model_name" .Name}}{{with $.Storage.SameAs .Name}} <span class="badge info" title="The same model as {{range $i, $n := .}}{{if $i}}, {{end}}{{$n}}{{end}} (same digest), so stored once">= {{index . 0}}{{if gt (len .) 1}} +{{sub (len .) 1}}{{end}}</span>{{end}}{{with index $.OtherQuants .Name}} <a class="badge warn" href="#dupes" data-open-dupes title="Also installed as {{range $i, $n := .}}{{if $i}}, {{end}}{{$n}}{{end}}">+{{len .}} quant{{if gt (len .) 1}}s{{end}}</a>{{end}}</td>
         <td>{{or .Details.Family "-"}}</td>
         <td>{{or .Details.ParameterSize "-"}}</td>
         <td>{{or .Details.QuantizationLevel "-"}}</td>
@@ -42,7 +49,7 @@
         <td class="tnum">{{with loadsof $.Loads .Name}}<span title="Times Ollama has loaded it into memory, since this app started tracking">{{.}}</span>{{else}}<span class="muted" title="Not seen loaded since this app started tracking">—</span>{{end}}</td>
         <td>{{with .Capabilities}}<div class="caps">{{range .}}<span class="badge cap">{{.}}</span>{{end}}</div>{{else}}<span class="muted">-</span>{{end}}</td>
         <td class="actions">
-          {{template "model_actions" (rowactions . (index $.LoadedNames .Name) $.AllowDelete $.ListURL)}}
+          {{template "model_actions" (rowactions . (index $.LoadedNames .Name) $.AllowDelete $.ListURL $.Storage)}}
         </td>
       </tr>
     {{end}}
@@ -110,7 +117,7 @@
       {{if .URL}}<a href="{{.URL}}" target="_blank" rel="noopener noreferrer">View on {{.Site}} ↗</a>{{end}}
       {{end}}
       {{if $.AllowDelete}}<button type="button" class="danger" data-dialog-open="delete-model-modal"
-        data-fill-name="{{.Name}}" data-fill-size="{{bytes .Size}}" data-fill-return="{{$.Return}}">Delete</button>{{end}}
+        data-fill-name="{{.Name}}" data-fill-effect="{{$.Storage.DeleteEffect .Name}}" data-fill-return="{{$.Return}}">Delete</button>{{end}}
     </div>
   </details>
 </div>

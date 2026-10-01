@@ -1,6 +1,7 @@
 package web
 
 import (
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"regexp"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/mophead64/ollama-model-manager/internal/ollama"
+	"github.com/mophead64/ollama-model-manager/internal/version"
 )
 
 var templateFuncs = template.FuncMap{
@@ -22,6 +24,7 @@ var templateFuncs = template.FuncMap{
 	"speed":     formatSpeed,
 	"elideurls": elideURLQueries,
 	"hasprefix": strings.HasPrefix,
+	"contains":  strings.Contains,
 	"eta":       humanDuration,
 	"took":      took,
 	"pct":       func(f float64) string { return fmt.Sprintf("%.1f", f) },
@@ -45,8 +48,8 @@ var templateFuncs = template.FuncMap{
 	"loadsof":    func(loads map[string]int, name string) int { return loads[name] },
 	"canchat":    canChat,
 	"pickeritem": func(m ollama.Model, loaded bool) map[string]any { return map[string]any{"Model": m, "Loaded": loaded} },
-	"rowactions": func(m ollama.Model, loaded, allowDelete bool, ret string) map[string]any {
-		return map[string]any{"Model": m, "Loaded": loaded, "AllowDelete": allowDelete, "Return": ret}
+	"rowactions": func(m ollama.Model, loaded, allowDelete bool, ret string, st *libraryStorage) map[string]any {
+		return map[string]any{"Model": m, "Loaded": loaded, "AllowDelete": allowDelete, "Return": ret, "Storage": st}
 	},
 	"ms": formatMS,
 	"copycmd": func(id, cmd string) map[string]string {
@@ -66,6 +69,15 @@ var templateFuncs = template.FuncMap{
 	"sub":     func(a, b int) int { return a - b },
 	"static":  staticURL,
 	"navlogo": func() template.URL { return navLogo },
+	// A build that isn't a release (a local or "dev" build) has nothing to
+	// compare with the latest release.
+	"devbuild": func(v string) bool { return !version.IsRelease(v) },
+	"reply":    renderReply,
+	// For a data- attribute a script reads; html/template escapes it.
+	"json": func(v any) (string, error) {
+		b, err := json.Marshal(v)
+		return string(b), err
+	},
 }
 
 // formatActive renders roughly how long a model was in use, from the usage

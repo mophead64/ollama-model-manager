@@ -54,11 +54,9 @@ func (s *Server) handleSystem(w http.ResponseWriter, r *http.Request) {
 		s.log.Warn("list models failed", "error", err)
 		data["LibraryErr"] = err.Error()
 	} else {
-		var total int64
-		for _, m := range all {
-			total += m.Size
-		}
-		data["Count"], data["TotalBytes"] = len(all), total
+		storage := s.storage(all)
+		data["Storage"] = storage
+		data["Count"], data["TotalBytes"] = storage.Models, storage.Bytes
 		data["Disk"] = s.diskUsage()
 	}
 	s.render(w, r, "system.html", data)

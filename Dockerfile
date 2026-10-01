@@ -26,4 +26,8 @@ VOLUME ["/data"]
 ENV DB_PATH=/data/omm.db
 EXPOSE 8080
 USER nonroot:nonroot
+# Healthy while the app answers and can reach its database and Ollama
+# (GET /healthz). distroless has no curl, so the binary asks itself.
+HEALTHCHECK --interval=30s --timeout=15s --start-period=20s --retries=3 \
+    CMD ["/ollama-model-manager", "healthcheck"]
 ENTRYPOINT ["/ollama-model-manager"]

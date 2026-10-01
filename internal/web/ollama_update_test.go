@@ -18,8 +18,8 @@ func TestOllamaUpdate(t *testing.T) {
 	// A newer release.
 	testServer.ollamaUp.releases.url = fakeGitHub(t, "v0.12.5", "Some **notes**.")
 	testServer.refreshOllamaUpdate(context.Background(), true)
-	if body := get(h, "/models", false).Body.String(); !strings.Contains(body, `<span class="nav-dot warn" role="img" aria-label="Ollama update available" title="Ollama v0.12.5 is available (running 0.12.3)">`) {
-		t.Error("the nav's System link should have an orange dot")
+	if body := get(h, "/models", false).Body.String(); !strings.Contains(body, `<a class="nav-dot-link" href="/system#ollama-panel" title="Ollama v0.12.5 is available (running 0.12.3)"><span class="nav-dot warn" role="img" aria-label="Ollama update available">`) {
+		t.Error("the nav's System link should have an orange dot, linking to the update panel")
 	}
 	page := get(h, "/system", false).Body.String()
 	for _, want := range []string{

@@ -38,11 +38,20 @@ many times it's been loaded. Filter and sort by any of them, and click a name to
 ![The Models page: every installed model, sorted by when it was last used, with how often each has been loaded](docs/images/models.png)
 
 Each model's menu loads or unloads it (choosing how long it stays loaded), opens a chat, shows its **other quants** to
-download, links to it on ollama.com or Hugging Face, or deletes it.
+download, links to it on ollama.com or Hugging Face, or deletes it. Tick several models to unload or delete them at once
+(optionally adding them to the blacklist as they go).
+
+Storage figures count each file once: `llama3.2:latest` and `llama3.2:3b` are the same model, and a variant made from
+another model shares its weights, so neither is counted twice, and deleting a model says exactly how much space it frees
+(this needs Ollama's models folder visible to the app; see `MODELS_DIR`). The free-space tile turns amber, then red, as
+the disk fills.
 
 ### Usage history
 Ollama keeps no record of what you use. This app checks every 15 seconds and records when each model was last used, each
-time it's loaded, and roughly how long it's in use each day, so you can see which models earn their disk space. Each
+time it's loaded, and roughly how long it's in use each day, so you can see which models earn their disk space. The dashboard says how many models have gone unused for 60 days and
+the space they take, and the Models page filters to models unused for 30, 60 or 90 days, to review and delete. A model
+installed in more than one quantisation is flagged, with each one's use side by side and a link to a test comparing
+them. Each
 model's page has a 30-day chart alongside everything Ollama knows about it: architecture, parameters, template and
 Modelfile.
 
@@ -80,7 +89,8 @@ downloading one again asks first, showing the reason you gave.
 
 ### Chat with a model
 A quick way to check a model works: chat with any installed model, switch models mid-conversation to compare them, and
-see tokens, tokens per second and response time for each reply. Nothing is saved.
+see tokens, tokens per second and response time for each reply. Replies (here and in test results) are shown as
+Markdown: lists, tables and code blocks. Nothing is saved.
 
 ![Chat: a reply from qwen3:8b, with its thinking folded away and its speed underneath](docs/images/chat.png)
 
@@ -241,6 +251,16 @@ docker exec ollama-model-manager /ollama-model-manager reset-password          #
 ```
 
 For a standalone binary started with a custom `DB_PATH`, set the same `DB_PATH` when resetting.
+
+## Health check
+
+`GET /healthz` needs no sign-in, for uptime monitors: it answers `200` with `{"status":"ok",...}` when the app's
+database and Ollama are both reachable, and `503` saying which isn't otherwise. The Docker image's `HEALTHCHECK` runs
+the binary's `healthcheck` command, which asks it (the image has no `curl`):
+
+```sh
+./ollama-model-manager healthcheck    # exit status 0 when healthy, 1 when not
+```
 
 ## Verifying downloads
 

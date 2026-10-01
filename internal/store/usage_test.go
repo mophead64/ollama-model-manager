@@ -46,9 +46,9 @@ func TestModelDailyUsage(t *testing.T) {
 	if all, _ := st.ModelDailyUsage(ctx, "qwen3:8b", ""); len(all) != 2 || all[0].ActiveSeconds != 45 {
 		t.Errorf("all days = %+v", all)
 	}
-	counts, err := st.ModelLoadCounts(ctx)
-	if err != nil || counts["qwen3:8b"] != 3 || counts["llama3.2:latest"] != 1 {
-		t.Errorf("load counts = %v, %v", counts, err)
+	totals, err := st.ModelTotals(ctx)
+	if err != nil || totals["qwen3:8b"] != (ModelTotal{ActiveSeconds: 60, Loads: 3}) || totals["llama3.2:latest"] != (ModelTotal{ActiveSeconds: 15, Loads: 1}) {
+		t.Errorf("totals = %v, %v", totals, err)
 	}
 	active, loads, since, err := st.ModelUsageTotals(ctx, "qwen3:8b")
 	if err != nil || active != 60 || loads != 3 || since != "2026-09-01" {
@@ -56,5 +56,29 @@ func TestModelDailyUsage(t *testing.T) {
 	}
 	if _, _, since, _ := st.ModelUsageTotals(ctx, "never:latest"); since != "" {
 		t.Errorf("a model with no usage should have no since, got %q", since)
+	}
+}
+
+func TestUsageTrackedSince(t *testing.T) {
+	ctx := context.Background()
+
+	// A new database starts tracking now, and remembers it.
+	st := openTest(t)
+	since, err := st.UsageTrackedSince(ctx)
+	if err != nil || time.Since(since) > time.Minute {
+		t.Fatalf("new database: %v, %v", since, err)
+	}
+	st.MarkModelUsed(ctx, "llama3.2:latest", since.Add(-48*time.Hour)) // recorded later, whatever it says
+	if again, _ := st.UsageTrackedSince(ctx); !again.Equal(since) {
+		t.Errorf("asked again: %v, want %v", again, since)
+	}
+
+	// One from before it was kept counts from its earliest recorded use.
+	st = openTest(t)
+	used := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
+	st.MarkModelUsed(ctx, "qwen3:8b", used)
+	st.AddModelUsage(ctx, "qwen3:8b", "2026-06-03", 60, 1)
+	if got, err := st.UsageTrackedSince(ctx); err != nil || !got.Equal(used) {
+		t.Errorf("existing usage: %v, %v; want %v", got, err, used)
 	}
 }
