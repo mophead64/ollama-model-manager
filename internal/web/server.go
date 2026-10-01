@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strings"
 
@@ -33,6 +34,9 @@ type Config struct {
 	HFURL       string   // Hugging Face; "" for the real one
 	HFToken     string   // optional Hugging Face access token (HF_TOKEN)
 	Env         []EnvVar // the environment settings in effect, for the Settings page
+	// Reverse proxies whose X-Forwarded-For is believed (TRUSTED_PROXIES), so
+	// logins are rate limited and logged by the browser's address, not the proxy's.
+	TrustedProxies []netip.Prefix
 }
 
 // EnvVar describes one environment variable the app reads, as it took effect.
@@ -59,6 +63,11 @@ type Server struct {
 	// Ollama's own updates; kept fresh by RunOllamaUpdateChecks.
 	ollamaUp *ollamaUpdates
 	logins   *loginLimiter
+	// Models' layers, read from their manifests (storage.go).
+	manifests manifestCache
+	// This machine's network addresses, for checking whether Ollama answers
+	// on them (localNetworkAddrs; tests substitute their own).
+	lanAddrs func() []string
 }
 
 func NewServer(ol *ollama.Client, st *store.Store, dl *downloads.Manager, mt *modeltest.Runner, sys *sysinfo.Sampler, cfg Config, log *slog.Logger) (*Server, error) {
@@ -69,6 +78,7 @@ func NewServer(ol *ollama.Client, st *store.Store, dl *downloads.Manager, mt *mo
 	return &Server{
 		ol: ol, st: st, dl: dl, mt: mt, sys: sys, lib: library.New(cfg.LibraryURL, cfg.HFURL, cfg.HFToken), cfg: cfg, log: log,
 		tmpl: tmpl, updates: newUpdateChecker(), ollamaUp: newOllamaUpdates(), logins: newLoginLimiter(),
+		lanAddrs: localNetworkAddrs,
 	}, nil
 }
 
@@ -84,11 +94,11 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /account/username", s.handleChangeUsername)
 	mux.HandleFunc("POST /account/password", s.handleChangePassword)
 	mux.HandleFunc("GET /account/huggingface", s.handleHuggingFace)
+	mux.HandleFunc("GET /account/ollama", s.handleOllamaSettings)
 
 	mux.HandleFunc("GET /{$}", s.handleDashboard)
 
 	mux.HandleFunc("GET /version/check", s.handleVersionCheck)
-	mux.HandleFunc("GET /version/release", s.handleRelease)
 
 	mux.HandleFunc("GET /models", s.handleModels)
 	mux.HandleFunc("GET /models/blacklist", s.handleBlacklist)
@@ -108,6 +118,9 @@ func (s *Server) Routes() http.Handler {
 	// The name goes in the form body: {name...} has to be the last path segment,
 	// so it can't be followed by /delete.
 	mux.HandleFunc("POST /models/delete", s.handleDeleteModel)
+	mux.HandleFunc("GET /models/bulk/confirm", s.handleBulkConfirm)
+	mux.HandleFunc("POST /models/bulk/delete", s.handleBulkDelete)
+	mux.HandleFunc("POST /models/bulk/unload", s.handleBulkUnload)
 	mux.HandleFunc("POST /models/load", s.handleLoadModel)
 	mux.HandleFunc("POST /models/unload", s.handleUnloadModel)
 	mux.HandleFunc("GET /discover", s.handleDiscover)
@@ -130,6 +143,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /system/load", s.handleSystemLoad)
 	mux.HandleFunc("GET /system/running", s.handleRunningModels)
 	mux.HandleFunc("GET /system/ollama", s.handleOllamaUpdate)
+	mux.HandleFunc("GET /system/app", s.handleAppUpdate)
 
 	mux.HandleFunc("GET /downloads", s.handleDownloads)
 	mux.HandleFunc("POST /downloads", s.handleQueueDownload)
@@ -139,9 +153,13 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /downloads/{id}/retry", s.handleRetryDownload)
 	mux.HandleFunc("POST /downloads/{id}/delete", s.handleDeleteDownload)
 
+	root := http.NewServeMux()
+	// For uptime monitors and Docker's HEALTHCHECK, so it needs no session.
+	root.HandleFunc("GET /healthz", s.handleHealth)
 	// Rejects cross-site POSTs (via Sec-Fetch-Site/Origin), so another page
 	// can't submit forms here using the session cookie.
-	return http.NewCrossOriginProtection().Handler(s.requireAuth(mux))
+	root.Handle("/", http.NewCrossOriginProtection().Handler(s.requireAuth(mux)))
+	return root
 }
 
 // render executes a template. For map data it also fills in what every page's

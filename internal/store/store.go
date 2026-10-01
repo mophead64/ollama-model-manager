@@ -66,3 +66,9 @@ func Open(ctx context.Context, path string) (*Store, error) {
 }
 
 func (s *Store) Close() error { return s.db.Close() }
+
+// Ping checks the database answers a query, for the health check.
+func (s *Store) Ping(ctx context.Context) error {
+	var one int
+	return s.db.QueryRowContext(ctx, `SELECT 1`).Scan(&one)
+}

@@ -159,6 +159,7 @@ func (s *Server) handleDiscover(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.log.Error("model search failed", "source", st.Source, "error", err)
 		data["Error"] = err.Error()
+		data["Unreadable"] = errors.Is(err, library.ErrUnreadable)
 	}
 
 	switch {
@@ -235,6 +236,7 @@ func (s *Server) discoverHF(r *http.Request, st discoverState, filter bool, loca
 	data["HFCards"] = cards
 	data["Hidden"] = len(page.Models) - len(cards) - hiddenBL
 	data["HiddenBL"] = hiddenBL
+	data["Unpullable"] = page.Unpullable
 	if page.NextCursor != "" {
 		next := st
 		next.Cursor = page.NextCursor
@@ -259,8 +261,11 @@ func (s *Server) handleDiscoverTags(w http.ResponseWriter, r *http.Request) {
 	model := r.URL.Query().Get("model")
 	tags, err := s.lib.Tags(r.Context(), model)
 	if err != nil {
-		if errors.Is(err, library.ErrNotFound) {
+		switch {
+		case errors.Is(err, library.ErrNotFound):
 			err = errMsg(model + " wasn't found on ollama.com.")
+		case errors.Is(err, library.ErrUnreadable):
+			err = errMsg("Couldn't read " + model + "'s tags from ollama.com (its layout may have changed). You can still download it by name, e.g. " + model + ":latest, from the Downloads page.")
 		}
 		s.render(w, r, "error_fragment.html", map[string]any{"Error": err.Error()})
 		return

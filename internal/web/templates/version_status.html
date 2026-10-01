@@ -1,6 +1,8 @@
 {{define "version_status.html"}}
 <span id="version-status" class="muted">
-  {{- if .Update.Available}}
+  {{- if devbuild .Version}}
+  <span class="badge info" title="Built from source rather than a release, so there's no release to compare it with">development build</span>
+  {{- else if .Update.Available}}
   <a href="{{.Update.URL}}" target="_blank" rel="noopener noreferrer" class="badge update">Update available: {{.Update.Latest}}</a>
   {{- else if .Update.Checked}}
   <span class="badge on" title="Checked {{time .Update.CheckedAt}}">✓ Up to date</span>

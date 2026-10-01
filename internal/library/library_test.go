@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"reflect"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -251,5 +253,62 @@ func TestHFToken(t *testing.T) {
 	}
 	if _, err := New("", srv.URL, "").HFWhoAmI(context.Background()); err == nil {
 		t.Error("no token: want an error")
+	}
+}
+
+func TestHFSearchLeavesOutUnpullableRepos(t *testing.T) {
+	// A repo of GGUFs Ollama can pull, one split into per-layer files (like
+	// lyssquant/GLM-5.2-Q2_K-MTP-Q8-layers), one with only a vision projector,
+	// and one whose files weren't listed, which is kept rather than guessed at.
+	body := `[
+	  {"id": "unsloth/Good-8B-GGUF", "siblings": [{"rfilename": "README.md"}, {"rfilename": "Good-8B-Q4_K_M.gguf"}, {"rfilename": "Q8_0/Good-8B-Q8_0-00001-of-00002.gguf"}, {"rfilename": "Q8_0/Good-8B-Q8_0-00002-of-00002.gguf"}, {"rfilename": "mmproj-F16.gguf"}]},
+	  {"id": "someone/Big-Q2_K-layers", "siblings": [{"rfilename": "README.md"}, {"rfilename": "layers/layer-000.gguf"}, {"rfilename": "layers/layer-001.gguf"}, {"rfilename": "shared/embeddings.gguf"}]},
+	  {"id": "someone/Projector-only", "siblings": [{"rfilename": "mmproj-model-f16.gguf"}]},
+	  {"id": "someone/Unlisted-GGUF"}
+	]`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !slices.Contains(r.URL.Query()["expand[]"], "siblings") {
+			t.Error("search should ask for the file names (expand[]=siblings)")
+		}
+		w.Write([]byte(body))
+	}))
+	defer srv.Close()
+
+	p, err := New("", srv.URL, "").HFSearch(context.Background(), HFQuery{Text: "q"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var repos []string
+	for _, m := range p.Models {
+		repos = append(repos, fmt.Sprintf("%s=%d", m.Repo, m.Quants))
+	}
+	if want := []string{"unsloth/Good-8B-GGUF=2", "someone/Unlisted-GGUF=-1"}; !reflect.DeepEqual(repos, want) || p.Unpullable != 2 {
+		t.Errorf("models = %v, unpullable = %d; want %v and 2", repos, p.Unpullable, want)
+	}
+}
+
+// A page that loads but can't be read (ollama.com changed its markup) is an
+// error where there must be results, and plain "no results" elsewhere.
+func TestUnreadablePages(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`<html><body><div class="all-new-markup">…</div></body></html>`))
+	}))
+	defer srv.Close()
+	c := New(srv.URL, "", "")
+	ctx := context.Background()
+
+	for _, q := range []Query{{}, {Order: "newest"}, {Caps: []string{"vision"}}} {
+		if _, err := c.Search(ctx, q); !errors.Is(err, ErrUnreadable) {
+			t.Errorf("blank search %+v: err = %v, want ErrUnreadable", q, err)
+		}
+	}
+	if p, err := c.Search(ctx, Query{Text: "no-such-model"}); err != nil || len(p.Models) != 0 {
+		t.Errorf("a text search can legitimately find nothing: %+v, %v", p, err)
+	}
+	if p, err := c.Search(ctx, Query{Page: 3}); err != nil || len(p.Models) != 0 {
+		t.Errorf("a later page can be empty: %+v, %v", p, err)
+	}
+	if _, err := c.Tags(ctx, "qwen3"); !errors.Is(err, ErrUnreadable) {
+		t.Errorf("tags: err = %v, want ErrUnreadable", err)
 	}
 }

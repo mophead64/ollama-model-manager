@@ -1,8 +1,9 @@
 // The Chat page: a model picker (a dropdown with keyboard support and a
 // filter) and the conversation. The conversation lives here and is posted
 // whole to /chat each turn, to whichever model is picked at the time; the
-// reply streams back as newline-delimited JSON (see handlers_chat.go) and is
-// shown as plain text.
+// reply streams back as newline-delimited JSON (see handlers_chat.go), shown
+// as plain text while it arrives, then as the Markdown the server renders
+// once it's done.
 (function () {
   var panel = document.getElementById("chat");
   if (!panel) return;
@@ -252,6 +253,14 @@
         }
         if (ev.content) { reply += ev.content; answer.appendData(ev.content); }
         if (ev.done) {
+          if (ev.html) {
+            // Rendered in goldmark's safe mode (renderReply): HTML in the
+            // reply comes back escaped, so it can go in as markup.
+            var md = el("div", "md");
+            md.innerHTML = ev.html;
+            bubble.replaceChild(md, answer);
+            bubble.classList.add("rendered");
+          }
           log.appendChild(statsLine(model, ev.stats));
           announceChange(); // its last used, and unload countdown, moved on
         }

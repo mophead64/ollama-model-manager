@@ -186,7 +186,7 @@ func TestModelsPagination(t *testing.T) {
 		}
 	}
 	// (The full page also lists it in the "loaded in memory" panel.)
-	if strings.Contains(get(h, "/models", true).Body.String(), "user/custom:v1") {
+	if strings.Contains(get(h, "/models", true).Body.String(), `href="/models/user/custom:v1"`) {
 		t.Error("page 1 should not include the last model")
 	}
 

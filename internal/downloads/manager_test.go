@@ -7,10 +7,13 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
+	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -18,14 +21,18 @@ import (
 	"github.com/mophead64/ollama-model-manager/internal/store"
 )
 
-// fakeOllama serves /api/tags and a scripted /api/pull:
+// fakeOllama serves /api/version, /api/tags and a scripted /api/pull:
 //   - "broken:*" fails after the manifest
 //   - "slow:*" trickles progress until the client goes away
 //   - anything else pulls two layers (900 + 100 bytes) and succeeds
 func fakeOllama(t *testing.T) *httptest.Server {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/tags" {
+		switch r.URL.Path {
+		case "/api/version":
+			w.Write([]byte(`{"version":"0.12.3"}`))
+			return
+		case "/api/tags":
 			w.Write([]byte(`{"models":[{"name":"installed:latest"}]}`))
 			return
 		}
@@ -305,5 +312,159 @@ func TestRetryNewNameAlreadyQueued(t *testing.T) {
 
 	if _, _, err := m.Retry(ctx, failed, "admin", "qwen3:8b"); !errors.Is(err, store.ErrAlreadyQueued) {
 		t.Errorf("switching to a queued model err = %v", err)
+	}
+}
+
+// flakyOllama is an Ollama that can go away. While down, /api/version answers
+// 503 (as a proxy in front of a stopped Ollama would). Pulls of "drop:*" are
+// cut off mid-stream the first dropFirst times (always, if it's negative),
+// having got to 300 of 1000 bytes; after that, and for any other model, a
+// pull succeeds.
+type flakyOllama struct {
+	mu        sync.Mutex
+	down      bool
+	dropFirst int
+	pulls     int
+}
+
+func (f *flakyOllama) setDown(v bool) { f.mu.Lock(); f.down = v; f.mu.Unlock() }
+
+func (f *flakyOllama) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	f.mu.Lock()
+	down := f.down
+	f.mu.Unlock()
+	switch r.URL.Path {
+	case "/api/version":
+		if down {
+			http.Error(w, `{"error":"ollama is restarting"}`, http.StatusServiceUnavailable)
+			return
+		}
+		w.Write([]byte(`{"version":"0.12.3"}`))
+		return
+	case "/api/tags":
+		w.Write([]byte(`{"models":[]}`))
+		return
+	}
+	var req struct{ Model string }
+	json.NewDecoder(r.Body).Decode(&req)
+	f.mu.Lock()
+	f.pulls++
+	drop := strings.HasPrefix(req.Model, "drop:") && (f.dropFirst < 0 || f.pulls <= f.dropFirst)
+	f.mu.Unlock()
+
+	fl := w.(http.Flusher)
+	send := func(s string) { fmt.Fprintln(w, s); fl.Flush() }
+	send(`{"status":"pulling manifest"}`)
+	send(`{"status":"pulling aaa","digest":"sha256:aaa","total":1000,"completed":300}`)
+	if drop {
+		// Ollama stops: the connection goes without the stream finishing.
+		conn, _, err := w.(http.Hijacker).Hijack()
+		if err == nil {
+			conn.Close()
+		}
+		return
+	}
+	send(`{"status":"pulling aaa","digest":"sha256:aaa","total":1000,"completed":1000}`)
+	send(`{"status":"success"}`)
+}
+
+func newFlakyManager(t *testing.T, f *flakyOllama) (*Manager, *store.Store) {
+	t.Helper()
+	m, st := newTestManager(t)
+	srv := httptest.NewServer(f)
+	t.Cleanup(srv.Close)
+	m.ol = ollama.New(srv.URL)
+	m.retryEvery = 10 * time.Millisecond
+	return m, st
+}
+
+func TestResumesWhenOllamaComesBack(t *testing.T) {
+	ctx := context.Background()
+	f := &flakyOllama{dropFirst: 1}
+	m, st := newFlakyManager(t, f)
+	id, _, _, _ := m.Enqueue(ctx, "drop:big", "admin")
+	runManager(t, m)
+
+	d := waitFor(t, st, id, store.DownloadCompleted)
+	if d.Attempts != 2 || d.Error != "" {
+		t.Errorf("download = %+v, want completed on attempt 2", d)
+	}
+	log := logText(t, st, id)
+	for _, want := range []string{"warn: Lost the connection to Ollama at 300 B of 1000 B", "It will resume when Ollama is back", "Starting download (attempt 2)", "Download complete"} {
+		if !strings.Contains(log, want) {
+			t.Errorf("log missing %q:\n%s", want, log)
+		}
+	}
+	if strings.Contains(log, "Failed") {
+		t.Errorf("an Ollama restart shouldn't fail the download:\n%s", log)
+	}
+}
+
+func TestQueueWaitsWhileOllamaIsDown(t *testing.T) {
+	ctx := context.Background()
+	f := &flakyOllama{down: true}
+	m, st := newFlakyManager(t, f)
+	id, _, _, _ := m.Enqueue(ctx, "good", "admin")
+	runManager(t, m)
+
+	deadline := time.Now().Add(5 * time.Second)
+	for m.Waiting() == nil {
+		if time.Now().After(deadline) {
+			t.Fatal("the queue should be held while Ollama is down")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if w := m.Waiting(); !strings.Contains(w.Err, "ollama is restarting") || w.Since.IsZero() {
+		t.Errorf("waiting = %+v", w)
+	}
+	time.Sleep(50 * time.Millisecond) // several retries' worth
+	if d, _ := st.GetDownload(ctx, id); d.Status != store.DownloadQueued || d.Attempts != 0 {
+		t.Errorf("nothing should start while Ollama is down: %+v", d)
+	}
+	f.mu.Lock()
+	pulls := f.pulls
+	f.mu.Unlock()
+	if pulls != 0 {
+		t.Errorf("%d pulls sent to a down Ollama", pulls)
+	}
+
+	f.setDown(false)
+	waitFor(t, st, id, store.DownloadCompleted)
+	if m.Waiting() != nil {
+		t.Error("the hold should clear once Ollama is back")
+	}
+}
+
+func TestGivesUpOnRepeatedDrops(t *testing.T) {
+	ctx := context.Background()
+	f := &flakyOllama{dropFirst: -1}
+	m, st := newFlakyManager(t, f)
+	id, _, _, _ := m.Enqueue(ctx, "drop:always", "admin")
+	runManager(t, m)
+
+	d := waitFor(t, st, id, store.DownloadFailed)
+	if d.Attempts != maxAutoResumes+1 || !strings.Contains(d.Error, "lost the connection to Ollama 5 times in a row without getting any further") {
+		t.Errorf("download = %+v", d)
+	}
+}
+
+func TestLostOllama(t *testing.T) {
+	for _, c := range []struct {
+		err  error
+		want bool
+	}{
+		{ollama.ErrPullCutOff, true},
+		{fmt.Errorf("contact ollama at x: %w", &net.OpError{Op: "dial", Err: syscall.ECONNREFUSED}), true},
+		{io.ErrUnexpectedEOF, true},
+		{&ollama.StatusError{StatusCode: 503}, true},
+		{&ollama.StatusError{StatusCode: 502}, true},
+		{&ollama.StatusError{StatusCode: 500}, false},
+		{&ollama.StatusError{StatusCode: 404}, false},
+		{&ollama.PullError{Message: "pull model manifest: file does not exist"}, false},
+		{errors.New("unexpected response from ollama"), false},
+	} {
+		if got := lostOllama(c.err); got != c.want {
+			t.Errorf("lostOllama(%v) = %v, want %v", c.err, got, c.want)
+		}
 	}
 }

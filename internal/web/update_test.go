@@ -53,7 +53,7 @@ func TestReleaseNotesRenderedSafely(t *testing.T) {
 	}
 }
 
-func TestReleasePanel(t *testing.T) {
+func TestSystemAppPanel(t *testing.T) {
 	render := func(t *testing.T, running, latest string) string {
 		setVersion(t, running)
 		s, err := NewServer(nil, nil, nil, nil, nil, Config{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
@@ -62,30 +62,62 @@ func TestReleasePanel(t *testing.T) {
 		}
 		s.updates.url = fakeGitHub(t, latest, "Some **notes**.")
 		rec := httptest.NewRecorder()
-		s.handleRelease(rec, httptest.NewRequest("GET", "/version/release", nil))
+		s.handleAppUpdate(rec, httptest.NewRequest("GET", "/system/app", nil))
 		return rec.Body.String()
 	}
 
 	cur := render(t, "v2026.09.20", "v2026.09.20")
-	if !strings.Contains(cur, `<span class="badge on">This release</span>`) || !strings.Contains(cur, "<strong>notes</strong>") {
-		t.Errorf("current release panel:\n%s", cur)
+	for _, want := range []string{
+		`<span class="mono">v2026.09.20</span>`, `<span class="badge on">✓ Up to date</span>`,
+		"<summary>Release notes for v2026.09.20</summary>", "<strong>notes</strong>",
+		`<details class="status-more"><summary>How to update Ollama Model Manager</summary>`, `value="docker compose pull &amp;&amp; docker compose up -d"`,
+	} {
+		if !strings.Contains(cur, want) {
+			t.Errorf("up to date panel missing %q:\n%s", want, cur)
+		}
 	}
-	if strings.Contains(cur, "how to update") {
-		t.Error("current release shouldn't point at updating")
+	if strings.Contains(cur, "system-update-panel") || strings.Contains(cur, `hx-trigger="load"`) {
+		t.Errorf("up to date panel shouldn't show update steps or refresh itself again:\n%s", cur)
 	}
 
 	old := render(t, "v2026.09.01", "v2026.09.20")
-	for _, want := range []string{"New release", "You're running <span class=\"mono\">v2026.09.01</span>. The notes below say how to update."} {
+	for _, want := range []string{
+		"Update available: v2026.09.20", "Update Ollama Model Manager to v2026.09.20", `you're running <span class="mono">v2026.09.01</span>`,
+		"<summary>Release notes for v2026.09.20</summary>", "<strong>notes</strong>",
+		"How to update depends on how you run it", `value="docker pull ghcr.io/mophead64/ollama-model-manager:latest"`,
+		`value="xattr -d com.apple.quarantine ollama-model-manager"`, `value="git pull &amp;&amp; ./run-local.sh"`,
+	} {
 		if !strings.Contains(old, want) {
-			t.Errorf("update panel missing %q", want)
+			t.Errorf("update panel missing %q:\n%s", want, old)
 		}
+	}
+	if strings.Contains(old, "<summary>How to update Ollama Model Manager</summary>") {
+		t.Error("with an update out, the steps should be shown, not folded away")
 	}
 }
 
-func TestAccountHasReleasePanel(t *testing.T) {
+func TestSystemPageLayout(t *testing.T) {
+	h := newTestServer(t, fakeOllama(t, 1).URL) // two models, 3 KB between them
+	body := get(h, "/system", false).Body.String()
+	for _, want := range []string{
+		`<div class="value">2</div><div class="label">models installed</div>`,
+		`<div class="value">` + formatBytes(3072) + `</div><div class="label">storage used by models <span class="tip-wrap"`,
+		`hx-get="/system/ollama" hx-trigger="load"`, `hx-get="/system/app" hx-trigger="load"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("system page missing %q", want)
+		}
+	}
+	// Ollama and this app's versions come last, after the graphs.
+	if strings.Index(body, `id="ollama-panel"`) < strings.Index(body, `data-charts=`) || strings.Index(body, `id="app-panel"`) < strings.Index(body, `data-charts=`) {
+		t.Error("the version panels should be at the bottom of the page")
+	}
+}
+
+func TestAccountHasNoReleasePanel(t *testing.T) {
 	h := newTestServer(t, fakeOllama(t, 1).URL)
-	if body := get(h, "/account", false).Body.String(); !strings.Contains(body, `hx-get="/version/release"`) {
-		t.Error("account page has no release panel")
+	if body := get(h, "/account", false).Body.String(); strings.Contains(body, "Latest release") {
+		t.Error("the release panel is on the System page now, not Settings")
 	}
 }
 

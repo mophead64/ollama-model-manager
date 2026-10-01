@@ -30,8 +30,14 @@ services:
       ALLOW_MODEL_DELETE: "true"
       # Optional Hugging Face read token, so Discover lists private repos and
       # downloads are checked with it. Ollama's own access for pulling gated or
-      # private models is set up from the admin's Account page instead.
+      # private models is set up from the admin's Settings page instead.
       # HF_TOKEN: hf_...
+      # Your time zone, for the times shown and usage history's days. Without
+      # it the container runs on UTC.
+      # TZ: Europe/London
+      # If a reverse proxy on this server sits in front of this app, its
+      # address, so logins are limited and logged by the browser's address.
+      # TRUSTED_PROXIES: 127.0.0.1
     volumes:
       - omm-data:/data
       # Ollama's model folder, read-only. /usr/share/ollama/.ollama/models is

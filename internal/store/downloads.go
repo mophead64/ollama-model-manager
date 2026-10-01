@@ -116,7 +116,10 @@ func (s *Store) queryDownloads(ctx context.Context, q string, args ...any) ([]Do
 // EnqueueDownload adds a model to the back of the queue. It refuses a model
 // that's already queued or downloading (compared case-insensitively, as
 // Ollama treats names).
-func (s *Store) EnqueueDownload(ctx context.Context, model, requestedBy string) (int64, error) {
+// EnqueueDownload adds a model to the back of the queue. size is its
+// expected download size (0 if unknown), recorded as its total until the pull
+// reports its own, so the queue's disk needs can be added up.
+func (s *Store) EnqueueDownload(ctx context.Context, model, requestedBy string, size int64) (int64, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, err
@@ -133,8 +136,8 @@ func (s *Store) EnqueueDownload(ctx context.Context, model, requestedBy string) 
 	}
 	now := time.Now().UTC()
 	res, err := tx.ExecContext(ctx,
-		`INSERT INTO downloads (model, status, requested_by, created_at, queued_at) VALUES (?, ?, ?, ?, ?)`,
-		model, DownloadQueued, requestedBy, now, now)
+		`INSERT INTO downloads (model, status, requested_by, created_at, queued_at, total_bytes) VALUES (?, ?, ?, ?, ?, ?)`,
+		model, DownloadQueued, requestedBy, now, now, max(size, 0))
 	if err != nil {
 		return 0, err
 	}
@@ -207,12 +210,24 @@ func (s *Store) FinishDownload(ctx context.Context, id int64, status, errMsg str
 }
 
 // SetDownloadModel changes which model a (finished) download fetches, for a
-// retry under a corrected name. Progress from the old model is reset.
-func (s *Store) SetDownloadModel(ctx context.Context, id int64, model string) error {
+// retry under a corrected name. Progress from the old model is reset, and
+// size (0 if unknown) is the new one's expected total, as in EnqueueDownload.
+func (s *Store) SetDownloadModel(ctx context.Context, id int64, model string, size int64) error {
 	_, err := s.db.ExecContext(ctx,
-		`UPDATE downloads SET model = ?, completed_bytes = 0, total_bytes = 0 WHERE id = ? AND status NOT IN (?, ?)`,
-		model, id, DownloadQueued, DownloadDownloading)
+		`UPDATE downloads SET model = ?, completed_bytes = 0, total_bytes = ? WHERE id = ? AND status NOT IN (?, ?)`,
+		model, max(size, 0), id, DownloadQueued, DownloadDownloading)
 	return err
+}
+
+// QueuedBytes is how much the queued and running downloads still have to
+// fetch, as far as is known: each one's total (expected, until its pull
+// reports one) less what it's fetched so far.
+func (s *Store) QueuedBytes(ctx context.Context) (int64, error) {
+	var n int64
+	err := s.db.QueryRowContext(ctx,
+		`SELECT COALESCE(SUM(MAX(total_bytes - completed_bytes, 0)), 0) FROM downloads WHERE status IN (?, ?)`,
+		DownloadQueued, DownloadDownloading).Scan(&n)
+	return n, err
 }
 
 // RequeueDownload puts a download back in the queue: at the back for a retry,

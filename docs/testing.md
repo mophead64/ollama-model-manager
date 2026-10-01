@@ -26,6 +26,10 @@ The **New test** form has:
   and the next.
 - **Name**: optional. Without one, the test is named after the first line of the prompt.
 
+**Compare in a test** on the Models page (for a model you have in more than one quantisation; see
+[Disk space](disk-space.md#models-in-more-than-one-quantisation)) opens the form with those models ticked and the test
+named, ready for a prompt.
+
 The **Summary** beside the form shows what you're about to queue: models × runs, an estimate of how long it'll take
 (from how long those models took in earlier tests), the total size of the models, and a warning for any that won't fit
 in VRAM. **Queue test** stays disabled until you've picked a model and written a prompt; hover over it to see what's
@@ -60,7 +64,7 @@ The **Testing** tab shows how many tests are queued or running, and the Tests li
 
 ## Reading the results
 
-![A finished test: the comparison table, and the first run's reply](images/test-results.png)
+![A finished test: the comparison table of four models, and the first run's reply, with its code, list and table laid out](images/test-results.png)
 
 A test's page has:
 
@@ -70,7 +74,8 @@ A test's page has:
   - **Time**: the whole request, from sending the prompt to the last token.
   - **Load**: the longest load time of its runs, usually the first, when Ollama loaded it into memory.
 - **Each run**, per model: open one to read its reply (and its thinking, for thinking models), with its token count,
-  speed and time, or the error if it failed.
+  speed and time, or the error if it failed. Replies are shown as Markdown, as the chat shows them: code blocks, lists
+  and tables are laid out, and any HTML in a reply is shown as text.
 
 The page refreshes itself while the test runs. **Run again** queues a copy of the test, and **Delete** removes it and its
 results (the models aren't affected).
@@ -80,7 +85,8 @@ results (the models aren't affected).
 - **Use several runs.** Replies vary from run to run. Three to five runs per model give a fairer average than one.
 - **Compare quantisations of one model.** Use [Other quants](discovery.md#other-quants-of-a-model-you-have) to download
   a Q4 and a Q8 of the same model, then test both with the same prompt: you'll see what the extra size buys in quality,
-  and what it costs in speed.
+  and what it costs in speed. Then delete the one you don't need: the Models page lists models you have in more than
+  one quantisation, with how much you use each ([Disk space](disk-space.md#models-in-more-than-one-quantisation)).
 - **Mind the first run.** Its time includes loading the model. Tokens/s isn't affected, but Time is.
 - **Close other heavy work.** Other models loaded in memory, or a download in progress, share the machine and can slow a
   test down.

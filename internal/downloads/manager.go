@@ -2,17 +2,21 @@
 // that pulls queued models through Ollama one at a time, recording progress
 // and a per-download log in the store. It runs independently of any browser,
 // so a download carries on after the user closes the page, and the queue
-// survives restarts (an interrupted download resumes where Ollama left off).
+// survives restarts of this app and of Ollama (an interrupted download resumes
+// where Ollama left off).
 package downloads
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/mophead64/ollama-model-manager/internal/ollama"
@@ -29,6 +33,12 @@ const (
 	persistEvery = 5 * time.Second
 	// Speed is averaged over this window, so the ETA doesn't jump around.
 	speedWindow = 15 * time.Second
+	// While Ollama isn't answering, the queue is held and Ollama asked again
+	// this often.
+	ollamaRetryEvery = 5 * time.Second
+	// A download that loses Ollama this many times in a row without getting
+	// any further is failed rather than resumed forever.
+	maxAutoResumes = 5
 )
 
 // Live is a snapshot of the download in progress, for the UI.
@@ -56,6 +66,9 @@ type Manager struct {
 	ol       *ollama.Client
 	log      *slog.Logger
 	registry *http.Client // nil = default; tests point this at a fake
+	// How often Ollama is asked again while it isn't answering (ollamaRetryEvery;
+	// shorter in tests).
+	retryEvery time.Duration
 
 	wake chan struct{}
 
@@ -63,10 +76,26 @@ type Manager struct {
 	live     *Live
 	cancelID int64
 	cancel   context.CancelCauseFunc
+	waiting  *Waiting
+
+	// Auto-resumes of each download since it last got any further, keyed by
+	// ID. Only the worker goroutine touches it.
+	resumes map[int64]resumeCount
+}
+
+// Waiting is set while the queue is held because Ollama isn't answering.
+type Waiting struct {
+	Since time.Time
+	Err   string // why the last attempt to reach Ollama failed
+}
+
+type resumeCount struct {
+	n         int
+	completed int64 // bytes reached when last resumed
 }
 
 func New(st *store.Store, ol *ollama.Client, log *slog.Logger) *Manager {
-	return &Manager{st: st, ol: ol, log: log, wake: make(chan struct{}, 1)}
+	return &Manager{st: st, ol: ol, log: log, wake: make(chan struct{}, 1), resumes: map[int64]resumeCount{}, retryEvery: ollamaRetryEvery}
 }
 
 var (
@@ -88,7 +117,7 @@ func (m *Manager) Enqueue(ctx context.Context, input, requestedBy string) (id in
 // EnqueueChecked adds a model that Check has already vetted to the queue, so
 // a caller can look at the check (e.g. the download size) before committing.
 func (m *Manager) EnqueueChecked(ctx context.Context, c Checked, requestedBy string) (int64, error) {
-	id, err := m.st.EnqueueDownload(ctx, c.Name, requestedBy)
+	id, err := m.st.EnqueueDownload(ctx, c.Name, requestedBy, c.diskNeed())
 	if err != nil {
 		return 0, err
 	}
@@ -105,6 +134,16 @@ type Checked struct {
 	Installed bool   // already downloaded, so pulling only fetches updates
 	Warning   string // for the user, when the registry couldn't be asked
 	note      string // for the download's log
+}
+
+// diskNeed is roughly the disk space the download takes: its size, or
+// nothing for a model that's installed already (pulling it again only
+// fetches what's changed).
+func (c Checked) diskNeed() int64 {
+	if c.Installed {
+		return 0
+	}
+	return c.Size
 }
 
 // Check normalises a requested name, asks its registry whether it exists
@@ -196,6 +235,17 @@ func (m *Manager) Live() *Live {
 	return &l
 }
 
+// Waiting returns why the queue is held, or nil when it isn't.
+func (m *Manager) Waiting() *Waiting {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.waiting == nil {
+		return nil
+	}
+	w := *m.waiting
+	return &w
+}
+
 // Cancel stops a download: a queued one is taken out of the queue, the
 // running one is aborted (Ollama keeps what it downloaded, so a retry resumes).
 func (m *Manager) Cancel(ctx context.Context, id int64) error {
@@ -251,7 +301,7 @@ func (m *Manager) Retry(ctx context.Context, id int64, by, newInput string) (nam
 	}
 
 	if c != nil {
-		if err := m.st.SetDownloadModel(ctx, id, c.Name); err != nil {
+		if err := m.st.SetDownloadModel(ctx, id, c.Name, c.diskNeed()); err != nil {
 			return name, "", err
 		}
 	}
@@ -296,20 +346,35 @@ func (m *Manager) Run(ctx context.Context) {
 			}
 			continue
 		}
-		m.process(ctx, d)
+		// Starting a pull while Ollama's down would only fail it. Hold the
+		// queue until Ollama answers, then look again: it may have changed.
+		if !m.ollamaAnswers(ctx) {
+			m.waitForOllama(ctx)
+			continue
+		}
+		if resumed := m.process(ctx, d); resumed {
+			// Give Ollama a moment before trying again, so a connection that
+			// keeps dropping doesn't use up the resumes in a burst.
+			select {
+			case <-ctx.Done():
+			case <-time.After(m.retryEvery):
+			}
+		}
 		if ctx.Err() != nil {
 			return
 		}
 	}
 }
 
-func (m *Manager) process(parent context.Context, d *store.Download) {
+// process runs one download. It reports whether the download was put back in
+// the queue to resume, because Ollama went away mid-pull.
+func (m *Manager) process(parent context.Context, d *store.Download) (resumed bool) {
 	ctx, cancel := context.WithCancelCause(parent)
 	defer cancel(nil)
 
 	if err := m.st.StartDownload(parent, d.ID); err != nil {
 		m.log.Error("failed to start download", "id", d.ID, "error", err)
-		return
+		return false
 	}
 	attempt := d.Attempts + 1
 	if attempt > 1 {
@@ -371,6 +436,11 @@ func (m *Manager) process(parent context.Context, d *store.Download) {
 
 	completed, total := tr.bytes()
 	bg := context.WithoutCancel(parent) // record the outcome even while shutting down
+	defer func() {
+		if !resumed {
+			delete(m.resumes, d.ID)
+		}
+	}()
 	m.st.UpdateDownloadProgress(bg, d.ID, completed, total)
 	took := time.Since(now).Round(time.Second)
 
@@ -391,6 +461,20 @@ func (m *Manager) process(parent context.Context, d *store.Download) {
 		m.logf(d.ID, "warn", "Cancelled at %s of %s. Downloaded data is kept, so a retry resumes", fmtBytes(completed), fmtBytes(total))
 		m.log.Info("download cancelled", "model", d.Model, "id", d.ID)
 
+	case !errors.Is(cause, errStalled) && lostOllama(err):
+		if resumed = m.resume(d.ID, completed); resumed {
+			// Back to the front of the queue. The worker waits for Ollama
+			// before starting it again, and Ollama kept what it downloaded.
+			m.st.RequeueDownload(bg, d.ID, true)
+			m.logf(d.ID, "warn", "Lost the connection to Ollama at %s of %s (%v). It will resume when Ollama is back", fmtBytes(completed), fmtBytes(total), err)
+			m.log.Warn("download interrupted: lost ollama; will resume", "model", d.Model, "id", d.ID, "error", err)
+			return true
+		}
+		msg := fmt.Sprintf("lost the connection to Ollama %d times in a row without getting any further: %v", maxAutoResumes, err)
+		m.st.FinishDownload(bg, d.ID, store.DownloadFailed, msg)
+		m.logf(d.ID, "error", "Failed: %s", msg)
+		m.log.Warn("download failed", "model", d.Model, "id", d.ID, "error", msg)
+
 	default:
 		msg := err.Error()
 		if errors.Is(cause, errStalled) {
@@ -399,6 +483,82 @@ func (m *Manager) process(parent context.Context, d *store.Download) {
 		m.st.FinishDownload(bg, d.ID, store.DownloadFailed, msg)
 		m.logf(d.ID, "error", "Failed: %s", msg)
 		m.log.Warn("download failed", "model", d.Model, "id", d.ID, "error", msg)
+	}
+	return false
+}
+
+// resume counts an auto-resume of download id, which had reached completed
+// bytes, and reports whether it's still allowed.
+func (m *Manager) resume(id, completed int64) bool {
+	r := m.resumes[id]
+	if completed > r.completed {
+		r = resumeCount{completed: completed} // it got further: start counting again
+	}
+	r.n++
+	m.resumes[id] = r
+	return r.n <= maxAutoResumes
+}
+
+// lostOllama reports whether a pull failed because Ollama went away (stopped,
+// restarted or crashed, or a proxy in front of it couldn't reach it) rather
+// than because of the pull itself. Those are worth resuming once it's back.
+func lostOllama(err error) bool {
+	var se *ollama.StatusError
+	if errors.As(err, &se) {
+		switch se.StatusCode {
+		case http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+			return true
+		}
+		return false
+	}
+	var pe *ollama.PullError
+	var ne *net.OpError
+	switch {
+	case errors.As(err, &pe): // Ollama answered, with a reason
+		return false
+	case errors.Is(err, ollama.ErrPullCutOff), errors.Is(err, io.ErrUnexpectedEOF), errors.Is(err, io.EOF),
+		errors.Is(err, syscall.ECONNREFUSED), errors.Is(err, syscall.ECONNRESET), errors.Is(err, syscall.EPIPE),
+		errors.As(err, &ne):
+		return true
+	}
+	return false
+}
+
+// ollamaAnswers reports whether Ollama responds now, recording why not.
+func (m *Manager) ollamaAnswers(ctx context.Context) bool {
+	vctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	_, err := m.ol.Version(vctx)
+	if err == nil || ctx.Err() != nil {
+		return err == nil
+	}
+	m.mu.Lock()
+	if m.waiting == nil {
+		m.waiting = &Waiting{Since: time.Now()}
+		m.log.Warn("download queue held: ollama isn't answering", "error", err)
+	}
+	m.waiting.Err = err.Error()
+	m.mu.Unlock()
+	return false
+}
+
+// waitForOllama holds the queue until Ollama answers (or ctx is cancelled).
+func (m *Manager) waitForOllama(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(m.retryEvery):
+		}
+		if m.ollamaAnswers(ctx) {
+			m.mu.Lock()
+			if m.waiting != nil {
+				m.log.Info("ollama is back; download queue resuming", "after", time.Since(m.waiting.Since).Round(time.Second).String())
+			}
+			m.waiting = nil
+			m.mu.Unlock()
+			return
+		}
 	}
 }
 

@@ -64,23 +64,29 @@ func TestResourceConcerns(t *testing.T) {
 		name string
 		c    downloads.Checked
 		d    *disk.Usage
+		q    int64 // queued ahead
 		snap sysinfo.Snapshot
 		want []string // substrings, one per expected concern; nil = none
 	}{
-		{"fits in VRAM", model(20), roomy, nvidia(24), nil},
-		{"exceeds VRAM", model(40), roomy, nvidia(24), []string{"exceeds this machine's total VRAM (24.0 GB across the GPU)"}},
-		{"fits across GPUs", model(40), roomy, nvidia(24, 24), nil},
-		{"exceeds several GPUs", model(60), roomy, nvidia(24, 24), []string{"48.0 GB across 2 GPUs"}},
-		{"exceeds VRAM + RAM", model(100), roomy, nvidia(24), []string{"VRAM and system memory combined (24.0 GB + 64.0 GB)"}},
-		{"unified memory", model(30), roomy, apple, []string{"24.0 GB of memory, which the CPU and GPU share"}},
-		{"no GPU", model(20), roomy, noGPU, []string{"no GPU was detected"}},
-		{"disk full too", model(40), &disk.Usage{Free: 10 * gb}, nvidia(24), []string{"only 10.0 GB is free", "total VRAM"}},
-		{"already installed", downloads.Checked{Size: 100 * gb, Installed: true}, roomy, nvidia(24), nil},
-		{"size unknown", downloads.Checked{}, roomy, nvidia(24), nil},
-		{"hardware not sampled yet", model(100), roomy, sysinfo.Snapshot{}, nil},
+		{"fits in VRAM", model(20), roomy, 0, nvidia(24), nil},
+		{"exceeds VRAM", model(40), roomy, 0, nvidia(24), []string{"exceeds this machine's total VRAM (24.0 GB across the GPU)"}},
+		{"fits across GPUs", model(40), roomy, 0, nvidia(24, 24), nil},
+		{"exceeds several GPUs", model(60), roomy, 0, nvidia(24, 24), []string{"48.0 GB across 2 GPUs"}},
+		{"exceeds VRAM + RAM", model(100), roomy, 0, nvidia(24), []string{"VRAM and system memory combined (24.0 GB + 64.0 GB)"}},
+		{"unified memory", model(30), roomy, 0, apple, []string{"24.0 GB of memory, which the CPU and GPU share"}},
+		{"no GPU", model(20), roomy, 0, noGPU, []string{"no GPU was detected"}},
+		{"disk full too", model(40), &disk.Usage{Free: 10 * gb}, 0, nvidia(24), []string{"only 10.0 GB is free", "total VRAM"}},
+		{"already installed", downloads.Checked{Size: 100 * gb, Installed: true}, roomy, 0, nvidia(24), nil},
+		{"size unknown", downloads.Checked{}, roomy, 0, nvidia(24), nil},
+		{"hardware not sampled yet", model(100), roomy, 0, sysinfo.Snapshot{}, nil},
+		// 50 GB free, 40 GB queued ahead: a 20 GB model no longer fits.
+		{"queue ahead", model(20), &disk.Usage{Free: 50 * gb, Total: 100 * gb}, 40 * gb, nvidia(24),
+			[]string{"50.0 GB is free where Ollama stores models, but the downloads queued ahead of it will take 40.0 GB of that, leaving 10.0 GB."}},
+		{"queue ahead, still fits", model(5), &disk.Usage{Free: 50 * gb, Total: 100 * gb}, 40 * gb, nvidia(24), nil},
+		{"queue bigger than the disk", model(5), &disk.Usage{Free: 50 * gb, Total: 100 * gb}, 80 * gb, nvidia(24), []string{"leaving 0 B"}},
 	}
 	for _, tc := range cases {
-		got := resourceConcerns(tc.c, tc.d, tc.snap)
+		got := resourceConcerns(tc.c, tc.d, tc.q, tc.snap)
 		if len(got) != len(tc.want) {
 			t.Errorf("%s: got %q, want %d concern(s)", tc.name, got, len(tc.want))
 			continue

@@ -1,0 +1,28 @@
+name: Live ollama.com check
+
+# ollama.com has no API, so Discover reads its HTML (internal/library). This
+# runs the parser against the live site each week, so a change to its layout
+# shows up here rather than as an empty Discover page.
+on:
+  schedule:
+    - cron: "17 6 * * 1" # Mondays, 06:17 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  live:
+    name: Parse ollama.com
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Run the parser against ollama.com
+        env:
+          LIVE_LIBRARY: "1"
+        run: go test ./internal/library -run TestLiveOllamaCom -count=1 -v

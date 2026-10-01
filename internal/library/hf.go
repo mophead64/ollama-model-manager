@@ -40,12 +40,18 @@ type HFModel struct {
 	BaseModel string // the model it's a quantisation of, if tagged
 	Gated     bool   // needs accepting terms (and a token) before download
 	Updated   time.Time
+	// Quantisations Ollama can pull, going by the repo's file names (the rules
+	// HFFiles uses); -1 if Hugging Face didn't list the files.
+	Quants int
 }
 
 // HFPage is a page of Hugging Face search results.
 type HFPage struct {
 	Models     []HFModel
 	NextCursor string // pass as HFQuery.Cursor for the next page; "" on the last
+	// Repos left out because none of their GGUFs is a model Ollama can pull,
+	// e.g. one split into per-layer files for distributed inference.
+	Unpullable int
 }
 
 // HFQuery is a Hugging Face search.
@@ -118,7 +124,9 @@ func (c *Client) HFSearch(ctx context.Context, q HFQuery) (HFPage, error) {
 		"sort":      {sort},
 		"direction": {"-1"},
 		"limit":     {fmt.Sprint(hfPageSize)},
-		"expand[]":  {"gguf", "downloads", "likes", "pipeline_tag", "lastModified", "gated", "tags"},
+		// siblings (the file names) show which repos have a GGUF Ollama can
+		// pull, without asking for each one's file list.
+		"expand[]": {"gguf", "downloads", "likes", "pipeline_tag", "lastModified", "gated", "tags", "siblings"},
 	}
 	if t := strings.TrimSpace(q.Text); t != "" {
 		v.Set("search", t)
@@ -135,11 +143,18 @@ func (c *Client) HFSearch(ctx context.Context, q HFQuery) (HFPage, error) {
 	if err != nil {
 		return HFPage{}, err
 	}
-	var next string
-	if n, err := url.Parse(resp.next); err == nil {
-		next = n.Query().Get("cursor")
+	page := HFPage{Models: models[:0]}
+	for _, m := range models {
+		if m.Quants == 0 {
+			page.Unpullable++
+			continue
+		}
+		page.Models = append(page.Models, m)
 	}
-	return HFPage{Models: models, NextCursor: next}, nil
+	if n, err := url.Parse(resp.next); err == nil {
+		page.NextCursor = n.Query().Get("cursor")
+	}
+	return page, nil
 }
 
 // HFFiles lists the quantisations in a repo, smallest first.
@@ -178,6 +193,7 @@ func parseHFModels(body string) ([]HFModel, error) {
 		LastModified time.Time       `json:"lastModified"`
 		Gated        json.RawMessage // false, or "auto"/"manual"
 		Tags         []string
+		Siblings     *[]struct{ Rfilename string } // nil if not listed
 		GGUF         struct {
 			Total         int64
 			Architecture  string
@@ -192,7 +208,15 @@ func parseHFModels(body string) ([]HFModel, error) {
 		m := HFModel{
 			Repo: r.ID, Downloads: r.Downloads, Likes: r.Likes, Pipeline: r.PipelineTag, Updated: r.LastModified,
 			Params: r.GGUF.Total, Context: r.GGUF.ContextLength, Arch: r.GGUF.Architecture,
-			Gated: len(r.Gated) > 0 && string(r.Gated) != "false" && string(r.Gated) != "null",
+			Gated:  len(r.Gated) > 0 && string(r.Gated) != "false" && string(r.Gated) != "null",
+			Quants: -1,
+		}
+		if r.Siblings != nil {
+			names := make([]string, len(*r.Siblings))
+			for i, f := range *r.Siblings {
+				names[i] = f.Rfilename
+			}
+			m.Quants = len(groupGGUFs(names, nil))
 		}
 		// The metadata describes one file in the repo, which is sometimes a
 		// small helper (e.g. a draft model) rather than the model itself. A

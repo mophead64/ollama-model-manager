@@ -30,6 +30,10 @@ What's recorded:
 
 If the model can't be deleted, it isn't blacklisted either. Blacklisting the same model again replaces its entry.
 
+To clear out several at once, tick them on the Models page and choose **Delete…**: the dialog has the same **Also add
+them to the blacklist**, with one reason for them all (see
+[Deleting several models at once](disk-space.md#deleting-several-models-at-once)).
+
 ## The Blacklist tab
 
 **Models → Blacklist** lists every entry, newest first, with the reason and the details kept.

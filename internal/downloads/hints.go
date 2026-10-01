@@ -121,7 +121,7 @@ func hfAccessHint(ref ollama.Ref) Hint {
 		Text:  "Ollama needs to be linked to a Hugging Face account that has access to this repo before it can pull it. Ollama signs its requests with its own key, so it's that key, not a login, that Hugging Face needs to know.",
 		Steps: []string{
 			"Open the model's page on Hugging Face, sign in, and accept its terms or request access. Gated models can take a while to be approved.",
-			"Add Ollama's public key to that Hugging Face account under Settings → SSH and GPG Keys. The Account page here shows the key (to the admin), or print it on the machine running Ollama.",
+			"Add Ollama's public key to that Hugging Face account under Settings → SSH and GPG Keys. The Settings page here shows the key (to the admin), or print it on the machine running Ollama.",
 			"Retry this download.",
 		},
 		Commands: []string{"cat ~/.ollama/id_ed25519.pub"},

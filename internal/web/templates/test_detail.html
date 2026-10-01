@@ -105,7 +105,7 @@
       </summary>
       {{with .Error}}<div class="error-box">{{.}}</div>{{end}}
       {{with .Thinking}}<details class="thinking"><summary>Thinking</summary><pre class="test-text">{{.}}</pre></details>{{end}}
-      {{with .Response}}<pre class="test-text">{{.}}</pre>{{else}}{{if eq .Status "completed"}}<p class="muted">An empty reply.</p>{{end}}{{end}}
+      {{with .Response}}<div class="test-reply md">{{reply .}}</div>{{else}}{{if eq .Status "completed"}}<p class="muted">An empty reply.</p>{{end}}{{end}}
     </details>
     {{end}}
   </div>

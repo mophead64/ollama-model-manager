@@ -96,10 +96,14 @@ func (s *Server) testModelOptions(r *http.Request, all []ollama.Model, selected 
 
 // handleTests is the models section's Testing tab: the tests so far, and a
 // form to start a new one. ?template= fills the form in from a template, and
-// ?model= ticks models (e.g. linked from elsewhere).
+// ?model= ticks models and ?name= names the test (e.g. linked from the
+// Models page's "Compare in a test").
 func (s *Server) handleTests(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	form := testForm{Repeats: testDefaultRepeats, Models: q["model"]}
+	form := testForm{Repeats: testDefaultRepeats, Models: q["model"], Name: strings.TrimSpace(q.Get("name"))}
+	if len([]rune(form.Name)) > testMaxName {
+		form.Name = string([]rune(form.Name)[:testMaxName])
+	}
 	var notice string
 	if id, err := strconv.ParseInt(q.Get("template"), 10, 64); err == nil {
 		switch t, err := s.st.GetModelTestTemplate(r.Context(), id); {

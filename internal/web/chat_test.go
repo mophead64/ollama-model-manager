@@ -70,6 +70,9 @@ func TestChatStreamsReply(t *testing.T) {
 	if !evs[3].Done || st == nil || st.Tokens != 20 || st.TokensPerSec != 40 || st.LoadMS != 1500 || st.TotalMS != 2000 || st.PromptTokens != 12 {
 		t.Errorf("final event = %+v %+v", evs[3], st)
 	}
+	if evs[3].HTML != "<p>Hello there</p>\n" {
+		t.Errorf("rendered reply = %q", evs[3].HTML)
+	}
 
 	// Ollama's reason for refusing is passed on.
 	_, evs = chat(h, `{"model":"broken","messages":[{"role":"user","content":"hi"}]}`)

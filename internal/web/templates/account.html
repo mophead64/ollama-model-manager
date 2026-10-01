@@ -60,17 +60,19 @@
       </div>
     </div>
     {{end}}
-    {{/* Filled in after the page loads: it asks GitHub. */}}
-    <div class="panel account-panel" id="release">
-      <h2>Latest release</h2>
-      <div hx-get="/version/release" hx-trigger="load" hx-swap="outerHTML"><p class="muted">Checking GitHub…</p></div>
-    </div>
-    </div>
     {{if .IsAdmin}}
     {{/* Filled in after the page loads: it asks Ollama and Hugging Face. */}}
     <div class="panel account-panel" id="huggingface">
       <h2>Hugging Face</h2>
       <div hx-get="/account/huggingface" hx-trigger="load" hx-swap="outerHTML"><p class="muted">Asking Ollama for its key…</p></div>
+    </div>
+    {{end}}
+    </div>
+    {{if .IsAdmin}}
+    {{/* Filled in after the page loads: it asks Ollama and checks the network. */}}
+    <div class="panel account-panel" id="ollama-settings">
+      <h2>Ollama settings</h2>
+      <div hx-get="/account/ollama" hx-trigger="load" hx-swap="outerHTML"><p class="muted">Checking Ollama…</p></div>
     </div>
     {{end}}
     </div>
@@ -163,25 +165,69 @@
 </div>
 {{end}}
 
-{{/* The release panel (update.go): the latest release's notes, flagged as
-     this release or a newer one. The notes carry the update steps (ci.yml). */}}
-{{define "release_panel"}}
-<div class="release-body">
-{{if not .Update.Checked}}
-  <p class="muted">Couldn't reach GitHub to check for releases.
-    <button type="button" class="link" hx-get="/version/release?force=1" hx-target="closest .release-body" hx-swap="outerHTML">Try again</button></p>
-{{else}}
-  <div class="release-head">
-    <strong>{{or .Update.Name .Update.Latest}}</strong>
-    {{if .Update.Current}}<span class="badge on">This release</span>{{else if .Update.Available}}<span class="badge update">New release</span>{{end}}
-    <span class="muted">{{if and .Update.Name (ne .Update.Name .Update.Latest)}}<span class="mono">{{.Update.Latest}}</span> · {{end}}{{if not .Update.Published.IsZero}}<span title="{{time .Update.Published}}">published {{ago .Update.Published}}</span> · {{end}}<a class="hint-link inline" href="{{.Update.URL}}" target="_blank" rel="noopener noreferrer">View on GitHub ↗</a></span>
-  </div>
-  {{if .Update.Available}}
-  <p class="release-running">You're running <span class="mono">{{.Version}}</span>. The notes below say how to update.</p>
-  {{else if not .Update.Current}}
-  <p class="muted release-running">You're running <span class="mono">{{.Version}}</span>.</p>
+{{/* The Ollama settings panel (ollama_settings.go): each of Ollama's main
+     settings with its default, a suggestion for this machine and what can be
+     seen of it, then copyable steps for applying the suggestions. */}}
+{{define "ollama_settings"}}
+<div class="os-body">
+  <p class="muted os-intro">Ollama reads these from its environment when it starts{{with .OllamaVersion}} (this is Ollama {{.}}){{end}}, and has no way to report them. So this shows what can be seen from here, and {{with .Hardware}}suggests values for {{.}}{{else}}will suggest values once this machine's hardware has been read: reload in a few seconds{{end}}.{{if eq .Exposure.Level "remote"}} Ollama runs on another machine, so the suggestions describe this one, which may not match.{{end}}</p>
+  {{if eq .Exposure.Level "network"}}
+  <div class="notice warning os-exposed" role="status"><div>
+    <strong>Ollama is open to your network.</strong> It answers, with no password, at:
+    <ul class="os-urls">{{range .Exposure.URLs}}<li><code>{{.}}</code></li>{{end}}</ul>
+    Any device that can reach one of these can run, download and delete models. See <code>OLLAMA_HOST</code> below.
+  </div></div>
   {{end}}
-  {{with .Update.Notes}}<div class="release-notes">{{.}}</div>{{else}}<p class="muted">This release has no notes.</p>{{end}}
-{{end}}
+  <div class="table-wrap">
+  <table class="os-table">
+    <thead><tr><th>Setting</th><th>Ollama's default</th><th>Suggested here</th></tr></thead>
+    <tbody>
+    {{range .Settings}}
+      <tr class="os-main">
+        <td><code title="{{.Label}}">{{.Env}}</code></td>
+        <td class="muted">{{.Default}}</td>
+        <td>{{if .Suggest}}<code class="os-suggest">{{.Suggest}}</code>{{else}}<span class="muted">Leave as it is</span>{{end}}</td>
+      </tr>
+      <tr class="os-why"><td colspan="3">{{.Why}}{{with .Detected}}<div class="os-detected"><span class="muted">Seen from here:</span> {{.}}</div>{{end}}</td></tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  {{if .EnvLines}}
+  <h3 class="os-apply">Applying the suggestions</h3>
+  <p class="os-apply-intro">Set them where Ollama runs, then restart it. Edit any value before copying if you'd rather use something else.{{if eq .Exposure.Level "network"}} The listen address isn't included: change it separately, once other devices no longer need it.{{end}}</p>
+  <div class="update-steps">
+    <details open>
+      <summary>Linux (systemd service)</summary>
+      <p>Open an override for the service, which Ollama's updates leave alone:</p>
+      {{template "copy_cmd" (copycmd "os-edit" "sudo systemctl edit ollama")}}
+      <p>Paste this in and save, then restart Ollama:</p>
+      {{template "copy_block" .Systemd}}
+      {{template "copy_cmd" (copycmd "os-restart" "sudo systemctl daemon-reload && sudo systemctl restart ollama")}}
+    </details>
+    <details>
+      <summary>Docker</summary>
+      <p>With Docker Compose, add these to the Ollama service, then run <code>docker compose up -d</code>:</p>
+      {{template "copy_block" .Compose}}
+      <p>With <code>docker run</code>, add these to your command and recreate the container:</p>
+      {{template "copy_cmd" (copycmd "os-run" .DockerRun)}}
+    </details>
+    <details>
+      <summary>macOS (Ollama app)</summary>
+      <p>Run this, then quit Ollama from the menu bar and open it again. The app's own Settings window also has <em>Context length</em> and <em>Expose Ollama to the network</em>.</p>
+      {{template "copy_cmd" (copycmd "os-launchctl" .Launchctl)}}
+      <p class="muted">Settings made with launchctl last until the Mac restarts.</p>
+    </details>
+    <details>
+      <summary>Windows</summary>
+      <p>Run these in a terminal, then quit Ollama from the system tray and start it again:</p>
+      {{template "copy_block" .Setx}}
+    </details>
+  </div>
+  {{end}}
+  <p class="muted update-tips">Restarting Ollama unloads the models in memory. Downloads in progress pause, and pick up where they left off once it's back.</p>
 </div>
 {{end}}
+
+{{/* A multi-line snippet with a Copy button (dialog.js). Takes a copyBlock. */}}
+{{define "copy_block"}}<div class="copy-row copy-block"><textarea id="{{.ID}}" class="mono" rows="{{.Rows}}" readonly aria-label="Settings to copy">{{.Text}}</textarea><button type="button" class="secondary small" data-copy="{{.ID}}">Copy</button></div>{{end}}

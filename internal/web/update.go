@@ -87,6 +87,13 @@ func (u *updateChecker) check(ctx context.Context, force bool) updateInfo {
 	return info
 }
 
+// last is the last answer, fresh or not, without asking GitHub.
+func (u *updateChecker) last() updateInfo {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	return u.info
+}
+
 func (u *updateChecker) fetch(ctx context.Context) (updateInfo, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.url, nil)
 	if err != nil {
@@ -171,11 +178,12 @@ func (s *Server) handleVersionCheck(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleRelease fills in the Settings page's release panel with the latest
-// release's notes, which say how to update.
-func (s *Server) handleRelease(w http.ResponseWriter, r *http.Request) {
-	s.render(w, r, "release_panel", map[string]any{
-		"Version": version.Version,
-		"Update":  s.updates.check(r.Context(), r.URL.Query().Get("force") != ""),
+// handleAppUpdate is the System page's Ollama Model Manager panel, fetched
+// once the page has loaded and re-checked on demand (?force=1, its "check now").
+func (s *Server) handleAppUpdate(w http.ResponseWriter, r *http.Request) {
+	s.render(w, r, "app_panel", map[string]any{
+		"Version":   version.Version,
+		"AppUpdate": s.updates.check(r.Context(), r.URL.Query().Get("force") != ""),
+		"Fragment":  true,
 	})
 }

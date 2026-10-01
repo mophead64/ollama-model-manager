@@ -3,12 +3,15 @@
 // keeping its own state in a SQLite database at DB_PATH (default /data/omm.db).
 //
 // "ollama-model-manager reset-password" gives the admin user a new random
-// password, for when it's been forgotten.
+// password, for when it's been forgotten. "ollama-model-manager healthcheck"
+// asks the running app's /healthz, for Docker's HEALTHCHECK (the distroless
+// image has no curl).
 package main
 
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -18,6 +21,9 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	// The time zone database, so TZ works wherever the binary runs (a minimal
+	// container image, Windows), for the times shown and usage history's days.
+	_ "time/tzdata"
 
 	"github.com/mophead64/ollama-model-manager/internal/downloads"
 	"github.com/mophead64/ollama-model-manager/internal/modeltest"
@@ -37,8 +43,10 @@ func main() {
 		switch os.Args[1] {
 		case "reset-password":
 			os.Exit(resetPassword(dbPath))
+		case "healthcheck":
+			os.Exit(healthcheck(getenv("PORT", "8080")))
 		default:
-			fmt.Fprintf(os.Stderr, "unknown command %q (the only command is reset-password)\n", os.Args[1])
+			fmt.Fprintf(os.Stderr, "unknown command %q (the commands are reset-password and healthcheck)\n", os.Args[1])
 			os.Exit(2)
 		}
 	}
@@ -96,7 +104,7 @@ func main() {
 	dl := downloads.New(st, ol, log)
 	// An optional Hugging Face token lets the app see private repos when
 	// checking and browsing them. Ollama's own access (for the pulls
-	// themselves) is separate: see the Account page.
+	// themselves) is separate: see the Settings page.
 	hfToken := strings.TrimSpace(os.Getenv("HF_TOKEN"))
 	if hfToken != "" {
 		dl.SetRegistryClient(&http.Client{Timeout: 10 * time.Second, Transport: ollama.HFTokenTransport{Token: hfToken}})
@@ -132,10 +140,22 @@ func main() {
 	go sys.Run(ctx)
 
 	// Notes when each model was last used, from what Ollama has loaded.
+	if _, err := st.UsageTrackedSince(ctx); err != nil { // records when tracking began, on the first run
+		log.Warn("failed to record when usage tracking began", "error", err)
+	}
 	go usage.New(ol, st, 15*time.Second, log).Run(ctx)
 
-	env := describeEnv(strings.TrimPrefix(addr, ":"), ol.BaseURL(), dbPath, modelsDir, allowDelete, hfToken != "")
-	srv, err := web.NewServer(ol, st, dl, mt, sys, web.Config{ModelsDir: modelsDir, AllowDelete: allowDelete, HFToken: hfToken, Env: env}, log)
+	// Reverse proxies whose X-Forwarded-For is believed, for logins' addresses.
+	proxies, badProxies := web.ParseTrustedProxies(os.Getenv("TRUSTED_PROXIES"))
+	if len(badProxies) > 0 {
+		log.Warn("ignoring invalid TRUSTED_PROXIES entries", "entries", strings.Join(badProxies, ", "))
+	}
+	if len(proxies) > 0 {
+		log.Info("trusting X-Forwarded-For from reverse proxies", "var", "TRUSTED_PROXIES", "proxies", len(proxies))
+	}
+
+	env := describeEnv(strings.TrimPrefix(addr, ":"), ol.BaseURL(), dbPath, modelsDir, allowDelete, hfToken != "", len(badProxies) > 0)
+	srv, err := web.NewServer(ol, st, dl, mt, sys, web.Config{ModelsDir: modelsDir, AllowDelete: allowDelete, HFToken: hfToken, Env: env, TrustedProxies: proxies}, log)
 	if err != nil {
 		log.Error("failed to initialize web server", "error", err)
 		os.Exit(1)
@@ -210,6 +230,26 @@ func resetPassword(dbPath string) int {
 	return 0
 }
 
+// healthcheck implements the healthcheck command: 0 if the app on port
+// answers /healthz with 200 (its database and Ollama both reachable), 1
+// otherwise. It prints the answer, which Docker keeps with the container's
+// health status.
+func healthcheck(port string) int {
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get("http://127.0.0.1:" + port + "/healthz")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "health check failed: %v\n", err)
+		return 1
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	fmt.Println(strings.TrimSpace(string(body)))
+	if resp.StatusCode != http.StatusOK {
+		return 1
+	}
+	return 0
+}
+
 // printCredentials writes a banner to stdout (not the structured log) so the
 // password is easy to spot in docker logs and copy cleanly.
 func printCredentials(title, username, password string) {
@@ -218,7 +258,7 @@ func printCredentials(title, username, password string) {
   %s
     username: %s
     password: %s
-  Change these from the Account page after logging in.
+  Change these from the Settings page after logging in.
   This password won't be shown again.
 ==============================================================
 
@@ -256,7 +296,7 @@ func findModelsDir() string {
 
 // describeEnv lists the environment settings as they took effect, for the
 // Settings page. HF_TOKEN's value is never included, only whether it's set.
-func describeEnv(port, ollamaURL, dbPath, modelsDir string, allowDelete, hasHFToken bool) []web.EnvVar {
+func describeEnv(port, ollamaURL, dbPath, modelsDir string, allowDelete, hasHFToken, badProxies bool) []web.EnvVar {
 	modelsSource := envSource("MODELS_DIR")
 	if modelsSource != "set" {
 		modelsSource = "auto-detected"
@@ -272,15 +312,30 @@ func describeEnv(port, ollamaURL, dbPath, modelsDir string, allowDelete, hasHFTo
 	if hasHFToken {
 		hfToken = "set"
 	}
+	proxiesSource := optionalSource("TRUSTED_PROXIES")
+	if badProxies {
+		proxiesSource = "invalid entries ignored"
+	}
+	zone, offset := time.Now().Zone()
+	tz := fmt.Sprintf("%s (UTC%+03d:%02d)", zone, offset/3600, abs(offset%3600)/60)
 	return []web.EnvVar{
 		{Name: "PORT", Value: port, Source: envSource("PORT"), About: "Port the web UI listens on"},
 		{Name: "OLLAMA_HOST", Value: ollamaURL, Source: envSource("OLLAMA_HOST"), About: "The Ollama server being managed"},
 		{Name: "DB_PATH", Value: dbPath, Source: envSource("DB_PATH"), About: "This app's database: accounts and download history"},
-		{Name: "MODELS_DIR", Value: modelsDir, Source: modelsSource, About: "Ollama's models folder, for the free disk space tile"},
+		{Name: "MODELS_DIR", Value: modelsDir, Source: modelsSource, About: "Ollama's models folder, for the free disk space tile and exact storage figures"},
 		{Name: "OLLAMA_MODELS", Value: os.Getenv("OLLAMA_MODELS"), Source: optionalSource("OLLAMA_MODELS"), About: "Ollama's own models folder setting; checked when finding MODELS_DIR"},
 		{Name: "ALLOW_MODEL_DELETE", Value: fmt.Sprint(allowDelete), Source: deleteSource, About: "Whether models can be deleted from this app"},
 		{Name: "HF_TOKEN", Value: hfToken, Source: optionalSource("HF_TOKEN"), About: "Hugging Face read token, for browsing private repos", Secret: true},
+		{Name: "TRUSTED_PROXIES", Value: os.Getenv("TRUSTED_PROXIES"), Source: proxiesSource, About: "Reverse proxies whose X-Forwarded-For is trusted, so logins are limited and logged by the browser's address"},
+		{Name: "TZ", Value: tz, Source: optionalSource("TZ"), About: "Time zone for the times shown and usage history's days"},
 	}
+}
+
+func abs(n int) int {
+	if n < 0 {
+		return -n
+	}
+	return n
 }
 
 // envSource says whether a variable with a default was set or defaulted.

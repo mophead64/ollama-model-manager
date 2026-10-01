@@ -22,10 +22,15 @@
         <span class="muted">Ollama at <code>{{.OllamaURL}}</code></span>
       </div>
       <form hx-get="/models" hx-target="#model-results" hx-swap="outerHTML" hx-push-url="true"
-            hx-trigger="submit, change from:.cap-filter" hx-include="#sort-state">
+            hx-trigger="submit, change from:.cap-filter, change from:#f-unused" hx-include="#sort-state">
         <div class="row">
           <label for="f-q" class="muted">Name, family or capability contains</label>
           <input id="f-q" type="text" name="q" value="{{.Query}}" placeholder="e.g. llama, vision">
+          <label for="f-unused" class="muted">Last used</label>
+          <select id="f-unused" name="unused">
+            <option value="">any time</option>
+            {{range .UnusedChoices}}<option value="{{.}}"{{if eq . $.Unused}} selected{{end}}>not in {{.}}+ days</option>{{end}}
+          </select>
           <button type="submit">Search</button>
         </div>
         {{with .AllCaps}}
@@ -38,12 +43,15 @@
         {{end}}
       </form>
     </div>
+    {{with .Dupes}}{{template "dupes_panel" $}}{{end}}
     {{template "models_results.html" .}}
   </main>
+  {{template "bulk_bar" .}}
   {{template "footer" .}}
   {{template "load_dialog" .}}
   {{template "delete_model_dialog" .}}
   {{template "quants_dialog"}}
+  <script src="{{static "models.js"}}"></script>
 </body>
 </html>
 {{end}}
@@ -55,16 +63,17 @@
 {{$dash := eq .Nav "dashboard"}}
 <div class="stat-grid{{if not $dash}} three{{end}}">
   {{if $dash}}
-  <a class="stat" href="/models" title="All models"><div class="value">{{.Count}}</div><div class="label">models installed →</div></a>
+  <a class="stat" href="/models" title="All models"><div class="value">{{.Count}}</div><div class="label">models installed{{template "tag_count" .Storage}} →</div></a>
   {{else}}
-  <div class="stat"><div class="value">{{.Count}}</div><div class="label">models installed</div></div>
+  <div class="stat"><div class="value">{{.Count}}</div><div class="label">models installed{{template "tag_count" .Storage}}</div></div>
   {{end}}
-  <div class="stat"><div class="value">{{bytes .TotalBytes}}</div><div class="label">total size on disk</div></div>
+  <div class="stat"><div class="value">{{bytes .TotalBytes}}</div><div class="label">total size on disk{{template "storage_basis" .Storage}}</div></div>
   {{with .Disk}}
-  <div class="stat">
+  {{$lvl := .Level}}
+  <div class="stat{{with $lvl}} disk-{{.}}{{end}}">
     <div class="value">{{bytes (int64 .Free)}}</div>
-    <div class="label">free of {{bytes (int64 .Total)}} on the models disk</div>
-    <div class="progress-bar" title="{{printf "%.0f" .UsedPercent}}% used"><div class="fill{{if gt .UsedPercent 90.0}} low{{end}}" style="width: {{printf "%.1f" .UsedPercent}}%"></div></div>
+    <div class="label">free of {{bytes (int64 .Total)}} on the models disk{{if eq $lvl "low"}}: <strong>nearly full</strong>{{else if eq $lvl "warn"}}: <strong>running low</strong>{{end}}</div>
+    <div class="progress-bar" title="{{printf "%.0f" .UsedPercent}}% used"><div class="fill {{$lvl}}" style="width: {{printf "%.1f" .UsedPercent}}%"></div></div>
   </div>
   {{else}}
   <div class="stat">
@@ -77,6 +86,96 @@
 {{template "running_panel" .}}
 {{end}}
 
+{{/* Models installed in more than one quantisation, side by side with
+     their use (duplicateQuants), to keep one and delete the rest. */}}
+{{define "dupes_panel"}}
+<details class="panel dupes" id="dupes">
+  <summary><strong>{{len .Dupes}} model{{if ne (len .Dupes) 1}}s are{{else}} is{{end}} installed in more than one quantisation.</strong> <span class="muted">Compare their use, keep the one you need and free the space the rest take.</span></summary>
+  {{range .Dupes}}
+  <div class="dupe-group">
+    <div class="row between">
+      <h3><code>{{.Name}}</code> <span class="muted">{{.Params}}</span></h3>
+      {{with .TestURL}}<a class="btn secondary small" href="{{.}}" title="Queue a test with the same prompt for each">Compare in a test →</a>{{end}}
+    </div>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Model</th><th>Quant</th><th>Size</th><th>Deleting frees</th><th>Last used</th><th>Loads</th><th>In use</th><th></th></tr></thead>
+      <tbody>
+      {{range .Quants}}
+        <tr>
+          <td>{{template "model_name" .Name}}{{with .Also}} <span class="muted small-note">also {{range $i, $n := .}}{{if $i}}, {{end}}{{$n}}{{end}}</span>{{end}}</td>
+          <td>{{or .Details.QuantizationLevel "-"}}</td>
+          <td>{{bytes .Size}}</td>
+          <td>{{if .Frees}}{{bytes .Frees}}{{else}}<span class="muted" title="Its files are shared with other models">nothing</span>{{end}}</td>
+          <td>{{with .LastUsed}}<span title="{{time .}}">{{ago .}}</span>{{else}}<span class="muted" title="Not seen in use since this app started tracking">never</span>{{end}}</td>
+          <td class="tnum">{{.Usage.Loads}}</td>
+          <td>{{if .Usage.ActiveSeconds}}{{activefor .Usage.ActiveSeconds}}{{else}}<span class="muted">—</span>{{end}}</td>
+          <td class="actions">
+            <a class="btn secondary small" href="/models/{{.Name}}">View</a>
+            {{if $.AllowDelete}}{{if .Also}}
+            {{/* Its other tags too: deleting one tag of a model frees nothing (static/models.js). */}}
+            <button type="button" class="danger small" data-delete-names="{{json .Tags}}">Delete</button>
+            {{else}}<button type="button" class="danger small" data-dialog-open="delete-model-modal"
+              data-fill-name="{{.Name}}" data-fill-effect="{{$.Storage.DeleteEffect .Name}}" data-fill-return="{{$.ListURL}}">Delete</button>{{end}}{{end}}
+          </td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table>
+    </div>
+  </div>
+  {{end}}
+</details>
+{{end}}
+
+{{/* The selected models' actions (static/models.js keeps the selection,
+     across pages and refreshes). Unload posts straight away; Delete asks
+     first, in a dialog listing them (/models/bulk/confirm). */}}
+{{define "bulk_bar"}}
+<div class="bulk-bar" id="bulk-bar" hidden>
+  <span><strong data-bulk-count>0</strong> selected</span>
+  <button type="button" class="link" data-bulk-all hidden>Select all <span data-bulk-total></span> matching</button>
+  <button type="button" class="link" data-bulk-clear>Clear</button>
+  <span class="bulk-actions">
+    <form method="post" action="/models/bulk/unload" class="inline" data-bulk-form>
+      <button type="submit" class="secondary small" data-busy="Unloading…">Unload</button>
+    </form>
+    {{if .AllowDelete}}<button type="button" class="danger-solid small" data-bulk-delete>Delete…</button>{{end}}
+  </span>
+</div>
+{{if .AllowDelete}}
+<dialog id="bulk-delete-modal" class="wide" aria-labelledby="bulk-delete-title">
+  <div id="bulk-delete-body"></div>
+</dialog>
+{{end}}
+{{end}}
+
+{{/* The bulk delete dialog's content: the models, what deleting them frees,
+     and the blacklist option. Fetched when it opens (handleBulkConfirm). */}}
+{{define "bulk_delete_body"}}
+<form method="post" action="/models/bulk/delete">
+  <h2 id="bulk-delete-title">Delete {{len .Models}} model{{if ne (len .Models) 1}}s{{end}}?</h2>
+  <input type="hidden" name="return" value="{{.Return}}">
+  {{range .Models}}<input type="hidden" name="name" value="{{.Name}}">{{end}}
+  <p>{{if eq (len .Models) 1}}It{{else}}They{{end}}'ll be removed from Ollama, {{.Effect}}. You'd have to pull {{if eq (len .Models) 1}}it{{else}}them{{end}} again to use {{if eq (len .Models) 1}}it{{else}}them{{end}}.</p>
+  <ul class="bulk-list">
+    {{range .Models}}<li><code>{{.Name}}</code> <span class="muted">{{bytes .Size}}</span></li>{{end}}
+  </ul>
+  {{with .Missing}}<p class="muted">Not on this Ollama server any more, so left out: {{range $i, $n := .}}{{if $i}}, {{end}}<code>{{$n}}</code>{{end}}.</p>{{end}}
+  {{if .Models}}{{template "blacklist_fields" "bulk"}}{{else}}
+  <div class="dialog-actions"><button type="button" class="secondary" data-dialog-close>Close</button></div>
+  {{end}}
+</form>
+{{end}}
+
+{{/* When some models have more than one tag (llama3.2:latest and
+     llama3.2:3b are the same model), how many tags there are. Takes a
+     libraryStorage. */}}
+{{define "tag_count"}}{{with .}}{{if ne .Tags .Models}} <span class="tip-wrap" tabindex="0">({{.Tags}} tags)<span class="tip" role="tooltip">Some models are listed under more than one name, such as llama3.2:latest and llama3.2:3b. They're the same files, so they're counted once.</span></span>{{end}}{{end}}{{end}}
+
+{{/* How the total size was worked out. Takes a libraryStorage. */}}
+{{define "storage_basis"}}{{with .}} <span class="tip-wrap" tabindex="0">ⓘ<span class="tip" role="tooltip">{{if .Exact}}Each file counted once, however many models share it.{{else}}Tags of the same model are counted once. Models that share files (a variant made from another) may still be counted twice: set MODELS_DIR to Ollama's models folder to count each file once.{{end}}</span></span>{{end}}{{end}}
+
 {{/* Shared by every row's Delete button, which fills in the model (dialog.js). */}}
 {{define "delete_model_dialog"}}
 {{if .AllowDelete}}
@@ -85,7 +184,7 @@
     <h2 id="delete-model-title">Delete model?</h2>
     <input type="hidden" name="name" data-fill="name">
     <input type="hidden" name="return" data-fill="return">
-    <p><code data-fill="name"></code> will be removed from Ollama, freeing up to <strong data-fill="size"></strong>. You'd have to pull it again to use it.</p>
+    <p><code data-fill="name"></code> will be removed from Ollama, <span data-fill="effect"></span>. You'd have to pull it again to use it.</p>
     {{template "blacklist_fields"}}
   </form>
 </dialog>
@@ -106,12 +205,12 @@
 
 {{/* The delete dialogs' optional blacklisting (handleDeleteModel), and their
      buttons. The reason box, and the submit button's wording, follow the
-     checkbox (CSS). */}}
+     checkbox (CSS). Takes an id suffix, when a page has more than one. */}}
 {{define "blacklist_fields"}}
-<label class="bl-check"><input type="checkbox" name="blacklist" class="bl-toggle"> Also add it to the blacklist</label>
+<label class="bl-check"><input type="checkbox" name="blacklist" class="bl-toggle"> Also add {{if .}}them{{else}}it{{end}} to the blacklist</label>
 <div class="bl-reason">
-  <label for="bl-reason" class="muted">Why isn't it any good? This is kept on the blacklist after the model is deleted.</label>
-  <textarea id="bl-reason" name="reason" rows="3" maxlength="2000" placeholder="e.g. too slow on this machine, poor at code"></textarea>
+  <label for="bl-reason{{with .}}-{{.}}{{end}}" class="muted">Why {{if .}}aren't they{{else}}isn't it{{end}} any good? This is kept on the blacklist after {{if .}}they're{{else}}the model is{{end}} deleted.</label>
+  <textarea id="bl-reason{{with .}}-{{.}}{{end}}" name="reason" rows="3" maxlength="2000" placeholder="e.g. too slow on this machine, poor at code"></textarea>
 </div>
 <div class="dialog-actions">
   <button type="button" class="secondary" data-dialog-close>Cancel</button>
@@ -119,7 +218,8 @@
 </div>
 {{end}}
 
-{{/* After a delete (handleDeleteModel's redirect). */}}
+{{/* After a delete (afterDelete's redirect). Deleted is a model's name or,
+     after a bulk delete, "3 models" (model names have no spaces). */}}
 {{define "deleted_notice"}}
-{{with .Deleted}}<div class="notice" role="status" data-clear-param="deleted blacklisted"><span>Deleted <strong>{{.}}</strong>{{if $.Blacklisted}} and added it to the <a href="/models/blacklist">blacklist</a>{{end}}.</span><button type="button" class="notice-close" data-dismiss aria-label="Dismiss">×</button></div>{{end}}
+{{with .Deleted}}<div class="notice" role="status" data-clear-param="deleted blacklisted"><span>Deleted <strong>{{.}}</strong>{{if $.Blacklisted}} and added {{if contains . " "}}them{{else}}it{{end}} to the <a href="/models/blacklist">blacklist</a>{{end}}.</span><button type="button" class="notice-close" data-dismiss aria-label="Dismiss">×</button></div>{{end}}
 {{end}}

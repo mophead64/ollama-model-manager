@@ -27,6 +27,10 @@ type PullError struct{ Message string }
 
 func (e *PullError) Error() string { return e.Message }
 
+// ErrPullCutOff means the progress stream ended before Ollama reported success
+// or an error: typically Ollama stopped or restarted mid-pull.
+var ErrPullCutOff = errors.New("ollama closed the connection before the pull finished")
+
 // Pull downloads a model, calling fn for each progress update, and returns
 // once Ollama reports success or an error. Cancel ctx to abort; Ollama keeps
 // the layers downloaded so far, so pulling again resumes.
@@ -80,5 +84,5 @@ func (c *Client) Pull(ctx context.Context, name string, fn func(PullProgress)) e
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	return errors.New("ollama closed the connection before the pull finished")
+	return ErrPullCutOff
 }
