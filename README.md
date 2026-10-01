@@ -33,8 +33,9 @@ Manager fills in the rest:
 ### Your models, at a glance
 The **dashboard** shows your library's size, free space on the disk Ollama uses, live CPU, memory, GPU and VRAM, what's
 loaded in memory (and how much of it is on the GPU), and the models you've used most recently. The **Models** page lists
-everything installed, with its family, size, quantisation, context length, capabilities, when it was last used and how
-many times it's been loaded. Filter and sort by any of them, and click a name to copy it.
+everything installed, with its family, size, quantisation, context length, capabilities, when it was downloaded, when
+it was last used and how many times it's been loaded. Sort by size, parameters, context, download date, last use or
+loads, filter by name, capability or how long it's gone unused, and click a name to copy it.
 
 ![The Models page: every installed model, sorted by when it was last used, with selection boxes, and badges for models with another name or another quantisation installed](docs/images/models.png)
 

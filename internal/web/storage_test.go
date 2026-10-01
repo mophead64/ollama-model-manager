@@ -121,7 +121,7 @@ func TestStorageOnModelsPage(t *testing.T) {
 	body = get(h, "/models", false).Body.String()
 	for _, want := range []string{
 		`<div class="value">1</div><div class="label">models installed <span class="tip-wrap" tabindex="0">(2 tags)`,
-		`<div class="value">1.0 KB</div><div class="label">total size on disk`, "Each file counted once",
+		`<div class="value">` + nbsp("1.0 KB") + `</div><div class="label">total size on disk</div>`,
 		`data-fill-effect="but that frees no space: llama3.2:3b is the same model and keeps its files"`,
 	} {
 		if !strings.Contains(body, want) {

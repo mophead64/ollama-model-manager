@@ -58,7 +58,7 @@ func TestDuplicateQuants(t *testing.T) {
 		`<details class="panel dupes" id="dupes">`, "1 model is installed in more than one quantisation.",
 		"<code>qwen3</code> <span class=\"muted\">8.2B</span>",
 		// The same model under two tags is one entry, with its use under either.
-		`also qwen3:latest`, `<span title="`, "2 hours ago", `<td class="tnum">4</td>`, "≈ 10 min",
+		`also qwen3:latest`, `<span title="`, nbsp("2 hours ago"), `<td class="tnum">4</td>`, nbsp("≈ 10 min"),
 		`data-fill-name="qwen3:8b-q8_0"`, "Q8_0",
 		// Deleting it deletes both its tags, freeing the space shown.
 		`data-delete-names="[&#34;qwen3:8b&#34;,&#34;qwen3:latest&#34;]"`,
@@ -95,14 +95,14 @@ func TestUnusedModels(t *testing.T) {
 
 	dash := get(h, "/", false).Body.String()
 	// qwen3:8b and qwen3:latest are one model: 2 models, 13.7 GB.
-	for _, want := range []string{"2 models unused for 60+ days, " + formatBytes(13700000000), `href="/models?unused=60"`} {
+	for _, want := range []string{"2 models unused for 60+ days, " + nbsp(formatBytes(13700000000)), `href="/models?unused=60"`} {
 		if !strings.Contains(dash, want) {
 			t.Errorf("dashboard missing %q", want)
 		}
 	}
 
 	list := get(h, "/models?unused=60", true).Body.String()
-	for _, want := range []string{"3 model(s) not used in 60+ days", "would free <strong>" + formatBytes(13700000000) + "</strong>",
+	for _, want := range []string{"3 model(s) not used in 60+ days", "would free <strong>" + nbsp(formatBytes(13700000000)) + "</strong>",
 		`value="qwen3:8b"`, `value="qwen3:latest"`, `value="qwen3:8b-q8_0"`} {
 		if !strings.Contains(list, want) {
 			t.Errorf("unused list missing %q", want)

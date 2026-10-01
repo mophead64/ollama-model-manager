@@ -173,8 +173,9 @@
      libraryStorage. */}}
 {{define "tag_count"}}{{with .}}{{if ne .Tags .Models}} <span class="tip-wrap" tabindex="0">({{.Tags}} tags)<span class="tip" role="tooltip">Some models are listed under more than one name, such as llama3.2:latest and llama3.2:3b. They're the same files, so they're counted once.</span></span>{{end}}{{end}}{{end}}
 
-{{/* How the total size was worked out. Takes a libraryStorage. */}}
-{{define "storage_basis"}}{{with .}} <span class="tip-wrap" tabindex="0">ⓘ<span class="tip" role="tooltip">{{if .Exact}}Each file counted once, however many models share it.{{else}}Tags of the same model are counted once. Models that share files (a variant made from another) may still be counted twice: set MODELS_DIR to Ollama's models folder to count each file once.{{end}}</span></span>{{end}}{{end}}
+{{/* Whether the total size is exact: without the models folder (MODELS_DIR),
+     files shared between models may be counted twice. Takes a libraryStorage. */}}
+{{define "storage_basis"}}{{with .}}{{if not .Exact}} (estimate){{end}}{{end}}{{end}}
 
 {{/* Shared by every row's Delete button, which fills in the model (dialog.js). */}}
 {{define "delete_model_dialog"}}
