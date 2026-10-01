@@ -4,6 +4,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mophead64/ollama-model-manager/internal/ollama"
 )
@@ -31,11 +32,12 @@ func names(ms []ollama.Model) string {
 }
 
 func TestSortModels(t *testing.T) {
+	day := func(d int) time.Time { return time.Date(2026, 1, d, 0, 0, 0, 0, time.UTC) }
 	models := func() []ollama.Model {
 		return []ollama.Model{
-			{Name: "b", Size: 300, Details: ollama.Details{ParameterSize: "3B", ContextLength: 8192}},
-			{Name: "a", Size: 100, Details: ollama.Details{ParameterSize: "137M"}},
-			{Name: "c", Size: 200, Details: ollama.Details{ParameterSize: "9.7B", ContextLength: 262144}},
+			{Name: "b", Size: 300, ModifiedAt: day(3), Details: ollama.Details{ParameterSize: "3B", ContextLength: 8192}},
+			{Name: "a", Size: 100, ModifiedAt: day(1), Details: ollama.Details{ParameterSize: "137M"}},
+			{Name: "c", Size: 200, ModifiedAt: day(2), Details: ollama.Details{ParameterSize: "9.7B", ContextLength: 262144}},
 			{Name: "d", Size: 200},
 		}
 	}
@@ -52,6 +54,8 @@ func TestSortModels(t *testing.T) {
 		{"params", false, "a,b,c,d"}, // 137M < 3B < 9.7B
 		{"context", true, "c,b,a,d"},
 		{"context", false, "b,c,a,d"},
+		{"downloaded", true, "b,c,a,d"}, // d has no date: last either way
+		{"downloaded", false, "a,c,b,d"},
 	}
 	for _, c := range cases {
 		ms := models()

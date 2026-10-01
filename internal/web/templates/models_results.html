@@ -29,7 +29,7 @@
       <th>Quant</th>
       {{template "sort_th" (sortcol "Context" .Headers.context)}}
       {{template "sort_th" (sortcol "Size" .Headers.size)}}
-      <th>Downloaded</th>
+      {{template "sort_th" (sortcol "Downloaded" .Headers.downloaded)}}
       {{template "sort_th" (sortcol "Last used" .Headers.used)}}
       {{template "sort_th" (sortcol "Loads" .Headers.loads)}}
       <th>Capabilities</th><th></th>

@@ -47,6 +47,9 @@ var sortKeys = map[string]func(m ollama.Model, u modelUsage) (v float64, ok bool
 	"params": func(m ollama.Model, _ modelUsage) (float64, bool) {
 		return parseParamSize(m.Details.ParameterSize)
 	},
+	"downloaded": func(m ollama.Model, _ modelUsage) (float64, bool) {
+		return float64(m.ModifiedAt.Unix()), !m.ModifiedAt.IsZero()
+	},
 	"used": func(m ollama.Model, u modelUsage) (float64, bool) {
 		t, ok := u.LastUsed[m.Name]
 		return float64(t.Unix()), ok
@@ -125,7 +128,7 @@ type sortHeader struct {
 // way it goes back to page 1.
 func (st listState) headers() map[string]sortHeader {
 	out := map[string]sortHeader{}
-	for _, key := range []string{"name", "size", "context", "params", "used", "loads"} {
+	for _, key := range []string{"name", "size", "context", "params", "downloaded", "used", "loads"} {
 		active := st.Sort == key
 		next := st
 		next.Page = 1
