@@ -20,9 +20,10 @@ import (
 type quantEntry struct {
 	ollama.Model
 	Also     []string // other tags of the same model (same digest)
+	Tags     []string // all of its tags: deleting it deletes them all, to free the space shown
 	LastUsed *time.Time
 	Usage    store.ModelTotal // under any of its tags
-	Frees    int64            // deleting it alone
+	Frees    int64            // deleting it (all its tags)
 }
 
 // quantGroup is a model installed in several quantisations.
@@ -62,8 +63,10 @@ func duplicateQuants(all []ollama.Model, u usageFacts, totals map[string]store.M
 			groups[key] = g
 			order = append(order, key)
 		}
-		e := quantEntry{Model: m, Also: st.SameAs(m.Name), Frees: st.Freed(append([]string{m.Name}, st.SameAs(m.Name)...)...)}
-		for _, tag := range append([]string{m.Name}, e.Also...) {
+		e := quantEntry{Model: m, Also: st.SameAs(m.Name)}
+		e.Tags = append([]string{m.Name}, e.Also...)
+		e.Frees = st.Freed(e.Tags...)
+		for _, tag := range e.Tags {
 			if t, ok := u.LastUsed[tag]; ok && (e.LastUsed == nil || t.After(*e.LastUsed)) {
 				e.LastUsed = &t
 			}

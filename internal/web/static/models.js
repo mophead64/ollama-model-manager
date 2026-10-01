@@ -96,30 +96,36 @@
   }
   unloadForm.addEventListener("submit", function () { fill(unloadForm); });
 
-  if (deleteBtn) {
+  // Opens the Delete dialog for names: the selection, or a model's tags (the
+  // duplicates panel's Delete, for a model listed under more than one).
+  function openBulkDelete(names) {
     var dialog = document.getElementById("bulk-delete-modal");
     var body = document.getElementById("bulk-delete-body");
-    deleteBtn.addEventListener("click", function () {
-      var q = new URLSearchParams();
-      selected.forEach(function (n) { q.append("name", n); });
-      q.set("return", location.pathname + location.search);
-      body.innerHTML = '<p class="muted">Loading…</p>';
-      dialog.showModal();
-      fetch("/models/bulk/confirm?" + q.toString(), { credentials: "same-origin" }).then(function (resp) {
-        if (resp.status === 401) { location.reload(); throw new Error("signed out"); }
-        return resp.text();
-      }).then(function (html) {
-        body.innerHTML = html; // our own server-rendered markup
-      }).catch(function (err) {
-        if (err.message === "signed out") return;
-        body.innerHTML = "";
-        var p = document.createElement("p");
-        p.className = "error-box";
-        p.textContent = "Couldn't reach the server: " + err.message;
-        body.appendChild(p);
-      });
+    if (!dialog) return;
+    var q = new URLSearchParams();
+    names.forEach(function (n) { q.append("name", n); });
+    q.set("return", location.pathname + location.search);
+    body.innerHTML = '<p class="muted">Loading…</p>';
+    dialog.showModal();
+    fetch("/models/bulk/confirm?" + q.toString(), { credentials: "same-origin" }).then(function (resp) {
+      if (resp.status === 401) { location.reload(); throw new Error("signed out"); }
+      return resp.text();
+    }).then(function (html) {
+      body.innerHTML = html; // our own server-rendered markup
+    }).catch(function (err) {
+      if (err.message === "signed out") return;
+      body.innerHTML = "";
+      var p = document.createElement("p");
+      p.className = "error-box";
+      p.textContent = "Couldn't reach the server: " + err.message;
+      body.appendChild(p);
     });
   }
+  if (deleteBtn) deleteBtn.addEventListener("click", function () { openBulkDelete(Array.from(selected)); });
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-delete-names]");
+    if (b) openBulkDelete(JSON.parse(b.dataset.deleteNames));
+  });
 
   document.body.addEventListener("htmx:afterSwap", render);
   render();

@@ -322,7 +322,7 @@ func describeEnv(port, ollamaURL, dbPath, modelsDir string, allowDelete, hasHFTo
 		{Name: "PORT", Value: port, Source: envSource("PORT"), About: "Port the web UI listens on"},
 		{Name: "OLLAMA_HOST", Value: ollamaURL, Source: envSource("OLLAMA_HOST"), About: "The Ollama server being managed"},
 		{Name: "DB_PATH", Value: dbPath, Source: envSource("DB_PATH"), About: "This app's database: accounts and download history"},
-		{Name: "MODELS_DIR", Value: modelsDir, Source: modelsSource, About: "Ollama's models folder, for the free disk space tile"},
+		{Name: "MODELS_DIR", Value: modelsDir, Source: modelsSource, About: "Ollama's models folder, for the free disk space tile and exact storage figures"},
 		{Name: "OLLAMA_MODELS", Value: os.Getenv("OLLAMA_MODELS"), Source: optionalSource("OLLAMA_MODELS"), About: "Ollama's own models folder setting; checked when finding MODELS_DIR"},
 		{Name: "ALLOW_MODEL_DELETE", Value: fmt.Sprint(allowDelete), Source: deleteSource, About: "Whether models can be deleted from this app"},
 		{Name: "HF_TOKEN", Value: hfToken, Source: optionalSource("HF_TOKEN"), About: "Hugging Face read token, for browsing private repos", Secret: true},

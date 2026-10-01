@@ -112,8 +112,11 @@
           <td>{{if .Usage.ActiveSeconds}}{{activefor .Usage.ActiveSeconds}}{{else}}<span class="muted">—</span>{{end}}</td>
           <td class="actions">
             <a class="btn secondary small" href="/models/{{.Name}}">View</a>
-            {{if $.AllowDelete}}<button type="button" class="danger small" data-dialog-open="delete-model-modal"
-              data-fill-name="{{.Name}}" data-fill-effect="{{$.Storage.DeleteEffect .Name}}" data-fill-return="{{$.ListURL}}">Delete</button>{{end}}
+            {{if $.AllowDelete}}{{if .Also}}
+            {{/* Its other tags too: deleting one tag of a model frees nothing (static/models.js). */}}
+            <button type="button" class="danger small" data-delete-names="{{json .Tags}}">Delete</button>
+            {{else}}<button type="button" class="danger small" data-dialog-open="delete-model-modal"
+              data-fill-name="{{.Name}}" data-fill-effect="{{$.Storage.DeleteEffect .Name}}" data-fill-return="{{$.ListURL}}">Delete</button>{{end}}{{end}}
           </td>
         </tr>
       {{end}}

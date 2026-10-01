@@ -60,6 +60,8 @@ func TestDuplicateQuants(t *testing.T) {
 		// The same model under two tags is one entry, with its use under either.
 		`also qwen3:latest`, `<span title="`, "2 hours ago", `<td class="tnum">4</td>`, "≈ 10 min",
 		`data-fill-name="qwen3:8b-q8_0"`, "Q8_0",
+		// Deleting it deletes both its tags, freeing the space shown.
+		`data-delete-names="[&#34;qwen3:8b&#34;,&#34;qwen3:latest&#34;]"`,
 		`href="/models/testing?model=qwen3%3A8b&amp;model=qwen3%3A8b-q8_0&amp;name=Compare&#43;qwen3&#43;8.2B&#43;quantisations"`,
 		// And flagged in the table.
 		`title="Also installed as qwen3:8b-q8_0 (Q8_0)">+1 quant</a>`,

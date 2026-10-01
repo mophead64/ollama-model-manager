@@ -25,6 +25,11 @@ match. Tags you already have are marked **Installed**, ones in the queue show th
 
 ![A gemma3 result with its tags open: sizes, context, fit, and which are installed](images/discover.png)
 
+ollama.com has no API for this, so the app reads its web pages. If ollama.com changes its layout in a way the app can't
+read, Discover says *couldn't read ollama.com (its layout may have changed)* rather than showing no results, and an
+update to this app will be needed. Hugging Face searches, and downloading by name from the Downloads page, still work
+meanwhile.
+
 The filters above the results:
 
 - **Has**: only models with every capability ticked. *cloud* shows ollama.com's cloud models, which don't run locally.
@@ -72,7 +77,8 @@ an ollama.com or huggingface.co link.
 
 - **Checked first.** Each name is checked with its registry before it's queued, so a typo fails straight away. If a
   model looks too big for your disk or memory, or it's on your [blacklist](blacklist.md), you're asked before it's
-  queued.
+  queued. The disk check counts what's already queued: with 50 GB free and two 20 GB downloads ahead of it, a third
+  is flagged then, rather than failing when the disk fills.
 - **One at a time, in the background.** Downloads carry on when you close the browser, with live progress, speed and
   ETA, and a count on the nav. If this app restarts, an interrupted download picks up where it left off.
 - **Failures explained.** A failed download keeps its log, and suggests what to do for the common causes: a model or tag

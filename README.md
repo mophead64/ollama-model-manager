@@ -10,7 +10,7 @@
   ones that weren't worth keeping.
 </p>
 
-![The dashboard: library totals, free disk space, live system load, the models loaded in memory, and the most recently used models](docs/images/dashboard.png)
+![The dashboard: library totals, free disk space running low, live system load, the models loaded in memory, four models unused for 60+ days, and the most recently used models](docs/images/dashboard.png)
 
 ## What it adds to Ollama
 
@@ -23,6 +23,7 @@ Manager fills in the rest:
 | **Finding models** | Browse ollama.com or Hugging Face yourself, and guess what will fit | Search both from the app, with every size and quantisation checked against your memory and GPU |
 | **Downloading** | `ollama pull`, one at a time, with the terminal kept open | A queue that runs in the background, carries on after a restart, and explains failures |
 | **Knowing what you use** | When a model was downloaded | When it was last used, how often it's loaded, and how long it's in use each day |
+| **Disk space** | `ollama list` sizes, which count files shared between models again for each | The real space used, exactly what a delete frees, the models you haven't used in months, and the ones you have in two quantisations, cleared out in one go |
 | **Comparing models** | Try each one by hand and eyeball it | Tests: one prompt, many models, many runs, with speed and replies side by side |
 | **Remembering what didn't work** | Nothing | A blacklist that keeps why you deleted a model, and warns you before you download it again |
 | **Staying up to date** | Check the releases yourself | An orange dot when Ollama has an update, with how to install it |
@@ -35,27 +36,30 @@ loaded in memory (and how much of it is on the GPU), and the models you've used 
 everything installed, with its family, size, quantisation, context length, capabilities, when it was last used and how
 many times it's been loaded. Filter and sort by any of them, and click a name to copy it.
 
-![The Models page: every installed model, sorted by when it was last used, with how often each has been loaded](docs/images/models.png)
+![The Models page: every installed model, sorted by when it was last used, with selection boxes, and badges for models with another name or another quantisation installed](docs/images/models.png)
 
 Each model's menu loads or unloads it (choosing how long it stays loaded), opens a chat, shows its **other quants** to
-download, links to it on ollama.com or Hugging Face, or deletes it. Tick several models to unload or delete them at once
-(optionally adding them to the blacklist as they go).
-
-Storage figures count each file once: `llama3.2:latest` and `llama3.2:3b` are the same model, and a variant made from
-another model shares its weights, so neither is counted twice, and deleting a model says exactly how much space it frees
-(this needs Ollama's models folder visible to the app; see `MODELS_DIR`). The free-space tile turns amber, then red, as
-the disk fills.
+download, links to it on ollama.com or Hugging Face, or deletes it. Tick several to unload or delete them at once.
 
 ### Usage history
 Ollama keeps no record of what you use. This app checks every 15 seconds and records when each model was last used, each
-time it's loaded, and roughly how long it's in use each day, so you can see which models earn their disk space. The dashboard says how many models have gone unused for 60 days and
-the space they take, and the Models page filters to models unused for 30, 60 or 90 days, to review and delete. A model
-installed in more than one quantisation is flagged, with each one's use side by side and a link to a test comparing
-them. Each
+time it's loaded, and roughly how long it's in use each day, so you can see which models earn their disk space. Each
 model's page has a 30-day chart alongside everything Ollama knows about it: architecture, parameters, template and
 Modelfile.
 
 ![A model's page: its details, and a usage chart of time in use per day over the last 30 days](docs/images/model-detail.png)
+
+### Reclaiming disk space
+Sizes count each file once: `llama3.2:latest` and `llama3.2:3b` are one model, a variant made from another shares its
+weights, and deleting a model says exactly how much it frees. The dashboard tells you when models have gone 60 days
+unused, and the Models page filters to them (30, 60 or 90 days) to delete them in one go, adding them to the blacklist
+if you like. Models installed in more than one quantisation are set side by side with how much you use each, and a link
+to test them against each other. The free space tile turns amber, then red, as the disk fills, and downloads check
+there's room for everything queued ahead of them.
+
+![The Models page filtered to models not used in 60+ days, all four selected, with the bar to unload or delete them](docs/images/models-unused.png)
+
+**[Reclaiming disk space →](docs/disk-space.md)**
 
 ### Discover and download models
 Search the [Ollama library](https://ollama.com/search) and GGUF models on
@@ -74,7 +78,7 @@ and load time, plus every reply to read side by side. Tests run in the backgroun
 when it's done so the next gets the GPU to itself. Save a prompt, models and runs as a **template** to run the same
 comparison again later.
 
-![A test's results: a comparison table of four models' speed and times, and each run's reply](docs/images/test-results.png)
+![A test's results: a comparison table of four models' speed and times (two of them quantisations of qwen3:8b), and the first run's reply, with its code, list and table](docs/images/test-results.png)
 
 **[Model testing →](docs/testing.md)**
 
@@ -92,7 +96,7 @@ A quick way to check a model works: chat with any installed model, switch models
 see tokens, tokens per second and response time for each reply. Replies (here and in test results) are shown as
 Markdown: lists, tables and code blocks. Nothing is saved.
 
-![Chat: a reply from qwen3:8b, with its thinking folded away and its speed underneath](docs/images/chat.png)
+![Chat: a reply from qwen3:8b with a code block, a numbered list and a table, its thinking folded away and its speed underneath](docs/images/chat.png)
 
 ### System monitoring and updates
 Live graphs of CPU, memory, GPU and VRAM use, each GPU's memory and utilisation, what's loaded, and how many models you
@@ -222,7 +226,7 @@ Everything is set with environment variables:
 | `PORT` | `8080` | Port the web UI listens on |
 | `OLLAMA_HOST` | `http://localhost:11434` | The Ollama server to manage |
 | `DB_PATH` | `omm.db` beside the binary (`/data/omm.db` in Docker) | Where the database is kept: accounts, downloads, usage history, tests and the blacklist |
-| `MODELS_DIR` | auto-detected | Ollama's models folder, for the free disk space tile. Found automatically in the usual places and at `/models` |
+| `MODELS_DIR` | auto-detected | Ollama's models folder, for the free disk space tile and exact storage figures (see [Disk space](docs/disk-space.md#how-much-space-your-models-take)). Found automatically in the usual places and at `/models` |
 | `ALLOW_MODEL_DELETE` | `true` | `false` hides the Delete buttons and refuses deletions |
 | `HF_TOKEN` | not set | Optional Hugging Face read token, for browsing private repos (see [the guide](docs/discovery.md#gated-and-private-hugging-face-models)) |
 | `TZ` | the system's (UTC in Docker) | Time zone for the times shown and usage history's days, e.g. `Europe/London` |
