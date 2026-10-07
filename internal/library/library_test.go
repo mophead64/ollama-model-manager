@@ -45,6 +45,32 @@ func TestParseSearch(t *testing.T) {
 	}
 }
 
+// The rounded-chip design ollama.com switched to and from in October 2026:
+// the same four models, read the same.
+func TestParseSearchChips(t *testing.T) {
+	b, err := os.ReadFile("testdata/search-chips.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := parseSearch(string(b), 1)
+	want := []Model{
+		{Name: "glm-5.3", Description: "Z.ai's flagship model and the most capable open-weights model for coding, with major gains on long-horizon agentic tasks.",
+			Capabilities: []string{"tools", "thinking"}, Cloud: true},
+		{Name: "qwen3.6", Description: "Qwen3.6 delivers substantial upgrades in agentic coding and thinking preservation than previous Qwen models.",
+			Capabilities: []string{"vision", "tools", "thinking"}, Sizes: []string{"27b", "35b"}, Pulls: "7M"},
+		{Name: "embeddinggemma-2", Description: "EmbeddingGemma 2 is a multimodal embedding model from Google built on the Gemma 4 architecture.",
+			Capabilities: []string{"vision", "embedding"}, Sizes: []string{"270m", "440m", "570m", "740m"}, Pulls: "10K"},
+		{Name: "laya", Description: "Laya is a 421M decision model from Convai Innovations, fine-tuned from ModernBERT-large.",
+			Capabilities: []string{"decision"}, Pulls: "1,180"},
+	}
+	if !reflect.DeepEqual(p.Models, want) {
+		t.Errorf("models =\n%+v\nwant\n%+v", p.Models, want)
+	}
+	if p.NextPage != 2 {
+		t.Errorf("next page = %d, want 2", p.NextPage)
+	}
+}
+
 func TestParseTags(t *testing.T) {
 	b, err := os.ReadFile("testdata/tags.html")
 	if err != nil {

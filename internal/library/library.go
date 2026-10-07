@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -282,15 +283,22 @@ var (
 	namePartRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 
 	// Search results: each is an <li> holding a link to /library/<name>,
-	// with the description, then a row of chips: "Cloud" (with a tooltip
-	// saying it runs on Ollama's cloud), the sizes ("27b · 35b"), and an
-	// icon and label for each capability. The pull count sits on the right,
-	// titled "N downloads".
-	resultRE   = regexp.MustCompile(`<a href="/library/([^"/:?]+)"`)
-	descRE     = regexp.MustCompile(`(?s)<p class="[^"]*\bmax-w-[^"]*"[^>]*>(.*?)</p>`)
+	// with the description, then a row of chips saying whether it's a cloud
+	// model, its sizes and its capabilities. The pull count sits on the
+	// right, titled "N downloads". ollama.com has shown the chips in two
+	// styles (in October 2026 it switched between them within days), so
+	// both are read:
+	//   - a rounded label each: "cloud", "27b", "vision";
+	//   - "Cloud" with a tooltip saying it runs on Ollama's cloud, the sizes
+	//     together ("27b · 35b"), and an icon and label per capability.
+	resultRE = regexp.MustCompile(`<a href="/library/([^"/:?]+)"`)
+	descRE   = regexp.MustCompile(`(?s)<p class="[^"]*\bmax-w-[^"]*"[^>]*>(.*?)</p>`)
+	chipREs  = []*regexp.Regexp{
+		regexp.MustCompile(`<span[^>]*class="[^"]*\brounded-md\b[^"]*"[^>]*>([^<]+)</span>`),
+		regexp.MustCompile(`<span\s+class="font-medium text-black">([^<]+)</span>`),
+		regexp.MustCompile(`(?s)<span\s+class="inline-flex items-center gap-1\.5">(?:<svg[^>]*>.*?</svg>)?([^<]+)</span>`),
+	}
 	cloudRE    = regexp.MustCompile(`role="tooltip"[^>]*>Runs on Ollama.s cloud<`)
-	sizeChipRE = regexp.MustCompile(`<span\s+class="font-medium text-black">([^<]+)</span>`)
-	featureRE  = regexp.MustCompile(`(?s)<span\s+class="inline-flex items-center gap-1\.5">(?:<svg[^>]*>.*?</svg>)?([^<]+)</span>`)
 	pullsRE    = regexp.MustCompile(`(?s)title="[^"]*\bdownloads"[^>]*>(?:<svg[^>]*>.*?</svg>)?\s*<span\s*>([^<]+)</span>`)
 	nextPageRE = regexp.MustCompile(`hx-get="/search\?page=(\d+)"`)
 	sizeRE     = regexp.MustCompile(`^(?:e?\d+(?:\.\d+)?|\d+x\d+(?:\.\d+)?)[mbt]$`)
@@ -322,14 +330,18 @@ func parseSearch(body string, page int) Page {
 			m.Description = clean(d[1])
 		}
 		m.Cloud = cloudRE.MatchString(chunk)
-		for _, c := range sizeChipRE.FindAllStringSubmatch(chunk, -1) {
-			if label := strings.ToLower(clean(c[1])); sizeRE.MatchString(label) {
-				m.Sizes = append(m.Sizes, label)
-			}
-		}
-		for _, c := range featureRE.FindAllStringSubmatch(chunk, -1) {
-			if label := strings.ToLower(clean(c[1])); isCapability(label) {
-				m.Capabilities = append(m.Capabilities, label)
+		for _, label := range chipLabels(chunk) {
+			switch {
+			case label == "cloud":
+				m.Cloud = true
+			case isCapability(label):
+				if !slices.Contains(m.Capabilities, label) {
+					m.Capabilities = append(m.Capabilities, label)
+				}
+			case sizeRE.MatchString(label):
+				if !slices.Contains(m.Sizes, label) {
+					m.Sizes = append(m.Sizes, label)
+				}
 			}
 		}
 		if s := pullsRE.FindStringSubmatch(chunk); s != nil {
@@ -343,6 +355,29 @@ func parseSearch(body string, page int) Page {
 		}
 	}
 	return p
+}
+
+// chipLabels is the text of a result's chips, in either style (chipREs),
+// lower-cased, in the order they're on the page. Anything else a pattern
+// catches (a tooltip, a context length) isn't a capability or size, so it's
+// ignored.
+func chipLabels(chunk string) []string {
+	type found struct {
+		at    int
+		label string
+	}
+	var all []found
+	for _, re := range chipREs {
+		for _, m := range re.FindAllStringSubmatchIndex(chunk, -1) {
+			all = append(all, found{m[0], strings.ToLower(clean(chunk[m[2]:m[3]]))})
+		}
+	}
+	slices.SortFunc(all, func(a, b found) int { return a.at - b.at })
+	labels := make([]string, len(all))
+	for i, f := range all {
+		labels[i] = f.label
+	}
+	return labels
 }
 
 func parseTags(body string) []Tag {
