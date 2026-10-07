@@ -60,13 +60,27 @@ func TestEstimateFit(t *testing.T) {
 }
 
 // A search result in ollama.com's markup (see internal/library/testdata).
+// Each chip is "cloud", a size ("8b") or a capability ("tools").
 func libraryResult(name, desc string, chips ...string) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, `<li class="flex items-baseline"><a href="/library/%s" class="group w-full"><p class="max-w-lg break-words">%s</p>`, name, desc)
+	fmt.Fprintf(&b, `<li class="border-b"><a href="/library/%s" class="group flex"><div class="min-w-0 flex-1"><h2 title="%[1]s"><span >%[1]s</span></h2>`, name)
+	fmt.Fprintf(&b, `<p class="mt-1 max-w-2xl truncate" title="%s">%[1]s</p><div class="mt-3 flex">`, desc)
+	var sizes []string
 	for _, c := range chips {
-		fmt.Fprintf(&b, `<span class="inline-flex my-1 items-center rounded-md px-2">%s</span>`, c)
+		switch {
+		case c == "cloud":
+			b.WriteString(`<span class="group/tip relative inline-flex"><span role="tooltip" class="absolute">Runs on Ollama’s cloud</span><svg viewBox="0 0 24 24"><path d="M0 0"/></svg>Cloud</span>`)
+		case c[len(c)-1] == 'b':
+			sizes = append(sizes, `<span  class="font-medium text-black">`+c+`</span>`)
+		default:
+			fmt.Fprintf(&b, `<span  class="inline-flex items-center gap-1.5"><svg viewBox="0 0 24 24"><path d="M0 0"/></svg>%s</span>`, strings.ToUpper(c[:1])+c[1:])
+		}
 	}
-	b.WriteString(`<span >1.2M</span><span class="hidden sm:flex">&nbsp;Pulls</span></a></li>`)
+	if sizes != nil {
+		b.WriteString(`<span class="group/tip relative inline-flex items-center gap-1.5"><span role="tooltip" class="absolute">Runs on your computer</span>` +
+			strings.Join(sizes, `<span class="text-black/50" aria-hidden="true">·</span>`) + `</span>`)
+	}
+	b.WriteString(`</div></div><span class="inline-flex tabular-nums" title="1,234,567 downloads"><svg viewBox="0 0 24 24"><path d="M0 0"/></svg><span >1.2M</span></span></a></li>`)
 	return b.String()
 }
 
@@ -80,6 +94,9 @@ func fakeLibrary(t *testing.T) *httptest.Server {
 				libraryResult("huge", "Won't fit anywhere.", "4000b")+
 				libraryResult("cloudy", "Cloud only.", "cloud")+
 				`<li hx-get="/search?page=2" hx-trigger="revealed"></li></ul>`)
+		case r.URL.Path == "/search" && r.Header.Get("HX-Request") != "true":
+			// Like ollama.com: later pages only for its own htmx requests.
+			http.Redirect(w, r, "/search", http.StatusSeeOther)
 		case r.URL.Path == "/search":
 			fmt.Fprint(w, `<ul>`+libraryResult("second-page", "Page two.", "1b")+`</ul>`)
 		case r.URL.Path == "/library/model-000/tags":
@@ -106,15 +123,15 @@ func TestDiscoverPage(t *testing.T) {
 
 	// Before the hardware's been read, the fit filter can't judge anything,
 	// so it shows everything rather than nothing.
-	if body := get(h, "/discover", false).Body.String(); !strings.Contains(body, "huge") {
+	if body := get(h, "/discover?src=ollama", false).Body.String(); !strings.Contains(body, "huge") {
 		t.Error("with hardware unknown, the fit filter hid a model")
 	}
 	testSampler.SetLatest(sysinfo.Snapshot{Time: time.Now(), MemTotal: 32 * gb, GPUs: []sysinfo.GPU{{Name: "RTX", MemTotal: 12 * gb}}})
 
 	// By default, only models that would run here.
-	body := get(h, "/discover", false).Body.String()
+	body := get(h, "/discover?src=ollama", false).Body.String()
 	for _, want := range []string{"<!doctype html>", "model-000", "Installed already.", "Installed",
-		`hx-get="/discover?page=2"`, "1.2M pulls"} {
+		`hx-get="/discover?page=2&amp;src=ollama"`, "1.2M pulls"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("page missing %q", want)
 		}
@@ -125,24 +142,24 @@ func TestDiscoverPage(t *testing.T) {
 		}
 	}
 	// Unticking the filter (the form's hidden fit=0 alone) shows everything.
-	all := get(h, "/discover?fit=0", false).Body.String()
-	for _, want := range []string{"huge", "cloudy", `hx-get="/discover?fit=0&amp;page=2"`} {
+	all := get(h, "/discover?src=ollama&fit=0", false).Body.String()
+	for _, want := range []string{"huge", "cloudy", `hx-get="/discover?fit=0&amp;page=2&amp;src=ollama"`} {
 		if !strings.Contains(all, want) {
 			t.Errorf("unfiltered page missing %q", want)
 		}
 	}
 	// Asking for cloud models shows them despite the filter.
-	if cloud := get(h, "/discover?c=cloud", false).Body.String(); !strings.Contains(cloud, "cloudy") || strings.Contains(cloud, "huge") {
+	if cloud := get(h, "/discover?src=ollama&c=cloud", false).Body.String(); !strings.Contains(cloud, "cloudy") || strings.Contains(cloud, "huge") {
 		t.Errorf("cloud filter: want cloudy and not huge")
 	}
 
 	// Filter changes swap just the results.
-	frag := get(h, "/discover?q=x", true).Body.String()
+	frag := get(h, "/discover?src=ollama&q=x", true).Body.String()
 	if strings.Contains(frag, "<!doctype html>") || !strings.Contains(frag, `id="discover-results"`) {
 		t.Errorf("htmx search didn't return the results fragment:\n%s", frag)
 	}
 	// Scrolling fetches just the next page's cards.
-	more := get(h, "/discover?page=2", true).Body.String()
+	more := get(h, "/discover?src=ollama&page=2", true).Body.String()
 	if strings.Contains(more, `id="discover-results"`) || !strings.Contains(more, "second-page") || strings.Contains(more, "page=3") {
 		t.Errorf("next page fragment wrong:\n%s", more)
 	}
@@ -176,15 +193,15 @@ func TestDiscoverTags(t *testing.T) {
 
 func TestDiscoverSearchError(t *testing.T) {
 	h := newTestServer(t, fakeOllama(t, 1).URL) // library unreachable
-	body := get(h, "/discover", false).Body.String()
+	body := get(h, "/discover?src=ollama", false).Body.String()
 	if !strings.Contains(body, "Search failed: couldn&#39;t reach ollama.com") {
 		t.Errorf("no error shown:\n%s", body)
 	}
 }
 
 func TestDiscoverStateURL(t *testing.T) {
-	st := parseDiscoverState(map[string][]string{"q": {" qwen "}, "c": {"vision", "bogus", "vision", "cloud"}, "o": {"newest"}, "fit": {"0"}, "page": {"3"}})
-	if want := "/discover?c=vision&c=cloud&fit=0&o=newest&page=3&q=qwen"; st.URL() != want {
+	st := parseDiscoverState(map[string][]string{"src": {"ollama"}, "q": {" qwen "}, "c": {"vision", "bogus", "vision", "cloud"}, "o": {"newest"}, "fit": {"0"}, "page": {"3"}})
+	if want := "/discover?c=vision&c=cloud&fit=0&o=newest&page=3&q=qwen&src=ollama"; st.URL() != want {
 		t.Errorf("URL = %s, want %s", st.URL(), want)
 	}
 	for fit, want := range map[string]bool{"": true, "0": false, "0,1": true} {
@@ -196,11 +213,11 @@ func TestDiscoverStateURL(t *testing.T) {
 			t.Errorf("fit=%q: Fit = %v, want %v", fit, got, want)
 		}
 	}
-	if st := parseDiscoverState(map[string][]string{"src": {"hf"}, "bl": {"hide"}}); !st.HideBL || st.URL() != "/discover?bl=hide&src=hf" {
+	if st := parseDiscoverState(map[string][]string{"src": {"hf"}, "bl": {"hide"}}); !st.HideBL || st.URL() != "/discover?bl=hide" {
 		t.Errorf("hide blacklisted on Hugging Face = %+v, %s", st, st.URL())
 	}
-	if got := parseDiscoverState(nil).URL(); got != "/discover" {
-		t.Errorf("empty state URL = %s", got)
+	if st := parseDiscoverState(nil); !st.HF() || st.URL() != "/discover" {
+		t.Errorf("empty state should be Hugging Face, the default: %+v, %s", st, st.URL())
 	}
 }
 
@@ -245,9 +262,13 @@ func TestDiscoverHuggingFace(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Hugging Face is the default, without the ollama.com tab's caveat.
+	if body := get(h, "/discover", false).Body.String(); !strings.Contains(body, `aria-current="true">Hugging Face`) || strings.Contains(body, `class="disc-banner warn"`) {
+		t.Error("a bare /discover should be Hugging Face, with no note about reading ollama.com's pages")
+	}
 	body := get(h, "/discover?src=hf", false).Body.String()
 	for _, want := range []string{"owner/Small-GGUF", "A quantisation of <strong>owner/Small</strong>", "8B parameters", "1.2M downloads",
-		"128K context", `class="badge queued"`, `hx-get="/discover?cursor=p2&amp;src=hf"`, `aria-current="true">Hugging Face`} {
+		"128K context", `class="badge queued"`, `hx-get="/discover?cursor=p2"`, `aria-current="true">Hugging Face`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("HF page missing %q", want)
 		}
@@ -323,7 +344,7 @@ func TestDiscoverShowsBlacklist(t *testing.T) {
 	}
 
 	// Cards: a badge whose tooltip has each entry.
-	body := get(h, "/discover?fit=0", false).Body.String()
+	body := get(h, "/discover?src=ollama&fit=0", false).Body.String()
 	for _, want := range []string{
 		`<a class="badge error tip-wrap" href="/models/blacklist">Blacklisted<span class="tip wide right" role="tooltip">`,
 		"<strong>model-000:cloud</strong> blacklisted 2026-09-01 10:30:00 by admin",
@@ -358,11 +379,11 @@ func TestDiscoverShowsBlacklist(t *testing.T) {
 	if !strings.Contains(body, `name="bl" value="hide" >`) {
 		t.Error("the filter should be offered, unticked")
 	}
-	hidden := get(h, "/discover?fit=0&bl=hide", false).Body.String()
+	hidden := get(h, "/discover?src=ollama&fit=0&bl=hide", false).Body.String()
 	if strings.Contains(hidden, `<h3 class="disc-name">model-000</h3>`) || !strings.Contains(hidden, `<h3 class="disc-name">huge</h3>`) {
 		t.Error("only model-000 (one tag blacklisted) should be hidden")
 	}
-	if !strings.Contains(hidden, `name="bl" value="hide" checked>`) || !strings.Contains(hidden, `hx-get="/discover?bl=hide&amp;fit=0&amp;page=2"`) {
+	if !strings.Contains(hidden, `name="bl" value="hide" checked>`) || !strings.Contains(hidden, `hx-get="/discover?bl=hide&amp;fit=0&amp;page=2&amp;src=ollama"`) {
 		t.Error("the filter should stay ticked, and carry on to the next page")
 	}
 	hfHidden := get(h, "/discover?src=hf&fit=0&bl=hide", false).Body.String()
@@ -378,7 +399,7 @@ func TestDiscoverAllBlacklisted(t *testing.T) {
 		testStore.BlacklistModel(t.Context(), store.BlacklistEntry{Model: m, By: "admin", At: time.Now()})
 	}
 	// The search has a next page, so the page still scrolls; its first page is just empty.
-	body := get(h, "/discover?fit=0&bl=hide", true).Body.String()
+	body := get(h, "/discover?src=ollama&fit=0&bl=hide", true).Body.String()
 	for _, name := range []string{"model-000", "huge", "cloudy"} {
 		if strings.Contains(body, `<h3 class="disc-name">`+name+`</h3>`) {
 			t.Errorf("%s should be hidden", name)
@@ -406,14 +427,41 @@ func TestDiscoverUnreadableLibrary(t *testing.T) {
 	t.Cleanup(lib.Close)
 	h := newTestServer(t, fakeOllama(t, 1).URL, func(c *Config) { c.LibraryURL = lib.URL })
 
-	body := get(h, "/discover", false).Body.String()
+	body := get(h, "/discover?src=ollama", false).Body.String()
 	if !strings.Contains(body, "Search failed: couldn&#39;t read ollama.com (its layout may have changed)") || strings.Contains(body, "No models found") {
 		t.Errorf("a blank search that reads nothing should say so:\n%s", body)
 	}
-	if body := get(h, "/discover?q=zzz", false).Body.String(); !strings.Contains(body, "No models found for “zzz”") {
+	if body := get(h, "/discover?src=ollama&q=zzz", false).Body.String(); !strings.Contains(body, "No models found for “zzz”") {
 		t.Errorf("a text search can find nothing:\n%s", body)
 	}
 	if body := get(h, "/discover/tags?model=qwen3", true).Body.String(); !strings.Contains(body, "Couldn&#39;t read qwen3&#39;s tags") {
 		t.Errorf("tags: %s", body)
+	}
+}
+
+// While browsing ollama.com isn't working, Discover in the nav and its
+// Ollama library tab have a red dot saying why.
+func TestDiscoverBrokenDot(t *testing.T) {
+	lib := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `<ul><li><a href="/library/a"></a></li><li><a href="/library/b"></a></li><li><a href="/library/c"></a></li></ul>`)
+	}))
+	t.Cleanup(lib.Close)
+	h := newTestServer(t, fakeOllama(t, 1).URL, func(c *Config) { c.LibraryURL = lib.URL })
+
+	if body := get(h, "/", false).Body.String(); strings.Contains(body, "nav-dot bad") {
+		t.Error("red dot before ollama.com was even tried")
+	}
+	body := get(h, "/discover?src=ollama&fit=0", false).Body.String()
+	if n := strings.Count(body, `class="nav-dot bad"`); n != 2 {
+		t.Errorf("discover page has %d red dots, want 2 (nav and tab)", n)
+	}
+	if !strings.Contains(body, "missing their descriptions") {
+		t.Error("the dot doesn't say what's wrong")
+	}
+	if !strings.Contains(body, "has no API for searching its library") || !strings.Contains(body, "isn't working right now") {
+		t.Error("the Ollama library tab should explain it reads web pages, and that it's broken now")
+	}
+	if body := get(h, "/", false).Body.String(); strings.Count(body, `class="nav-dot bad"`) != 1 {
+		t.Error("other pages should keep the nav's red dot")
 	}
 }

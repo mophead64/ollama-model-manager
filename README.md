@@ -32,9 +32,12 @@ Manager fills in the rest:
 
 ### Your models, at a glance
 The **dashboard** shows your library's size, free space on the disk Ollama uses, live CPU, memory, GPU and VRAM, what's
-loaded in memory (and how much of it is on the GPU), and the models you've used most recently. The **Models** page lists
-everything installed, with its family, size, quantisation, context length, capabilities, when it was downloaded, when
-it was last used and how many times it's been loaded. Sort by size, parameters, context, download date, last use or
+loaded in memory (and how much of it is on the GPU), and the models you've used most recently.
+
+![The dashboard: library totals, free disk space running low, live system load, the models loaded in memory, four models unused for 60+ days, and the most recently used models](docs/images/dashboard.png)
+
+The **Models** page lists everything installed, with its family, size, quantisation, context length, capabilities, when
+it was downloaded, when it was last used and how many times it's been loaded. Sort by size, parameters, context, download date, last use or
 loads, filter by name, capability or how long it's gone unused, and click a name to copy it.
 
 ![The Models page: every installed model, sorted by when it was last used, with selection boxes, and badges for models with another name or another quantisation installed](docs/images/models.png)
@@ -63,8 +66,8 @@ there's room for everything queued ahead of them.
 **[Reclaiming disk space →](docs/disk-space.md)**
 
 ### Discover and download models
-Search the [Ollama library](https://ollama.com/search) and GGUF models on
-[Hugging Face](https://huggingface.co/models?library=gguf) without leaving the app. Every size and quantisation is marked
+Search GGUF models on [Hugging Face](https://huggingface.co/models?library=gguf) and the
+[Ollama library](https://ollama.com/search) without leaving the app. Every size and quantisation is marked
 ✓ fits in VRAM, ◐ partly on the CPU, or ✗ too big for your machine, with its real download size. Downloads go into a
 queue that works through them in the background, with progress, speed and ETA, and suggestions for fixing any that fail.
 

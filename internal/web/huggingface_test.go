@@ -70,3 +70,34 @@ func TestHuggingFaceSectionOllamaSignedIn(t *testing.T) {
 		t.Errorf("no fallback:\n%s", body)
 	}
 }
+
+// The Hugging Face tab on Discover says whether this app is connected to
+// Hugging Face, and if not, where to connect it.
+func TestDiscoverHuggingFaceConnection(t *testing.T) {
+	hf := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/api/whoami-v2" && r.Header.Get("Authorization") == "Bearer hf_good":
+			w.Write([]byte(`{"name":"josh"}`))
+		case r.URL.Path == "/api/whoami-v2":
+			w.WriteHeader(http.StatusUnauthorized)
+		default:
+			w.Write([]byte(`[]`)) // no search results
+		}
+	}))
+	defer hf.Close()
+
+	for token, want := range map[string]string{
+		"":        `Not connected to Hugging Face, so searches show public repos only`,
+		"hf_good": `Connected to Hugging Face as <strong>josh</strong>`,
+		"hf_bad":  `The Hugging Face token (HF_TOKEN) isn't working:</strong> Hugging Face rejected the token`,
+	} {
+		h := newTestServer(t, fakeOllama(t, 1).URL, func(c *Config) { c.HFURL, c.HFToken = hf.URL, token })
+		body := get(h, "/discover", false).Body.String()
+		if !strings.Contains(body, want) {
+			t.Errorf("token %q: missing %q", token, want)
+		}
+		if !strings.Contains(body, `href="/account#huggingface"`) {
+			t.Errorf("token %q: the admin should get a link to Settings", token)
+		}
+	}
+}

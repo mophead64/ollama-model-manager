@@ -163,6 +163,8 @@ func main() {
 
 	// Whether Ollama itself has an update, for the nav and the System page.
 	go srv.RunOllamaUpdateChecks(ctx)
+	// Whether browsing ollama.com still works, for a red dot on Discover.
+	go srv.RunLibraryChecks(ctx)
 
 	httpServer := &http.Server{
 		Addr:              addr,

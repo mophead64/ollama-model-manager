@@ -22,12 +22,33 @@
         {{end}}
       </div>
       <div class="disc-tabs">
-        <a href="/discover" class="disc-tab"{{if not .State.HF}} aria-current="true"{{end}}>Ollama library</a>
-        <a href="/discover?src=hf" class="disc-tab"{{if .State.HF}} aria-current="true"{{end}}>Hugging Face</a>
+        <a href="/discover" class="disc-tab"{{if .State.HF}} aria-current="true"{{end}}>Hugging Face</a>
+        <a href="/discover?src=ollama" class="disc-tab"{{if not .State.HF}} aria-current="true"{{end}}>Ollama library{{template "library_dot" .LibraryHealth}}</a>
       </div>
+      {{with .HFConn}}
+      {{if .User}}
+      <p class="disc-banner good">✓ Connected to Hugging Face as <strong>{{.User}}</strong>. Searches include its private repos and the
+        gated ones it's been granted. To download a gated model, Ollama's key needs adding to that account too{{if .IsAdmin}}
+        (<a href="/account#huggingface">Settings → Hugging Face</a>){{end}}.</p>
+      {{else if .Token}}
+      <p class="disc-banner warn"><strong>The Hugging Face token (HF_TOKEN) isn't working:</strong> {{.Err}}. Searches show public repos
+        only until it's fixed{{if .IsAdmin}} (<a href="/account#huggingface">Settings → Hugging Face</a>){{end}}.</p>
+      {{else}}
+      <p class="disc-banner info">Not connected to Hugging Face, so searches show public repos only and gated models won't download.
+        {{if .IsAdmin}}<a href="/account#huggingface">Connect in Settings → Hugging Face</a>.{{else}}The admin can connect it in Settings.{{end}}</p>
+      {{end}}
+      {{end}}
+      {{if not .State.HF}}
+      <p class="disc-banner warn">
+        ollama.com has no API for searching its library, so this tab reads ollama.com's web pages instead.
+        When the site changes, results can come back incomplete or stop loading until this app is updated.
+        {{with .LibraryHealth}}{{if .Broken}}<strong>It isn't working right now:</strong> {{.Reason}}.{{else}}A red dot beside Discover shows when that's happened.{{end}}{{end}}
+        Hugging Face, which has a proper API, isn't affected.
+      </p>
+      {{end}}
       <form action="/discover" hx-get="/discover" hx-target="#discover-results" hx-swap="outerHTML" hx-push-url="true"
             hx-trigger="submit, input changed delay:400ms from:#d-q, change from:.disc-filter">
-        {{if .State.HF}}<input type="hidden" name="src" value="hf">{{end}}
+        {{if not .State.HF}}<input type="hidden" name="src" value="ollama">{{end}}
         <div class="row">
           <label for="d-q" class="muted">{{if .State.HF}}Search GGUF models on Hugging Face{{else}}Search the Ollama library{{end}}</label>
           <input id="d-q" type="text" name="q" value="{{.State.Query}}" placeholder="{{if .State.HF}}e.g. qwen, unsloth, coder{{else}}e.g. qwen, coder, embed{{end}}" autocomplete="off">
@@ -151,8 +172,6 @@
   {{end}}
   <div class="disc-meta muted">
     {{with .Pulls}}<span>{{.}} pulls</span>{{end}}
-    {{with .Tags}}<span>{{.}} tag{{if ne . 1}}s{{end}}</span>{{end}}
-    {{with .Updated}}<span>updated {{.}}</span>{{end}}
   </div>
   <details class="disc-tags" hx-get="/discover/tags?model={{.Name}}" hx-trigger="toggle once" hx-target="find .disc-tags-body">
     <summary>Tags and downloads</summary>
@@ -203,7 +222,7 @@
     {{range .Tags}}
     <tr>
       <td class="mono">{{.Label}}{{with .AliasOf}}<div class="muted disc-alias">same as {{.}}</div>{{end}}{{with .Input}}<div class="muted disc-alias">{{.}}</div>{{end}}</td>
-      <td>{{if .Size}}{{bytes .Size}}{{else}}—{{end}}</td>
+      <td class="nowrap">{{if .Size}}{{with .SizeMin}}<span title="ollama.com gives a range; it's checked against the larger">{{bytes .}} – </span>{{end}}{{bytes .Size}}{{else}}—{{end}}</td>
       <td>{{or .Context "—"}}</td>
       <td><span class="badge {{.Fit.Badge}}" title="{{.Fit.Detail}}">{{.Fit.Label}}</span></td>
       <td class="actions">

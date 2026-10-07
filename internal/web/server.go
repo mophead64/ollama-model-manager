@@ -189,6 +189,10 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 				if _, set := m["OllamaUpdate"]; !set {
 					m["OllamaUpdate"] = s.ollamaUp.latest()
 				}
+				// For the red dot on Discover while ollama.com can't be browsed.
+				if _, set := m["LibraryHealth"]; !set {
+					m["LibraryHealth"] = s.lib.Health()
+				}
 				// And for the Testing tab's badge.
 				if n, err := s.st.CountActiveModelTests(r.Context()); err == nil {
 					m["ActiveTests"] = n
