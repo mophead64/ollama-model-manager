@@ -401,3 +401,17 @@ func TestHealth(t *testing.T) {
 		t.Errorf("a request given up on says nothing either: %+v", h)
 	}
 }
+
+func TestParseSizeRange(t *testing.T) {
+	for in, want := range map[string][2]int64{
+		"18GB":          {0, 18e9},
+		"4.6GB - 7.5GB": {4.6e9, 7.5e9}, // gemma4's tags, October 2026
+		"815MB – 1.2GB": {815e6, 1.2e9},
+		"-":             {0, 0},
+		"4.6GB - ?":     {0, 0},
+	} {
+		if low, high := parseSizeRange(in); low != want[0] || high != want[1] {
+			t.Errorf("parseSizeRange(%q) = %d, %d; want %d, %d", in, low, high, want[0], want[1])
+		}
+	}
+}

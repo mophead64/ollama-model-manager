@@ -2,15 +2,33 @@
 
 [← Back to the README](../README.md)
 
-Ollama Model Manager lets you find models on ollama.com and Hugging Face, check which ones your machine can run, and
+Ollama Model Manager lets you find models on Hugging Face and ollama.com, check which ones your machine can run, and
 download them through a queue, all from the browser.
 
-- [Searching the Ollama library](#searching-the-ollama-library)
 - [Searching Hugging Face](#searching-hugging-face)
+- [Searching the Ollama library](#searching-the-ollama-library)
 - [Will it fit?](#will-it-fit)
 - [Other quants of a model you have](#other-quants-of-a-model-you-have)
 - [The download queue](#the-download-queue)
 - [Gated and private Hugging Face models](#gated-and-private-hugging-face-models)
+
+## Searching Hugging Face
+
+**Discover → Hugging Face**, the tab Discover opens on, searches the GGUF models on
+[Hugging Face](https://huggingface.co/models?library=gguf) through its API, sorted by downloads, trending, likes or
+newest. Each result shows the model it's a quantisation of, its pipeline and architecture, an estimated size from its
+parameter count, its context length, and a **gated** badge if you need to ask for access (see
+[gated models](#gated-and-private-hugging-face-models)).
+
+Open **Files and downloads** to see each quantisation (Q4_K_M, Q8_0 and so on) with its real size and fit. Files split
+into several parts, and vision projectors (which aren't models on their own), are handled for you.
+
+![Discover's Hugging Face tab: the note that the app isn't connected to Hugging Face, and a search for Google's official QAT Gemma GGUF with its quantisations](images/discover-hf.png)
+
+A note at the top of the tab says whether this app is connected to Hugging Face. Connected (with `HF_TOKEN` set), it
+names the account, and searches include that account's private repos and the gated ones it's been granted. Not
+connected, searches show public repos only, and the note links the admin to **Settings → Hugging Face** to connect. See
+[gated and private models](#gated-and-private-hugging-face-models).
 
 ## Searching the Ollama library
 
@@ -18,10 +36,12 @@ download them through a queue, all from the browser.
 capabilities (vision, tools, thinking, embedding, decision, cloud), its sizes, each marked with whether it fits (see
 [below](#will-it-fit)), and how many times it's been pulled. Results load as you scroll.
 
-Discover reads ollama.com's web pages, so a redesign of the site can break it. The app checks every few hours, and
-whenever you search: if ollama.com can't be reached or its results can't be read, a red dot appears beside
-**Discover** in the menu and on the **Ollama library** tab. Hover over it to see what's wrong. It goes once a search
-works again, so an update to this app that handles the new layout clears it.
+**This tab can stop working when ollama.com changes.** ollama.com has no API for searching its library, so the app reads
+its web pages instead, and a redesign of the site can leave results incomplete or stop them loading until this app is
+updated (a note at the top of the tab says so). The app checks every few hours, and whenever you search: if ollama.com
+can't be reached or its results can't be read, a red dot appears beside **Discover** in the menu and on the **Ollama
+library** tab, and the note says what's wrong. It goes once a search works again. Meanwhile, Hugging Face searches and
+downloading by name from the Downloads page still work.
 
 Open **Tags and downloads** on a result to see every tag: its real download size, context length, whether it fits,
 and a **Download** button. Tags that are the same download under another name (such as `latest`) say which tag they
@@ -30,28 +50,11 @@ match. Tags you already have are marked **Installed**, ones in the queue show th
 
 ![A gemma3 result with its tags open: sizes, context, fit, and which are installed](images/discover.png)
 
-ollama.com has no API for this, so the app reads its web pages. If ollama.com changes its layout in a way the app can't
-read, Discover says *couldn't read ollama.com (its layout may have changed)* rather than showing no results, and an
-update to this app will be needed. Hugging Face searches, and downloading by name from the Downloads page, still work
-meanwhile.
-
 The filters above the results:
 
 - **Has**: only models with every capability ticked. *cloud* shows ollama.com's cloud models, which don't run locally.
 - **Runs on this machine** (on by default): hides models with no size that would run here.
 - **Hide blacklisted**: hides any model with a tag or quantisation on your blacklist.
-
-## Searching Hugging Face
-
-**Discover → Hugging Face** searches the GGUF models on [Hugging Face](https://huggingface.co/models?library=gguf),
-sorted by downloads, trending, likes or newest. Each result shows the model it's a quantisation of, its pipeline and
-architecture, an estimated size from its parameter count, its context length, and a **gated** badge if you need to ask
-for access (see [gated models](#gated-and-private-hugging-face-models)).
-
-Open **Files and downloads** to see each quantisation (Q4_K_M, Q8_0 and so on) with its real size and fit. Files split
-into several parts, and vision projectors (which aren't models on their own), are handled for you.
-
-![A Hugging Face search for Google's official QAT Gemma GGUF, with its quantisations](images/discover-hf.png)
 
 ## Will it fit?
 

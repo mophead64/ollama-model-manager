@@ -561,6 +561,13 @@
   .nav-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-left: 4px; vertical-align: 2px; }
   .nav-dot.warn { background: #f59e0b; box-shadow: 0 0 0 2px var(--panel); }
   .nav-dot.bad { background: var(--danger); box-shadow: 0 0 0 2px var(--panel); }
+  /* Discover's notes at the top of each tab: the Hugging Face connection,
+     and that the ollama.com library is read from its web pages. */
+  .disc-banner { margin: 0 0 12px; padding: 8px 12px; font-size: 13px; line-height: 1.5; color: var(--muted);
+    border-left: 3px solid var(--accent); background: var(--code-bg); border-radius: 0 6px 6px 0; }
+  .disc-banner.warn { border-left-color: var(--warn); }
+  .disc-banner.good { border-left-color: var(--good); }
+  .disc-banner strong { color: var(--text); }
   .nav-system { display: inline-flex; align-items: center; }
   a.nav-dot-link { display: inline-flex; padding: 6px 4px; margin: -6px -4px; }
   a.nav-dot-link .nav-dot { margin-left: 4px; vertical-align: 0; }

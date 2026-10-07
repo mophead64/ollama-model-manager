@@ -60,6 +60,7 @@ type Page struct {
 type Tag struct {
 	Name    string // full name, e.g. "qwen3:8b"
 	Size    int64  // download size in bytes, as listed (rounded); 0 when not listed (cloud tags)
+	SizeMin int64  // when listed as a range ("4.6GB - 7.5GB", as for gemma4), the low end; Size is the high end
 	Context string // context window as listed, e.g. "128K"
 	Input   string // e.g. "Text, Image"
 	Digest  string // short digest, shared by aliases such as "latest"
@@ -98,7 +99,8 @@ type Client struct {
 
 	mu     sync.Mutex
 	cache  map[string]response
-	health Health // see health.go
+	health Health    // see health.go
+	who    whoAnswer // HFAccount's last answer
 }
 
 // New returns a client for the ollama.com library at base and Hugging Face at
@@ -391,7 +393,7 @@ func parseTags(body string) []Tag {
 		t := Tag{Name: clean(row[n[2]:n[3]])}
 		rest := row[n[1]:]
 		if c := tagColsRE.FindStringSubmatch(rest); c != nil {
-			t.Size = parseByteSize(clean(c[1]))
+			t.SizeMin, t.Size = parseSizeRange(clean(c[1]))
 			t.Context = clean(c[2])
 			t.Input = clean(c[3])
 		}
@@ -428,6 +430,19 @@ func parseByteSize(s string) int64 {
 	f, _ := strconv.ParseFloat(m[1], 64)
 	mult := map[string]float64{"B": 1, "KB": 1e3, "MB": 1e6, "GB": 1e9, "TB": 1e12}[m[2]]
 	return int64(f * mult)
+}
+
+// parseSizeRange reads a tag's size: one ("18GB"), or a range ("4.6GB -
+// 7.5GB") as some models list, giving its low end and high end. For a
+// single size, low is 0.
+func parseSizeRange(s string) (low, high int64) {
+	if a, b, ok := strings.Cut(strings.ReplaceAll(s, "–", "-"), " - "); ok {
+		if low, high = parseByteSize(strings.TrimSpace(a)), parseByteSize(strings.TrimSpace(b)); low > 0 && high > 0 {
+			return low, high
+		}
+		return 0, 0
+	}
+	return 0, parseByteSize(s)
 }
 
 // ParamCount turns a size label such as "8b", "270m", "8x7b" or "e4b" into a

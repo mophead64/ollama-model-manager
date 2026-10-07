@@ -80,6 +80,36 @@ var (
 // HasHFToken reports whether requests to Hugging Face carry an access token.
 func (c *Client) HasHFToken() bool { return c.hfToken != "" }
 
+// whoAnswer is a cached HFWhoAmI answer.
+type whoAnswer struct {
+	name string
+	err  error
+	at   time.Time
+}
+
+// HFAccount is HFWhoAmI, remembered for a while (a failure for less), for
+// showing on pages without asking Hugging Face each time.
+func (c *Client) HFAccount(ctx context.Context) (string, error) {
+	c.mu.Lock()
+	w := c.who
+	c.mu.Unlock()
+	keep := 30 * time.Minute
+	if w.err != nil {
+		keep = 2 * time.Minute
+	}
+	if !w.at.IsZero() && time.Since(w.at) < keep {
+		return w.name, w.err
+	}
+	name, err := c.HFWhoAmI(ctx)
+	if ctx.Err() != nil {
+		return "", err // gave up waiting: not an answer to remember
+	}
+	c.mu.Lock()
+	c.who = whoAnswer{name, err, time.Now()}
+	c.mu.Unlock()
+	return name, err
+}
+
 // HFWhoAmI returns the Hugging Face account the access token belongs to.
 func (c *Client) HFWhoAmI(ctx context.Context) (string, error) {
 	if c.hfToken == "" {

@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/mophead64/ollama-model-manager/internal/downloads"
 	"github.com/mophead64/ollama-model-manager/internal/library"
@@ -18,7 +20,7 @@ import (
 
 // discoverState is the search on the discover page, as held in its URL.
 type discoverState struct {
-	Source string // "ollama" (the ollama.com library) or "hf" (Hugging Face)
+	Source string // "hf" (Hugging Face, the default) or "ollama" (the ollama.com library)
 	Query  string
 	Caps   []string // ollama.com only
 	Order  string   // "popular"/"newest" for ollama.com; a key of library.HFSorts for Hugging Face
@@ -33,7 +35,10 @@ func parseDiscoverState(q url.Values) discoverState {
 	// ticked, so a bare /discover (no fit at all) gets the default: on.
 	fit := !q.Has("fit") || slices.Contains(q["fit"], "1")
 	st := discoverState{Source: "ollama", Query: strings.TrimSpace(q.Get("q")), Order: "popular", Fit: fit, HideBL: q.Get("bl") == "hide", Page: 1}
-	if q.Get("src") == "hf" {
+	// Hugging Face unless asked for the ollama.com library: its search is a
+	// real API, where ollama.com's is read from its web pages and can break.
+	// (src=hf, from before it was the default, still works.)
+	if q.Get("src") != "ollama" {
 		st.Source, st.Order, st.Cursor = "hf", "downloads", q.Get("cursor")
 		if _, ok := library.HFSorts[q.Get("o")]; ok {
 			st.Order = q.Get("o")
@@ -61,8 +66,8 @@ func (st discoverState) more() bool { return st.Page > 1 || st.Cursor != "" }
 
 func (st discoverState) URL() string {
 	v := url.Values{}
-	if st.HF() {
-		v.Set("src", "hf")
+	if !st.HF() {
+		v.Set("src", "ollama")
 	}
 	if st.Query != "" {
 		v.Set("q", st.Query)
@@ -164,12 +169,39 @@ func (s *Server) handleDiscover(w http.ResponseWriter, r *http.Request) {
 
 	switch {
 	case r.Header.Get("HX-Request") != "true":
+		if st.HF() {
+			data["HFConn"] = s.hfConnection(r)
+		}
 		s.render(w, r, "discover.html", data)
 	case st.more():
 		s.render(w, r, "discover_cards", data)
 	default:
 		s.render(w, r, "discover_results", data)
 	}
+}
+
+// hfConn is whether this app is connected to Hugging Face (HF_TOKEN), for
+// the Hugging Face tab.
+type hfConn struct {
+	Token   bool   // HF_TOKEN is set
+	User    string // the account it belongs to, if Hugging Face said
+	Err     string // why it couldn't be checked or was refused
+	IsAdmin bool   // can connect it in Settings
+}
+
+func (s *Server) hfConnection(r *http.Request) hfConn {
+	c := hfConn{Token: s.lib.HasHFToken(), IsAdmin: s.isAdmin(r)}
+	if c.Token {
+		// Not worth holding up the page for: say it couldn't be checked.
+		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		defer cancel()
+		if name, err := s.lib.HFAccount(ctx); err != nil {
+			c.Err = err.Error()
+		} else {
+			c.User = name
+		}
+	}
+	return c
 }
 
 func (s *Server) discoverOllama(r *http.Request, st discoverState, filter bool, local localModels, snap sysinfo.Snapshot, data map[string]any) error {
