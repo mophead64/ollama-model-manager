@@ -22,7 +22,7 @@
         {{end}}
       </div>
       <div class="disc-tabs">
-        <a href="/discover" class="disc-tab"{{if not .State.HF}} aria-current="true"{{end}}>Ollama library</a>
+        <a href="/discover" class="disc-tab"{{if not .State.HF}} aria-current="true"{{end}}>Ollama library{{template "library_dot" .LibraryHealth}}</a>
         <a href="/discover?src=hf" class="disc-tab"{{if .State.HF}} aria-current="true"{{end}}>Hugging Face</a>
       </div>
       <form action="/discover" hx-get="/discover" hx-target="#discover-results" hx-swap="outerHTML" hx-push-url="true"
@@ -151,8 +151,6 @@
   {{end}}
   <div class="disc-meta muted">
     {{with .Pulls}}<span>{{.}} pulls</span>{{end}}
-    {{with .Tags}}<span>{{.}} tag{{if ne . 1}}s{{end}}</span>{{end}}
-    {{with .Updated}}<span>updated {{.}}</span>{{end}}
   </div>
   <details class="disc-tags" hx-get="/discover/tags?model={{.Name}}" hx-trigger="toggle once" hx-target="find .disc-tags-body">
     <summary>Tags and downloads</summary>

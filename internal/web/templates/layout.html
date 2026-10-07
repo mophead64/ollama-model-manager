@@ -560,6 +560,7 @@
   .update-tips { font-size: 12px !important; margin-top: 4px !important; }
   .nav-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-left: 4px; vertical-align: 2px; }
   .nav-dot.warn { background: #f59e0b; box-shadow: 0 0 0 2px var(--panel); }
+  .nav-dot.bad { background: var(--danger); box-shadow: 0 0 0 2px var(--panel); }
   .nav-system { display: inline-flex; align-items: center; }
   a.nav-dot-link { display: inline-flex; padding: 6px 4px; margin: -6px -4px; }
   a.nav-dot-link .nav-dot { margin-left: 4px; vertical-align: 0; }
@@ -713,7 +714,7 @@
   <span class="brand"><img src="{{navlogo}}" alt="" width="33" height="32">Ollama Model Manager</span>
   {{if .User}}<a href="/"{{template "nav_current" (eq .Nav "dashboard")}}>Dashboard</a>
   <a href="/models"{{template "nav_current" (eq .Nav "models")}}>Models</a>
-  <a href="/discover"{{template "nav_current" (eq .Nav "discover")}}>Discover</a>
+  <span class="nav-system"><a href="/discover"{{template "nav_current" (eq .Nav "discover")}}>Discover</a>{{template "library_dot" .LibraryHealth}}</span>
   <a href="/downloads"{{template "nav_current" (eq .Nav "downloads")}}>Downloads {{template "nav_dl_badge" .}}</a>
   {{/* The dot is a link of its own, straight to the update panel (a link
        can't go inside another). */}}
@@ -765,6 +766,10 @@
 
 {{/* Count of queued + running downloads. The downloads panel re-sends it
      out-of-band on each poll so it stays current there. */}}
+{{/* A red dot while browsing ollama.com isn't working (library.Health),
+     beside Discover in the nav and its Ollama library tab. */}}
+{{define "library_dot"}}{{with .}}{{if .Broken}}<span class="nav-dot bad" role="img" aria-label="Browsing ollama.com isn't working" title="Browsing ollama.com isn't working, since {{time .Since}}: {{.Reason}}"></span>{{end}}{{end}}{{end}}
+
 {{define "nav_dl_badge"}}<span id="nav-dl-badge" class="nav-badge"{{if .Fragment}} hx-swap-oob="true"{{end}}{{if not .ActiveDownloads}} hidden{{end}}>{{.ActiveDownloads}}</span>{{end}}
 
 {{/* Goes right after </main>, outside it. The update check needs a

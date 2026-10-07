@@ -113,6 +113,10 @@ func (s *Server) RunOllamaUpdateChecks(ctx context.Context) {
 	}
 }
 
+// RunLibraryChecks checks browsing ollama.com works, every few hours until
+// ctx is cancelled, for the red dot on Discover (library.Client.WatchHealth).
+func (s *Server) RunLibraryChecks(ctx context.Context) { s.lib.WatchHealth(ctx) }
+
 // handleOllamaUpdate is the System page's Ollama panel, re-checked on demand
 // (?force=1, its "check now").
 func (s *Server) handleOllamaUpdate(w http.ResponseWriter, r *http.Request) {

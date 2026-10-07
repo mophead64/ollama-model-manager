@@ -60,13 +60,27 @@ func TestEstimateFit(t *testing.T) {
 }
 
 // A search result in ollama.com's markup (see internal/library/testdata).
+// Each chip is "cloud", a size ("8b") or a capability ("tools").
 func libraryResult(name, desc string, chips ...string) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, `<li class="flex items-baseline"><a href="/library/%s" class="group w-full"><p class="max-w-lg break-words">%s</p>`, name, desc)
+	fmt.Fprintf(&b, `<li class="border-b"><a href="/library/%s" class="group flex"><div class="min-w-0 flex-1"><h2 title="%[1]s"><span >%[1]s</span></h2>`, name)
+	fmt.Fprintf(&b, `<p class="mt-1 max-w-2xl truncate" title="%s">%[1]s</p><div class="mt-3 flex">`, desc)
+	var sizes []string
 	for _, c := range chips {
-		fmt.Fprintf(&b, `<span class="inline-flex my-1 items-center rounded-md px-2">%s</span>`, c)
+		switch {
+		case c == "cloud":
+			b.WriteString(`<span class="group/tip relative inline-flex"><span role="tooltip" class="absolute">Runs on Ollama’s cloud</span><svg viewBox="0 0 24 24"><path d="M0 0"/></svg>Cloud</span>`)
+		case c[len(c)-1] == 'b':
+			sizes = append(sizes, `<span  class="font-medium text-black">`+c+`</span>`)
+		default:
+			fmt.Fprintf(&b, `<span  class="inline-flex items-center gap-1.5"><svg viewBox="0 0 24 24"><path d="M0 0"/></svg>%s</span>`, strings.ToUpper(c[:1])+c[1:])
+		}
 	}
-	b.WriteString(`<span >1.2M</span><span class="hidden sm:flex">&nbsp;Pulls</span></a></li>`)
+	if sizes != nil {
+		b.WriteString(`<span class="group/tip relative inline-flex items-center gap-1.5"><span role="tooltip" class="absolute">Runs on your computer</span>` +
+			strings.Join(sizes, `<span class="text-black/50" aria-hidden="true">·</span>`) + `</span>`)
+	}
+	b.WriteString(`</div></div><span class="inline-flex tabular-nums" title="1,234,567 downloads"><svg viewBox="0 0 24 24"><path d="M0 0"/></svg><span >1.2M</span></span></a></li>`)
 	return b.String()
 }
 
@@ -80,6 +94,9 @@ func fakeLibrary(t *testing.T) *httptest.Server {
 				libraryResult("huge", "Won't fit anywhere.", "4000b")+
 				libraryResult("cloudy", "Cloud only.", "cloud")+
 				`<li hx-get="/search?page=2" hx-trigger="revealed"></li></ul>`)
+		case r.URL.Path == "/search" && r.Header.Get("HX-Request") != "true":
+			// Like ollama.com: later pages only for its own htmx requests.
+			http.Redirect(w, r, "/search", http.StatusSeeOther)
 		case r.URL.Path == "/search":
 			fmt.Fprint(w, `<ul>`+libraryResult("second-page", "Page two.", "1b")+`</ul>`)
 		case r.URL.Path == "/library/model-000/tags":
@@ -415,5 +432,29 @@ func TestDiscoverUnreadableLibrary(t *testing.T) {
 	}
 	if body := get(h, "/discover/tags?model=qwen3", true).Body.String(); !strings.Contains(body, "Couldn&#39;t read qwen3&#39;s tags") {
 		t.Errorf("tags: %s", body)
+	}
+}
+
+// While browsing ollama.com isn't working, Discover in the nav and its
+// Ollama library tab have a red dot saying why.
+func TestDiscoverBrokenDot(t *testing.T) {
+	lib := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `<ul><li><a href="/library/a"></a></li><li><a href="/library/b"></a></li><li><a href="/library/c"></a></li></ul>`)
+	}))
+	t.Cleanup(lib.Close)
+	h := newTestServer(t, fakeOllama(t, 1).URL, func(c *Config) { c.LibraryURL = lib.URL })
+
+	if body := get(h, "/", false).Body.String(); strings.Contains(body, "nav-dot bad") {
+		t.Error("red dot before ollama.com was even tried")
+	}
+	body := get(h, "/discover?fit=0", false).Body.String()
+	if n := strings.Count(body, `class="nav-dot bad"`); n != 2 {
+		t.Errorf("discover page has %d red dots, want 2 (nav and tab)", n)
+	}
+	if !strings.Contains(body, "missing their descriptions") {
+		t.Error("the dot doesn't say what's wrong")
+	}
+	if body := get(h, "/", false).Body.String(); strings.Count(body, `class="nav-dot bad"`) != 1 {
+		t.Error("other pages should keep the nav's red dot")
 	}
 }

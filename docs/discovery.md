@@ -15,8 +15,13 @@ download them through a queue, all from the browser.
 ## Searching the Ollama library
 
 **Discover → Ollama library** searches [ollama.com](https://ollama.com/search). Each result shows its description,
-capabilities (vision, tools, thinking, embedding, cloud) and its sizes, each marked with whether it fits (see
-[below](#will-it-fit)). Results load as you scroll.
+capabilities (vision, tools, thinking, embedding, decision, cloud), its sizes, each marked with whether it fits (see
+[below](#will-it-fit)), and how many times it's been pulled. Results load as you scroll.
+
+Discover reads ollama.com's web pages, so a redesign of the site can break it. The app checks every few hours, and
+whenever you search: if ollama.com can't be reached or its results can't be read, a red dot appears beside
+**Discover** in the menu and on the **Ollama library** tab. Hover over it to see what's wrong. It goes once a search
+works again, so an update to this app that handles the new layout clears it.
 
 Open **Tags and downloads** on a result to see every tag: its real download size, context length, whether it fits,
 and a **Download** button. Tags that are the same download under another name (such as `latest`) say which tag they

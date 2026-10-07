@@ -30,7 +30,7 @@ func TestLiveOllamaCom(t *testing.T) {
 		t.Errorf("search: next page = %d, want 2", page.NextPage)
 	}
 	// Individual fields can be missing from a model or two, but not from all.
-	var desc, sizes, pulls, tags, updated, caps int
+	var desc, sizes, pulls, caps, cloud int
 	for _, m := range page.Models {
 		if m.Name == "" {
 			t.Errorf("a result has no name: %+v", m)
@@ -38,16 +38,26 @@ func TestLiveOllamaCom(t *testing.T) {
 		for _, f := range []struct {
 			ok bool
 			n  *int
-		}{{m.Description != "", &desc}, {len(m.Sizes) > 0, &sizes}, {m.Pulls != "", &pulls}, {m.Tags > 0, &tags}, {m.Updated != "", &updated}, {len(m.Capabilities) > 0, &caps}} {
+		}{{m.Description != "", &desc}, {len(m.Sizes) > 0, &sizes}, {m.Pulls != "", &pulls}, {len(m.Capabilities) > 0, &caps}, {m.Cloud, &cloud}} {
 			if f.ok {
 				*f.n++
 			}
 		}
 	}
-	for name, n := range map[string]int{"description": desc, "sizes": sizes, "pulls": pulls, "tag count": tags, "updated": updated, "capabilities": caps} {
+	for name, n := range map[string]int{"description": desc, "sizes": sizes, "pulls": pulls, "capabilities": caps, "cloud flag": cloud} {
 		if n == 0 {
 			t.Errorf("no search result has its %s: the markup may have changed", name)
 		}
+	}
+
+	// Later pages come from the "load more" request, which ollama.com only
+	// answers for htmx (anything else is redirected to the first page).
+	next, err := c.Search(ctx, Query{Page: 2})
+	if err != nil {
+		t.Fatalf("search page 2: %v", err)
+	}
+	if len(next.Models) < 10 || next.Models[0].Name == page.Models[0].Name {
+		t.Errorf("search page 2 found %d models, starting %+v: want the next full page", len(next.Models), next.Models[:min(1, len(next.Models))])
 	}
 
 	found, err := c.Search(ctx, Query{Text: "llama3.2"})

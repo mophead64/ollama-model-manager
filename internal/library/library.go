@@ -37,7 +37,7 @@ const (
 )
 
 // Capabilities are the filters ollama.com's search offers, besides "cloud".
-var Capabilities = []string{"vision", "tools", "thinking", "embedding"}
+var Capabilities = []string{"vision", "tools", "thinking", "embedding", "decision"}
 
 // Model is one search result.
 type Model struct {
@@ -47,8 +47,6 @@ type Model struct {
 	Cloud        bool     // offered as a cloud model
 	Sizes        []string // parameter counts as labelled, e.g. "8b", "70b", "e4b", "8x7b"
 	Pulls        string   // as shown, e.g. "2.5M"
-	Tags         int
-	Updated      string // as shown, e.g. "3 weeks ago"
 }
 
 // Page is a page of search results.
@@ -86,6 +84,7 @@ type Query struct {
 type response struct {
 	body    string
 	next    string // the Link header's rel="next" URL, if any
+	final   string // the URL it came from, after any redirects
 	expires time.Time
 }
 
@@ -96,8 +95,9 @@ type Client struct {
 	hfToken      string // sent to Hugging Face, if set
 	hc           *http.Client
 
-	mu    sync.Mutex
-	cache map[string]response
+	mu     sync.Mutex
+	cache  map[string]response
+	health Health // see health.go
 }
 
 // New returns a client for the ollama.com library at base and Hugging Face at
@@ -122,6 +122,19 @@ func New(base, hfBase, hfToken string) *Client {
 
 // Search returns a page of models matching q.
 func (c *Client) Search(ctx context.Context, q Query) (Page, error) {
+	p, err := c.search(ctx, q)
+	switch {
+	case err != nil:
+		c.record(ctx, err)
+	case missingDetails(p, strings.TrimSpace(q.Text) == "" && len(q.Caps) == 0 && q.Page <= 1):
+		c.record(ctx, errMissingDetails) // the names are still worth showing
+	default:
+		c.record(ctx, nil)
+	}
+	return p, err
+}
+
+func (c *Client) search(ctx context.Context, q Query) (Page, error) {
 	v := url.Values{}
 	if t := strings.TrimSpace(q.Text); t != "" {
 		v.Set("q", t)
@@ -139,9 +152,20 @@ func (c *Client) Search(ctx context.Context, q Query) (Page, error) {
 	if len(v) > 0 {
 		path += "?" + v.Encode()
 	}
-	resp, err := c.fetch(ctx, c.base+path, "ollama.com", searchTTL)
+	// Later pages are only served to the page's own "load more" requests
+	// (htmx); anything else is redirected back to the first page.
+	var header http.Header
+	if q.Page > 1 {
+		header = http.Header{"Hx-Request": {"true"}}
+	}
+	resp, err := c.fetchWith(ctx, c.base+path, "ollama.com", searchTTL, header)
 	if err != nil {
 		return Page{}, err
+	}
+	if q.Page > 1 {
+		if u, err := url.Parse(resp.final); err != nil || u.Query().Get("page") != strconv.Itoa(q.Page) {
+			return Page{}, fmt.Errorf("%w: asked for page %d of the results, it sent the first", ErrUnreadable, q.Page)
+		}
 	}
 	p := parseSearch(resp.body, max(q.Page, 1))
 	// Without search text, the first page lists the library's most popular
@@ -158,6 +182,12 @@ func (c *Client) Tags(ctx context.Context, model string) ([]Tag, error) {
 	if !namePartRE.MatchString(model) {
 		return nil, fmt.Errorf("%q isn't a library model name", model)
 	}
+	tags, err := c.tags(ctx, model)
+	c.record(ctx, err)
+	return tags, err
+}
+
+func (c *Client) tags(ctx context.Context, model string) ([]Tag, error) {
 	resp, err := c.fetch(ctx, c.base+"/library/"+model+"/tags", "ollama.com", tagsTTL)
 	if err != nil {
 		return nil, err
@@ -181,6 +211,11 @@ var (
 // fetch GETs url, from the cache if it was fetched within ttl. site names the
 // host in errors.
 func (c *Client) fetch(ctx context.Context, url, site string, ttl time.Duration) (response, error) {
+	return c.fetchWith(ctx, url, site, ttl, nil)
+}
+
+// fetchWith is fetch, sending header with the request too.
+func (c *Client) fetchWith(ctx context.Context, url, site string, ttl time.Duration, header http.Header) (response, error) {
 	now := time.Now()
 	c.mu.Lock()
 	if e, ok := c.cache[url]; ok && now.Before(e.expires) {
@@ -192,6 +227,9 @@ func (c *Client) fetch(ctx context.Context, url, site string, ttl time.Duration)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return response{}, err
+	}
+	for k, v := range header {
+		req.Header[k] = v
 	}
 	req.Header.Set("User-Agent", "ollama-model-manager/"+version.Version)
 	if c.hfToken != "" && strings.HasPrefix(url, c.hfBase+"/") {
@@ -212,7 +250,7 @@ func (c *Client) fetch(ctx context.Context, url, site string, ttl time.Duration)
 	if err != nil {
 		return response{}, fmt.Errorf("reading %s: %w", site, err)
 	}
-	r := response{body: string(b), next: nextLink(resp.Header.Get("Link")), expires: now.Add(ttl)}
+	r := response{body: string(b), next: nextLink(resp.Header.Get("Link")), final: resp.Request.URL.String(), expires: now.Add(ttl)}
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -243,13 +281,17 @@ func nextLink(h string) string {
 var (
 	namePartRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 
-	// Search results: each is an <li> holding a link to /library/<name>.
+	// Search results: each is an <li> holding a link to /library/<name>,
+	// with the description, then a row of chips: "Cloud" (with a tooltip
+	// saying it runs on Ollama's cloud), the sizes ("27b · 35b"), and an
+	// icon and label for each capability. The pull count sits on the right,
+	// titled "N downloads".
 	resultRE   = regexp.MustCompile(`<a href="/library/([^"/:?]+)"`)
-	descRE     = regexp.MustCompile(`(?s)<p class="max-w-lg[^"]*">(.*?)</p>`)
-	chipRE     = regexp.MustCompile(`<span[^>]*class="[^"]*\brounded-md\b[^"]*"[^>]*>([^<]+)</span>`)
-	pullsRE    = regexp.MustCompile(`<span\s*>([^<]+)</span>\s*<span[^>]*>&nbsp;Pulls`)
-	tagCountRE = regexp.MustCompile(`<span\s*>([^<]+)</span>\s*<span[^>]*>&nbsp;Tags?`)
-	updatedRE  = regexp.MustCompile(`Updated&nbsp;</span>\s*<span\s*>([^<]+)</span>`)
+	descRE     = regexp.MustCompile(`(?s)<p class="[^"]*\bmax-w-[^"]*"[^>]*>(.*?)</p>`)
+	cloudRE    = regexp.MustCompile(`role="tooltip"[^>]*>Runs on Ollama.s cloud<`)
+	sizeChipRE = regexp.MustCompile(`<span\s+class="font-medium text-black">([^<]+)</span>`)
+	featureRE  = regexp.MustCompile(`(?s)<span\s+class="inline-flex items-center gap-1\.5">(?:<svg[^>]*>.*?</svg>)?([^<]+)</span>`)
+	pullsRE    = regexp.MustCompile(`(?s)title="[^"]*\bdownloads"[^>]*>(?:<svg[^>]*>.*?</svg>)?\s*<span\s*>([^<]+)</span>`)
 	nextPageRE = regexp.MustCompile(`hx-get="/search\?page=(\d+)"`)
 	sizeRE     = regexp.MustCompile(`^(?:e?\d+(?:\.\d+)?|\d+x\d+(?:\.\d+)?)[mbt]$`)
 
@@ -279,25 +321,19 @@ func parseSearch(body string, page int) Page {
 		if d := descRE.FindStringSubmatch(chunk); d != nil {
 			m.Description = clean(d[1])
 		}
-		for _, c := range chipRE.FindAllStringSubmatch(chunk, -1) {
-			label := strings.ToLower(clean(c[1]))
-			switch {
-			case label == "cloud":
-				m.Cloud = true
-			case isCapability(label):
-				m.Capabilities = append(m.Capabilities, label)
-			case sizeRE.MatchString(label):
+		m.Cloud = cloudRE.MatchString(chunk)
+		for _, c := range sizeChipRE.FindAllStringSubmatch(chunk, -1) {
+			if label := strings.ToLower(clean(c[1])); sizeRE.MatchString(label) {
 				m.Sizes = append(m.Sizes, label)
+			}
+		}
+		for _, c := range featureRE.FindAllStringSubmatch(chunk, -1) {
+			if label := strings.ToLower(clean(c[1])); isCapability(label) {
+				m.Capabilities = append(m.Capabilities, label)
 			}
 		}
 		if s := pullsRE.FindStringSubmatch(chunk); s != nil {
 			m.Pulls = clean(s[1])
-		}
-		if s := tagCountRE.FindStringSubmatch(chunk); s != nil {
-			m.Tags, _ = strconv.Atoi(strings.ReplaceAll(clean(s[1]), ",", ""))
-		}
-		if s := updatedRE.FindStringSubmatch(chunk); s != nil {
-			m.Updated = clean(s[1])
 		}
 		p.Models = append(p.Models, m)
 	}

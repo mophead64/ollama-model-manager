@@ -25,12 +25,14 @@ func TestParseSearch(t *testing.T) {
 	p := parseSearch(string(b), 1)
 	want := []Model{
 		{Name: "glm-5.3", Description: "Z.ai's flagship model and the most capable open-weights model for coding, with major gains on long-horizon agentic tasks.",
-			Capabilities: []string{"tools", "thinking"}, Cloud: true, Pulls: "58.1K", Tags: 1, Updated: "3 weeks ago"},
-		{Name: "qwen3.8", Description: "Qwen3.8 delivers substantial gains across coding, professional work, research, and long-horizon agentic tasks.",
-			Capabilities: []string{"vision", "tools", "thinking"}, Sizes: []string{"27b"}, Pulls: "2.5M", Tags: 12, Updated: "1 month ago"},
-		{Name: "qwen3.5", Description: "Qwen 3.5 is a family of open-source multimodal models that delivers exceptional utility and performance.",
-			Capabilities: []string{"vision", "tools", "thinking"}, Cloud: true, Sizes: []string{"0.8b", "2b", "4b", "9b", "27b", "35b", "122b"},
-			Pulls: "20.8M", Tags: 64, Updated: "3 weeks ago"},
+			Capabilities: []string{"tools", "thinking"}, Cloud: true},
+		{Name: "qwen3.6", Description: "Qwen3.6 delivers substantial upgrades in agentic coding and thinking preservation than previous Qwen models.",
+			Capabilities: []string{"tools", "thinking", "vision"}, Sizes: []string{"27b", "35b"}, Pulls: "7M"},
+		// Audio isn't one of the search's filters, so it isn't kept.
+		{Name: "embeddinggemma-2", Description: "EmbeddingGemma 2 is a multimodal embedding model from Google built on the Gemma 4 architecture.",
+			Capabilities: []string{"vision", "embedding"}, Sizes: []string{"270m", "440m", "570m", "740m"}, Pulls: "5,108"},
+		{Name: "laya", Description: "Laya is a 421M decision model from Convai Innovations, fine-tuned from ModernBERT-large.",
+			Capabilities: []string{"decision"}, Pulls: "515"},
 	}
 	if !reflect.DeepEqual(p.Models, want) {
 		t.Errorf("models =\n%+v\nwant\n%+v", p.Models, want)
@@ -95,8 +97,8 @@ func TestClientSearchQueryAndCache(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(p.Models) != 3 {
-		t.Errorf("got %d models, want 3", len(p.Models))
+	if len(p.Models) != 4 {
+		t.Errorf("got %d models, want 4", len(p.Models))
 	}
 	if want := "/search?c=vision&c=tools&o=newest&page=2&q=qwen"; lastURL != want {
 		t.Errorf("requested %s, want %s", lastURL, want)
@@ -310,5 +312,66 @@ func TestUnreadablePages(t *testing.T) {
 	}
 	if _, err := c.Tags(ctx, "qwen3"); !errors.Is(err, ErrUnreadable) {
 		t.Errorf("tags: err = %v, want ErrUnreadable", err)
+	}
+}
+
+func TestHealth(t *testing.T) {
+	good, _ := os.ReadFile("testdata/search.html")
+	// What ollama.com's October 2026 redesign left: the names, and nothing else read.
+	namesOnly := `<ul><li><a href="/library/a"></a></li><li><a href="/library/b"></a></li><li><a href="/library/c"></a></li></ul>`
+	body := namesOnly
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/library/nope/tags":
+			http.NotFound(w, r)
+		case r.URL.Query().Get("page") != "" && r.Header.Get("HX-Request") != "true":
+			http.Redirect(w, r, "/search", http.StatusSeeOther)
+		case r.URL.Query().Get("page") == "3":
+			http.Redirect(w, r, "/search", http.StatusSeeOther) // as if the htmx header stopped working
+		default:
+			fmt.Fprint(w, body)
+		}
+	}))
+	defer srv.Close()
+	ctx := context.Background()
+
+	c := New(srv.URL, "", "")
+	if h := c.Health(); h.Broken || !h.Checked.IsZero() {
+		t.Errorf("before anything's read, health = %+v", h)
+	}
+	if p, err := c.Search(ctx, Query{}); err != nil || len(p.Models) != 3 {
+		t.Errorf("names-only page: %d models, %v; want the names, no error", len(p.Models), err)
+	}
+	h := c.Health()
+	if !h.Broken || h.Since.IsZero() || !strings.Contains(h.Reason, "missing their descriptions") {
+		t.Errorf("names-only results should count as broken: %+v", h)
+	}
+
+	body = string(good)
+	c = New(srv.URL, "", "") // uncached
+	c.health = h
+	if _, err := c.Search(ctx, Query{Text: "qwen"}); err != nil {
+		t.Fatal(err)
+	}
+	if h := c.Health(); h.Broken {
+		t.Errorf("a good read should clear it: %+v", h)
+	}
+
+	if _, err := c.Search(ctx, Query{Page: 2}); err != nil {
+		t.Errorf("page 2 with the htmx header: %v", err)
+	}
+	if _, err := c.Search(ctx, Query{Page: 3}); !errors.Is(err, ErrUnreadable) || !c.Health().Broken {
+		t.Errorf("a later page redirected to the first: err %v, health %+v; want unreadable and broken", err, c.Health())
+	}
+
+	c = New(srv.URL, "", "")
+	if _, err := c.Tags(ctx, "nope"); !errors.Is(err, ErrNotFound) || c.Health().Broken {
+		t.Errorf("a model that doesn't exist says nothing about ollama.com: %+v", c.Health())
+	}
+	cancelled, cancel := context.WithCancel(ctx)
+	cancel()
+	c.Search(cancelled, Query{Text: "x"})
+	if h := c.Health(); h.Broken || !h.Checked.IsZero() {
+		t.Errorf("a request given up on says nothing either: %+v", h)
 	}
 }
