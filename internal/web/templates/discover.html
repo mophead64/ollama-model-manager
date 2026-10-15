@@ -99,6 +99,7 @@
     </div>
     {{template "discover_results" .}}
   </main>
+  {{template "quant_guide"}}
   {{template "footer" .}}
 </body>
 </html>
@@ -215,13 +216,14 @@
 
 {{define "discover_tags"}}
 {{if .Tags}}
+{{if .QuantHelp}}<p class="disc-quant-help"><button type="button" class="link" data-dialog-open="quant-guide-modal">What do names like Q4_K_M mean?</button></p>{{end}}
 <div class="table-wrap disc-tag-table">
   <table>
     <thead><tr><th>{{if .HF}}Quantisation{{else}}Tag{{end}}</th><th>Size</th><th>Context</th><th>On this machine</th><th></th></tr></thead>
     <tbody>
     {{range .Tags}}
     <tr>
-      <td class="mono">{{.Label}}{{with .AliasOf}}<div class="muted disc-alias">same as {{.}}</div>{{end}}{{with .Input}}<div class="muted disc-alias">{{.}}</div>{{end}}</td>
+      <td class="mono">{{.Label}}{{with .AliasOf}}<div class="muted disc-alias">same as {{.}}</div>{{end}}{{with .Input}}<div class="muted disc-alias">{{.}}</div>{{end}}{{with .Quant}}<div class="muted disc-alias disc-quant">{{.}}</div>{{end}}</td>
       <td class="nowrap">{{if .Size}}{{with .SizeMin}}<span title="ollama.com gives a range; it's checked against the larger">{{bytes .}} – </span>{{end}}{{bytes .Size}}{{else}}—{{end}}</td>
       <td>{{or .Context "—"}}</td>
       <td><span class="badge {{.Fit.Badge}}" title="{{.Fit.Detail}}">{{.Fit.Label}}</span></td>

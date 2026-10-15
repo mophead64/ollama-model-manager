@@ -1,6 +1,7 @@
 package web
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -286,6 +287,7 @@ type tagRow struct {
 	Active      *activeDL
 	Blacklisted *store.BlacklistEntry
 	AliasOf     string // an earlier tag with the same digest, e.g. latest -> 8b
+	Quant       string // what its quantisation means (describeQuant), if its name says
 }
 
 // handleDiscoverTags lists a library model's tags, for expanding its card.
@@ -303,7 +305,7 @@ func (s *Server) handleDiscoverTags(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows := tagRows(tags, s.localModels(r), s.sys.Latest())
-	s.render(w, r, "discover_tags", map[string]any{"Model": model, "Tags": rows})
+	s.render(w, r, "discover_tags", map[string]any{"Model": model, "Tags": rows, "QuantHelp": anyQuant(rows)})
 }
 
 // handleDiscoverHFFiles lists a Hugging Face repo's quantisations, for
@@ -336,7 +338,18 @@ func (s *Server) handleDiscoverHFFiles(w http.ResponseWriter, r *http.Request) {
 	for i := range rows {
 		rows[i].Label = labels[i]
 	}
-	s.render(w, r, "discover_tags", map[string]any{"Model": repo, "Tags": rows, "HF": true})
+	s.render(w, r, "discover_tags", map[string]any{"Model": repo, "Tags": rows, "HF": true, "QuantHelp": anyQuant(rows)})
+}
+
+// anyQuant reports whether any row's quantisation is explained, so the
+// table offers the guide to them.
+func anyQuant(rows []tagRow) bool {
+	for _, r := range rows {
+		if r.Quant != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // tagRows pairs tags with their fit here and whether they're installed,
@@ -364,10 +377,19 @@ func tagRows(tags []library.Tag, local localModels, snap sysinfo.Snapshot) []tag
 			}
 		}
 	}
+	// A tag whose name doesn't say its quantisation ("8b", "latest") is often
+	// the same download as one that does ("8b-q4_K_M"): explained as that.
+	quantByDigest := map[string]string{}
+	for _, t := range tags {
+		if q := describeQuant(quantOf(t.Name)); q != "" && t.Digest != "" && quantByDigest[t.Digest] == "" {
+			quantByDigest[t.Digest] = q
+		}
+	}
 	rows := make([]tagRow, len(tags))
 	for i, t := range tags {
 		k := tagKey(t.Name)
-		rows[i] = tagRow{Tag: t, Label: t.Name, Fit: tagFit(t, snap), Installed: local.installed[k] || haveDigest[t.Digest], Active: local.active[k]}
+		rows[i] = tagRow{Tag: t, Label: t.Name, Fit: tagFit(t, snap), Installed: local.installed[k] || haveDigest[t.Digest], Active: local.active[k],
+			Quant: cmp.Or(describeQuant(quantOf(t.Name)), quantByDigest[t.Digest])}
 		if rows[i].Blacklisted = local.blacklistedTag(t); rows[i].Blacklisted == nil && t.Digest != "" {
 			rows[i].Blacklisted = banned[t.Digest]
 		}

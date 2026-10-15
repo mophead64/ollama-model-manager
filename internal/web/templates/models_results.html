@@ -82,6 +82,7 @@
 {{/* A model's other tags or quantisations, with Download buttons (Discover's
      list), and a link to its page. Shared by every opener on the page. */}}
 {{define "quants_dialog"}}
+{{template "quant_guide"}}
 <dialog id="quants-modal" class="wide" aria-labelledby="quants-title">
   <div class="dialog-body">
     <div class="row between">
@@ -93,6 +94,53 @@
     <div class="dialog-actions">
       <button type="button" class="secondary" data-dialog-close>Close</button>
     </div>
+  </div>
+</dialog>
+{{end}}
+
+{{/* What quantisation names mean ("What do names like Q4_K_M mean?", on
+     Discover's tags and files and the "Other quants" dialog). describeQuant
+     gives each one's line in those tables. */}}
+{{define "quant_guide"}}
+<dialog id="quant-guide-modal" class="wide quant-guide" aria-labelledby="quant-guide-title">
+  <div class="dialog-body">
+    <h2 id="quant-guide-title">What quantisation names mean</h2>
+    <p>Quantising stores a model's weights with fewer bits, so it takes less memory and disk and usually runs faster, at some
+      cost in accuracy. The name says how it was done. Take <code>Q4_K_M</code>:</p>
+    <ul>
+      <li><strong>Q4</strong>: about 4 bits per weight. The fewer the bits, the smaller the model and the more it loses.</li>
+      <li><strong>K</strong>: the method. See below.</li>
+      <li><strong>M</strong>: the size variant: how many of its layers are kept at higher precision.</li>
+    </ul>
+    <h3>Bits</h3>
+    <table class="quant-table">
+      <tr><td><code>F16</code> <code>BF16</code> <code>F32</code></td><td>Unquantised: the original quality, at 4× (F32: 8×) the size of 4-bit. Rarely worth it to run.</td></tr>
+      <tr><td><code>Q8</code></td><td>Practically indistinguishable from the original, at about twice the size of 4-bit.</td></tr>
+      <tr><td><code>Q6</code> <code>Q5</code></td><td>Very close to the original. Worth it if they fit.</td></tr>
+      <tr><td><code>Q4</code></td><td>The usual choice: a good balance of size and quality. <code>Q4_K_M</code> is what Ollama's own tags usually are.</td></tr>
+      <tr><td><code>Q3</code></td><td>Noticeably less accurate. For fitting a bigger model than would otherwise fit.</td></tr>
+      <tr><td><code>Q2</code> <code>Q1</code></td><td>A big loss in quality: a last resort. A smaller model at Q4 is often better than a bigger one at Q2.</td></tr>
+    </table>
+    <h3>Methods</h3>
+    <table class="quant-table">
+      <tr><td><code>_K</code> (k-quants)</td><td>The usual kind: quantised in blocks, with the parts that matter most kept more precise. <code>Q4_K_M</code>, <code>Q5_K_S</code>, <code>Q6_K</code>.</td></tr>
+      <tr><td><code>_0</code> <code>_1</code> (legacy)</td><td>The older, simpler method. A k-quant of the same size is usually better, except <code>Q8_0</code>, the usual 8-bit format.</td></tr>
+      <tr><td><code>IQ</code> (i-quants)</td><td>Use an “importance matrix” to squeeze more quality into fewer bits, so they're best at 3 bits and below (<code>IQ3_XXS</code>, <code>IQ2_M</code>). They can be slower on a CPU.</td></tr>
+      <tr><td><code>MXFP4</code></td><td>4-bit floating point: the format some models, such as gpt-oss, are released in.</td></tr>
+      <tr><td><code>TQ1_0</code> <code>TQ2_0</code></td><td>Ternary: only for models trained to run that way.</td></tr>
+    </table>
+    <h3>Size variants</h3>
+    <p><code>XXS</code>, <code>XS</code>, <code>S</code>, <code>M</code>, <code>L</code> and <code>XL</code> go from smallest to largest. For the same bits,
+      a larger variant keeps more layers precise: a little bigger, a little better. <code>M</code> is the usual balance. Uploaders
+      sometimes add letters of their own (such as <code>_P</code>); those are their variants, so see the repo's description.</p>
+    <h3>Prefixes and tags</h3>
+    <table class="quant-table">
+      <tr><td><code>UD-</code></td><td>Unsloth Dynamic: picks the precision layer by layer, so it's better than a plain quant of the same size.</td></tr>
+      <tr><td><code>qat</code></td><td>Quantisation-aware trained (Gemma's <code>-it-qat</code> tags): trained to be run at 4 bits, so it loses less than an ordinary Q4.</td></tr>
+      <tr><td><code>it</code> <code>instruct</code></td><td>Not a quantisation: the instruction-tuned (chat) version, as opposed to the base model.</td></tr>
+    </table>
+    <p class="muted">Rule of thumb: pick the largest quant that fits on your GPU, Q4_K_M or better. Discover's ✓ says which do.</p>
+    <div class="dialog-actions"><button type="button" class="secondary" data-dialog-close>Close</button></div>
   </div>
 </dialog>
 {{end}}
