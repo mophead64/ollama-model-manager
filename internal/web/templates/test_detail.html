@@ -69,16 +69,23 @@
   {{with .Summary}}
   <div class="panel">
     <h2>Comparison</h2>
-    <p class="muted test-intro">Averages over each model's completed runs. Load time is the longest of its runs; usually the first, when Ollama had to load the model.</p>
+    <p class="muted test-intro">Averages over each model's completed runs. Load time is the longest of its runs; usually the first, when Ollama had to load the model. Context is the most each model supports; tests run with Ollama's default.</p>
     <div class="table-wrap">
     <table>
-      <thead><tr><th>Model</th><th>Completed</th><th>Failed</th><th>Tokens/s</th><th>Reply tokens</th><th>Time</th><th>Load</th></tr></thead>
+      <thead><tr><th>Model</th><th>Params</th><th>Quant</th><th>Size</th><th>Context</th><th>Completed</th><th>Tokens/s</th><th>Reply tokens</th><th>Time</th><th>Load</th></tr></thead>
       <tbody>
       {{range $i, $m := .}}
         <tr>
-          <td><a class="model-link" href="#model-{{add $i 1}}">{{.Model}}</a></td>
-          <td>{{.OK}} / {{len .Runs}}</td>
-          <td>{{if .Failed}}<span class="badge failed">{{.Failed}}</span>{{else}}0{{end}}</td>
+          <td><a class="model-link" href="#model-{{add $i 1}}">{{.Model}}</a>{{if not .Info}}<div class="muted small-note">no longer installed</div>{{end}}</td>
+          {{with .Info}}
+          <td>{{or .Details.ParameterSize "-"}}</td>
+          <td>{{with .Details.QuantizationLevel}}<span{{with $m.Quant}} title="{{.}}"{{end}}>{{.}}</span>{{else}}-{{end}}</td>
+          <td class="nowrap">{{bytes .Size}}</td>
+          <td>{{with .Details.ContextLength}}{{tokens .}}{{else}}-{{end}}</td>
+          {{else}}
+          <td>-</td><td>-</td><td>-</td><td>-</td>
+          {{end}}
+          <td class="nowrap">{{.OK}} / {{len .Runs}}{{if .Failed}} <span class="badge failed">{{.Failed}} failed</span>{{end}}</td>
           <td>{{if .OK}}{{printf "%.1f" .AvgTPS}}{{else}}-{{end}}</td>
           <td>{{if .OK}}{{printf "%.0f" .AvgTokens}}{{else}}-{{end}}</td>
           <td>{{if .OK}}{{ms .AvgTotalMS}}{{else}}-{{end}}</td>

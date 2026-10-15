@@ -64,11 +64,17 @@ The **Testing** tab shows how many tests are queued or running, and the Tests li
 
 ## Reading the results
 
-![A finished test: the comparison table of four models, and the first run's reply, with its code, list and table laid out](images/test-results.png)
+![A finished test: the comparison table of four models, with each one's parameters, quantisation, size and context beside its speed and times, and the first run's reply, with its code, list and table laid out](images/test-results.png)
 
 A test's page has:
 
-- **Comparison**: one row per model, averaged over its completed runs:
+- **Comparison**: one row per model. First what the model is, so you're comparing like with like:
+  - **Params**, **Quant** and **Size**: its parameter count, its quantisation (hover over it for what that means) and
+    its size on disk. A model that's been deleted since the test ran says so instead.
+  - **Context**: the most it supports. Tests run with Ollama's default context, which is usually far less.
+
+  Then how it did, averaged over its completed runs (**Completed** says how many of its runs finished, and how many
+  failed):
   - **Tokens/s**: generation speed, the best guide to how responsive a model will feel.
   - **Reply tokens**: how long its replies are. A thinking model's count includes its thinking.
   - **Time**: the whole request, from sending the prompt to the last token.

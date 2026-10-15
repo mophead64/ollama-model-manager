@@ -315,6 +315,10 @@ type testSummary struct {
 	AvgTokens  float64
 	AvgTotalMS float64
 	MaxLoadMS  int64 // usually the first run, when the model had to be loaded
+	// What Ollama says about the model (parameters, quantisation, size,
+	// context), for comparing like with like; nil if it's no longer installed.
+	Info  *ollama.Model
+	Quant string // what its quantisation means (describeQuant)
 }
 
 func summarise(runs []store.ModelTestRun) []testSummary {
@@ -358,9 +362,30 @@ func (s *Server) handleTestDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	q := r.URL.Query()
-	data := map[string]any{"Test": t, "Summary": summarise(runs), "Cancelled": q.Get("cancelled") != "", "Queued": q.Get("queued") != ""}
-	s.addModelsOverview(r, data)
+	summary := summarise(runs)
+	data := map[string]any{"Test": t, "Summary": summary, "Cancelled": q.Get("cancelled") != "", "Queued": q.Get("queued") != ""}
+	all, err := s.ol.List(r.Context())
+	if err != nil {
+		s.log.Error("list models failed", "error", err)
+		data["Error"] = err.Error()
+	} else {
+		s.addOverview(r, all, data)
+		addModelInfo(summary, all)
+	}
 	s.render(w, r, "test_detail.html", data)
+}
+
+// addModelInfo adds each tested model's details, from the models Ollama has.
+func addModelInfo(summary []testSummary, all []ollama.Model) {
+	for i := range summary {
+		for j := range all {
+			if all[j].Name == summary[i].Model || all[j].Model == summary[i].Model {
+				summary[i].Info = &all[j]
+				summary[i].Quant = describeQuant(all[j].Details.QuantizationLevel)
+				break
+			}
+		}
+	}
 }
 
 // testFromPath is the test named by the {id} in the path, or nil after a

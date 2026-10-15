@@ -78,11 +78,11 @@ models.
 
 ### Model testing
 Send one prompt to several models, several times each, and compare them: tokens per second, reply length, response time
-and load time, plus every reply to read side by side. Tests run in the background, one model at a time, unloading each
+and load time beside each model's parameters, quantisation, size and context, plus every reply to read side by side. Tests run in the background, one model at a time, unloading each
 when it's done so the next gets the GPU to itself. Save a prompt, models and runs as a **template** to run the same
 comparison again later.
 
-![A test's results: a comparison table of four models' speed and times (two of them quantisations of qwen3:8b), and the first run's reply, with its code, list and table](docs/images/test-results.png)
+![A test's results: a comparison table of four models' parameters, quantisation, size, context, speed and times (two of them quantisations of qwen3:8b), and the first run's reply, with its code, list and table](docs/images/test-results.png)
 
 **[Model testing →](docs/testing.md)**
 

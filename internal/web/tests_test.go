@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mophead64/ollama-model-manager/internal/ollama"
 	"github.com/mophead64/ollama-model-manager/internal/store"
 )
 
@@ -111,6 +112,8 @@ func TestModelTestFlow(t *testing.T) {
 		`<span class="badge test-status completed">Completed</span>`, "4 of 4 done", `<div class="test-reply md"><p>Pong</p>`,
 		"30 tokens · 60.0 tokens/s · 1.5s (loading " + nbsp("900 ms") + ")", // eval 30 tokens in 0.5s
 		`<a class="model-link" href="#model-1">user/custom:v1</a>`,
+		// Each model's details, to compare like with like.
+		"<th>Params</th><th>Quant</th><th>Size</th><th>Context</th>", `<td class="nowrap">` + nbsp("2.0 KB") + `</td>`,
 		// The id carries the status, so a run that finished since the last
 		// refresh isn't swapped back to how it looked while it ran.
 		`-completed" hx-preserve="true">`,
@@ -296,4 +299,22 @@ func mustID(t *testing.T, s string) int64 {
 		t.Fatalf("bad id %q", s)
 	}
 	return id
+}
+
+func TestAddModelInfo(t *testing.T) {
+	all := []ollama.Model{
+		{Name: "qwen3:8b", Size: 5e9, Details: ollama.Details{ParameterSize: "8.2B", QuantizationLevel: "Q4_K_M", ContextLength: 40960}},
+		{Name: "qwen3:8b-q8_0", Size: 9e9, Details: ollama.Details{ParameterSize: "8.2B", QuantizationLevel: "Q8_0"}},
+	}
+	summary := []testSummary{{Model: "qwen3:8b"}, {Model: "qwen3:8b-q8_0"}, {Model: "deleted:1b"}}
+	addModelInfo(summary, all)
+	if summary[0].Info == nil || summary[0].Info.Details.ParameterSize != "8.2B" || summary[0].Quant != describeQuant("Q4_K_M") {
+		t.Errorf("qwen3:8b: %+v", summary[0])
+	}
+	if summary[1].Info == nil || summary[1].Info.Size != 9e9 {
+		t.Errorf("qwen3:8b-q8_0: %+v", summary[1])
+	}
+	if summary[2].Info != nil {
+		t.Errorf("a model that's since been deleted has no details: %+v", summary[2])
+	}
 }
