@@ -318,3 +318,55 @@ func TestAddModelInfo(t *testing.T) {
 		t.Errorf("a model that's since been deleted has no details: %+v", summary[2])
 	}
 }
+
+func TestBuiltinTestsAreValid(t *testing.T) {
+	seen := map[string]bool{}
+	for _, bt := range builtinTests {
+		if bt.Slug == "" || seen[bt.Slug] || bt.Name == "" || bt.About == "" || bt.Prompt == "" || bt.LookFor == "" {
+			t.Errorf("built-in test incomplete or a duplicate: %+v", bt)
+		}
+		seen[bt.Slug] = true
+		if len([]rune(bt.Prompt)) > testMaxPrompt || bt.Repeats < 1 || bt.Repeats > testMaxRepeats || len([]rune(bt.Name)) > testMaxName {
+			t.Errorf("%s: outside the form's limits", bt.Slug)
+		}
+		if builtinTestBySlug(bt.Slug) == nil || builtinTestFor(bt.Prompt).Slug != bt.Slug {
+			t.Errorf("%s: can't be looked up", bt.Slug)
+		}
+	}
+}
+
+func TestBuiltinTestApply(t *testing.T) {
+	h := newTestServer(t, fakeOllama(t, 1).URL)
+	bt := builtinTestBySlug("reasoning")
+
+	page := get(h, "/models/testing", false).Body.String()
+	for _, want := range []string{"<h2>Built-in tests</h2>", `href="/models/testing?builtin=reasoning"`, "Structured output (JSON)"} {
+		if !strings.Contains(page, want) {
+			t.Errorf("testing page missing %q", want)
+		}
+	}
+	if strings.Contains(page, `class="test-lookfor"`) {
+		t.Error("an empty form has nothing to look for")
+	}
+
+	// Applying it fills the form in, keeping a model already picked.
+	form := get(h, "/models/testing?builtin=reasoning&model=user/custom:v1", false).Body.String()
+	for _, want := range []string{bt.Prompt + "</textarea>", `value="user/custom:v1" checked`, "Filled in from the built-in test Reasoning",
+		`<p class="test-lookfor"><strong>What to look for:</strong> The ball costs $0.05`} {
+		if !strings.Contains(form, want) {
+			t.Errorf("applied form missing %q", want)
+		}
+	}
+	if body := get(h, "/models/testing?builtin=nope", false).Body.String(); strings.Contains(body, "Filled in from") {
+		t.Error("an unknown built-in test shouldn't fill anything in")
+	}
+
+	// A test run from it says what to look for on its page.
+	id, err := testStore.CreateModelTest(t.Context(), bt.Name, bt.Prompt, []string{"user/custom:v1"}, 1, "admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if body := get(h, "/models/testing/"+strconv.FormatInt(id, 10), false).Body.String(); !strings.Contains(body, "(this is the built-in test Reasoning): The ball costs $0.05") {
+		t.Error("the results page should say what to look for")
+	}
+}

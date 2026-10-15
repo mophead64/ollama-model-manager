@@ -613,6 +613,15 @@
   .disc-tag-table td.mono .disc-quant { white-space: normal; max-width: 72ch; line-height: 1.4; margin-top: 2px;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
   .disc-quant-help { margin: 4px 0 6px; font-size: 13px; }
+  /* A built-in test's "What to look for", under its prompt. */
+  .test-lookfor { margin: 8px 0 0; padding: 8px 12px; font-size: 13px; line-height: 1.5; color: var(--muted);
+    border-left: 3px solid var(--accent); background: var(--code-bg); border-radius: 0 6px 6px 0; }
+  .test-lookfor strong { color: var(--text); }
+  .test-builtin-intro { font-size: 13px; margin: 0 0 6px; }
+  .test-builtins { list-style: none; margin: 0; padding: 0; }
+  .test-builtins li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; }
+  .test-builtins li + li { border-top: 1px solid var(--border); }
+  .test-builtins .muted { font-size: 13px; }
   .quant-guide p, .quant-guide li { font-size: 14px; line-height: 1.5; }
   .quant-guide ul { margin: 0 0 12px; padding-left: 20px; }
   .quant-guide h3 { font-size: 15px; margin: 18px 0 6px; }

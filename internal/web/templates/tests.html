@@ -37,6 +37,7 @@
             <span class="muted tnum" data-prompt-count aria-live="polite">{{len .Form.Prompt}} / {{count .MaxPrompt}}</span>
           </div>
           <textarea id="t-prompt" name="prompt" rows="7" maxlength="{{.MaxPrompt}}" required placeholder="e.g. Write a Python function that checks whether a string is a palindrome.">{{.Form.Prompt}}</textarea>
+          {{with .LookFor}}<p class="test-lookfor"><strong>What to look for:</strong> {{.LookFor}}</p>{{end}}
         </div>
 
         <fieldset class="test-models" aria-labelledby="models-label">
@@ -103,6 +104,18 @@
         <ul class="test-sum-warn" data-sum-warn></ul>
       </div>
       {{end}}
+      <div class="panel">
+        <h2>Built-in tests</h2>
+        <p class="muted test-builtin-intro">Ready-made prompts for common jobs. Apply one, pick the models to compare, and queue it. Each says what a good reply looks like.</p>
+        <ul class="test-builtins">
+          {{range .Builtins}}
+          <li>
+            <div><strong class="test-tpl-name">{{.Name}}</strong><div class="muted">{{.About}}</div></div>
+            <a class="btn secondary small" href="/models/testing?builtin={{.Slug}}" title="Fill the New test form in with this test ({{.Repeats}} runs per model), to pick the models and queue it">Apply</a>
+          </li>
+          {{end}}
+        </ul>
+      </div>
       <div class="panel">
         <h2>Templates</h2>
         {{with .Templates}}

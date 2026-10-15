@@ -63,6 +63,7 @@
     </dl>
     <h3 class="test-h3">Prompt</h3>
     <pre class="test-text">{{.Prompt}}</pre>
+    {{with $.LookFor}}<p class="test-lookfor"><strong>What to look for</strong> (this is the built-in test {{.Name}}): {{.LookFor}}</p>{{end}}
   </div>
 {{end}}
 

@@ -105,7 +105,11 @@ func (s *Server) handleTests(w http.ResponseWriter, r *http.Request) {
 		form.Name = string([]rune(form.Name)[:testMaxName])
 	}
 	var notice string
-	if id, err := strconv.ParseInt(q.Get("template"), 10, 64); err == nil {
+	if bt := builtinTestBySlug(q.Get("builtin")); bt != nil {
+		// Models ticked already (?model=) stay ticked: they're the ones to compare.
+		form = testForm{Name: bt.Name, Prompt: bt.Prompt, Models: q["model"], Repeats: bt.Repeats}
+		notice = "Filled in from the built-in test " + bt.Name + ". Pick the models to compare, then queue it."
+	} else if id, err := strconv.ParseInt(q.Get("template"), 10, 64); err == nil {
 		switch t, err := s.st.GetModelTestTemplate(r.Context(), id); {
 		case err != nil:
 			s.log.Error("read model test template failed", "error", err)
@@ -122,9 +126,13 @@ func (s *Server) handleTests(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) renderTests(w http.ResponseWriter, r *http.Request, form testForm, formErr, notice string, status int) {
 	q := r.URL.Query()
-	data := map[string]any{"Form": form, "FormError": formErr, "Notice": notice, "Deleted": q.Get("deleted"),
+	data := map[string]any{"Form": form, "FormError": formErr, "Notice": notice, "Deleted": q.Get("deleted"), "Builtins": builtinTests,
 		"TemplateDeleted": q.Get("template_deleted"), "MaxModels": testMaxModels, "MaxRepeats": testMaxRepeats,
 		"DefaultRepeats": testDefaultRepeats, "MaxPrompt": testMaxPrompt, "Presets": []int{1, 3, 5, 10}}
+	// A built-in test's prompt says what to look for in its replies.
+	if bt := builtinTestFor(form.Prompt); bt != nil {
+		data["LookFor"] = bt
+	}
 	if all, err := s.ol.List(r.Context()); err != nil {
 		s.log.Error("list models failed", "error", err)
 		data["Error"] = err.Error()
@@ -363,7 +371,8 @@ func (s *Server) handleTestDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	q := r.URL.Query()
 	summary := summarise(runs)
-	data := map[string]any{"Test": t, "Summary": summary, "Cancelled": q.Get("cancelled") != "", "Queued": q.Get("queued") != ""}
+	data := map[string]any{"Test": t, "Summary": summary, "Cancelled": q.Get("cancelled") != "", "Queued": q.Get("queued") != "",
+		"LookFor": builtinTestFor(t.Prompt)}
 	all, err := s.ol.List(r.Context())
 	if err != nil {
 		s.log.Error("list models failed", "error", err)

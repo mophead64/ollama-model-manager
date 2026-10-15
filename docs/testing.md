@@ -7,6 +7,7 @@ and eyeballing the answers. **Models → Testing** does it for you: it sends one
 each, and keeps every reply with its timings, so you can compare their speed and output side by side.
 
 - [Creating a test](#creating-a-test)
+- [Built-in tests](#built-in-tests)
 - [Templates](#templates)
 - [How a test runs](#how-a-test-runs)
 - [Reading the results](#reading-the-results)
@@ -14,7 +15,7 @@ each, and keeps every reply with its timings, so you can compare their speed and
 
 ## Creating a test
 
-![The New test form, filled in from a template, with the Summary and Templates alongside](images/testing.png)
+![The New test form, filled in from the built-in Reasoning test with its note on what to look for, and the Summary, Built-in tests and Templates alongside](images/testing.png)
 
 The **New test** form has:
 
@@ -34,6 +35,26 @@ The **Summary** beside the form shows what you're about to queue: models × runs
 (from how long those models took in earlier tests), the total size of the models, and a warning for any that won't fit
 in VRAM. **Queue test** stays disabled until you've picked a model and written a prompt; hover over it to see what's
 missing. **Reset** clears the form.
+
+## Built-in tests
+
+**Built-in tests**, beside the form, are ready-made prompts for common jobs, so you can compare models without writing
+one. **Apply** fills the form in with one; pick the models to compare and queue it.
+
+| Test | What it checks |
+|---|---|
+| **Speed check** | A one-line reply, run 5 times: compare load time and tokens/s, not the reply. |
+| **Coding** | A small Python function (FizzBuzz) and its output. |
+| **Reasoning** | A short puzzle with a tempting wrong answer. |
+| **Following instructions** | Strict rules on format and length: exactly three short bullets, nothing else. |
+| **Structured output (JSON)** | Pulling facts out of text as JSON only, as a program would need. |
+| **Summarising** | A paragraph boiled down to one sentence of 25 words or fewer. |
+| **Translation** | One sentence into French, Spanish and German. |
+| **Longer answer** | About 300 words, for a fairer measure of speed than a short reply. |
+
+Replies are judged by reading them, so each built-in test says **what to look for**: the right answer (the ball in the
+puzzle costs $0.05, not the $0.10 many models say), the format it should be in, or the mistakes models often make. The
+note shows under the prompt when you apply the test, and again on the test's results page.
 
 ## Templates
 
