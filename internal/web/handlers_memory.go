@@ -35,13 +35,14 @@ const loadTimeout = 10 * time.Minute
 // user came back to. It travels in the query string (see backTo).
 type flash struct {
 	Loaded, Unloaded, Error string
+	Labelled                string // a label change, said in full (handlers_labels.go)
 }
 
 // flashParams are the query parameters flash is read from.
-var flashParams = []string{"loaded", "unloaded", "memerror"}
+var flashParams = []string{"loaded", "unloaded", "memerror", "labelled"}
 
 func readFlash(q url.Values) *flash {
-	f := flash{Loaded: q.Get("loaded"), Unloaded: q.Get("unloaded"), Error: q.Get("memerror")}
+	f := flash{Loaded: q.Get("loaded"), Unloaded: q.Get("unloaded"), Error: q.Get("memerror"), Labelled: q.Get("labelled")}
 	if f == (flash{}) {
 		return nil
 	}

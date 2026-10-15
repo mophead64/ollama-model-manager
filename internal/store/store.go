@@ -58,9 +58,13 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
-	if _, err := db.ExecContext(ctx, schema+downloadsSchema+usageSchema+blacklistSchema+modelTestsSchema); err != nil {
+	if _, err := db.ExecContext(ctx, schema+downloadsSchema+usageSchema+blacklistSchema+modelTestsSchema+labelsSchema); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("apply schema: %w", err)
+	}
+	if err := addBuiltinLabels(ctx, db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("add built-in labels: %w", err)
 	}
 	return &Store{db: db}, nil
 }

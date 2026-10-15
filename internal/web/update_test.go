@@ -68,31 +68,33 @@ func TestSystemAppPanel(t *testing.T) {
 
 	cur := render(t, "v2026.09.20", "v2026.09.20")
 	for _, want := range []string{
-		`<span class="mono">v2026.09.20</span>`, `<span class="badge on">✓ Up to date</span>`,
-		"<summary>Release notes for v2026.09.20</summary>", "<strong>notes</strong>",
-		`<details class="status-more"><summary>How to update Ollama Model Manager</summary>`, `value="docker compose pull &amp;&amp; docker compose up -d"`,
+		`<span class="mono">v2026.09.20</span>`, `<button type="button" class="badge on" data-dialog-open="app-update-modal"`,
+		`data-dialog-scroll="app-update-modal-notes">Release notes</button>`, `data-dialog-scroll="app-update-modal-how">How to update</button>`,
+		`<dialog id="app-update-modal"`, "Ollama Model Manager v2026.09.20</h2>", "<h3>Release notes for v2026.09.20</h3>", "<strong>notes</strong>",
+		"<h3>How to update Ollama Model Manager</h3>", `value="docker compose pull &amp;&amp; docker compose up -d"`,
 	} {
 		if !strings.Contains(cur, want) {
 			t.Errorf("up to date panel missing %q:\n%s", want, cur)
 		}
 	}
-	if strings.Contains(cur, "system-update-panel") || strings.Contains(cur, `hx-trigger="load"`) {
-		t.Errorf("up to date panel shouldn't show update steps or refresh itself again:\n%s", cur)
+	if strings.Contains(cur, "is out") || strings.Contains(cur, `hx-trigger="load"`) {
+		t.Errorf("up to date panel shouldn't say there's an update, or refresh itself again:\n%s", cur)
 	}
 
 	old := render(t, "v2026.09.01", "v2026.09.20")
 	for _, want := range []string{
-		"Update available: v2026.09.20", "Update Ollama Model Manager to v2026.09.20", `you're running <span class="mono">v2026.09.01</span>`,
-		"<summary>Release notes for v2026.09.20</summary>", "<strong>notes</strong>",
-		"How to update depends on how you run it", `value="docker pull ghcr.io/mophead64/ollama-model-manager:latest"`,
+		`data-dialog-open="app-update-modal" title="What's new, and how to update">Update available: v2026.09.20</button>`,
+		"Update Ollama Model Manager to v2026.09.20", `you're running <span class="mono">v2026.09.01</span>`,
+		"<h3>Release notes for v2026.09.20</h3>", "<strong>notes</strong>",
+		"It depends on how you run it", `value="docker pull ghcr.io/mophead64/ollama-model-manager:latest"`,
 		`value="xattr -d com.apple.quarantine ollama-model-manager"`, `value="git pull &amp;&amp; ./run-local.sh"`,
 	} {
 		if !strings.Contains(old, want) {
 			t.Errorf("update panel missing %q:\n%s", want, old)
 		}
 	}
-	if strings.Contains(old, "<summary>How to update Ollama Model Manager</summary>") {
-		t.Error("with an update out, the steps should be shown, not folded away")
+	if strings.Contains(old, "<summary>Release notes") || strings.Contains(old, "system-update-panel") {
+		t.Error("the release notes and steps belong in the modal, not inline")
 	}
 }
 

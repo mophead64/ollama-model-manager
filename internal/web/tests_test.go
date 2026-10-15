@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mophead64/ollama-model-manager/internal/ollama"
 	"github.com/mophead64/ollama-model-manager/internal/store"
 )
 
@@ -111,6 +112,8 @@ func TestModelTestFlow(t *testing.T) {
 		`<span class="badge test-status completed">Completed</span>`, "4 of 4 done", `<div class="test-reply md"><p>Pong</p>`,
 		"30 tokens · 60.0 tokens/s · 1.5s (loading " + nbsp("900 ms") + ")", // eval 30 tokens in 0.5s
 		`<a class="model-link" href="#model-1">user/custom:v1</a>`,
+		// Each model's details, to compare like with like.
+		"<th>Params</th><th>Quant</th><th>Size</th><th>Context</th>", `<td class="nowrap">` + nbsp("2.0 KB") + `</td>`,
 		// The id carries the status, so a run that finished since the last
 		// refresh isn't swapped back to how it looked while it ran.
 		`-completed" hx-preserve="true">`,
@@ -296,4 +299,74 @@ func mustID(t *testing.T, s string) int64 {
 		t.Fatalf("bad id %q", s)
 	}
 	return id
+}
+
+func TestAddModelInfo(t *testing.T) {
+	all := []ollama.Model{
+		{Name: "qwen3:8b", Size: 5e9, Details: ollama.Details{ParameterSize: "8.2B", QuantizationLevel: "Q4_K_M", ContextLength: 40960}},
+		{Name: "qwen3:8b-q8_0", Size: 9e9, Details: ollama.Details{ParameterSize: "8.2B", QuantizationLevel: "Q8_0"}},
+	}
+	summary := []testSummary{{Model: "qwen3:8b"}, {Model: "qwen3:8b-q8_0"}, {Model: "deleted:1b"}}
+	addModelInfo(summary, all)
+	if summary[0].Info == nil || summary[0].Info.Details.ParameterSize != "8.2B" || summary[0].Quant != describeQuant("Q4_K_M") {
+		t.Errorf("qwen3:8b: %+v", summary[0])
+	}
+	if summary[1].Info == nil || summary[1].Info.Size != 9e9 {
+		t.Errorf("qwen3:8b-q8_0: %+v", summary[1])
+	}
+	if summary[2].Info != nil {
+		t.Errorf("a model that's since been deleted has no details: %+v", summary[2])
+	}
+}
+
+func TestBuiltinTestsAreValid(t *testing.T) {
+	seen := map[string]bool{}
+	for _, bt := range builtinTests {
+		if bt.Slug == "" || seen[bt.Slug] || bt.Name == "" || bt.About == "" || bt.Prompt == "" || bt.LookFor == "" {
+			t.Errorf("built-in test incomplete or a duplicate: %+v", bt)
+		}
+		seen[bt.Slug] = true
+		if len([]rune(bt.Prompt)) > testMaxPrompt || bt.Repeats < 1 || bt.Repeats > testMaxRepeats || len([]rune(bt.Name)) > testMaxName {
+			t.Errorf("%s: outside the form's limits", bt.Slug)
+		}
+		if builtinTestBySlug(bt.Slug) == nil || builtinTestFor(bt.Prompt).Slug != bt.Slug {
+			t.Errorf("%s: can't be looked up", bt.Slug)
+		}
+	}
+}
+
+func TestBuiltinTestApply(t *testing.T) {
+	h := newTestServer(t, fakeOllama(t, 1).URL)
+	bt := builtinTestBySlug("reasoning")
+
+	page := get(h, "/models/testing", false).Body.String()
+	for _, want := range []string{"<h2>Built-in tests</h2>", `href="/models/testing?builtin=reasoning"`, "Structured output (JSON)"} {
+		if !strings.Contains(page, want) {
+			t.Errorf("testing page missing %q", want)
+		}
+	}
+	if strings.Contains(page, `class="test-lookfor"`) {
+		t.Error("an empty form has nothing to look for")
+	}
+
+	// Applying it fills the form in, keeping a model already picked.
+	form := get(h, "/models/testing?builtin=reasoning&model=user/custom:v1", false).Body.String()
+	for _, want := range []string{bt.Prompt + "</textarea>", `value="user/custom:v1" checked`, "Filled in from the built-in test Reasoning",
+		`<p class="test-lookfor"><strong>What to look for:</strong> The ball costs $0.05`} {
+		if !strings.Contains(form, want) {
+			t.Errorf("applied form missing %q", want)
+		}
+	}
+	if body := get(h, "/models/testing?builtin=nope", false).Body.String(); strings.Contains(body, "Filled in from") {
+		t.Error("an unknown built-in test shouldn't fill anything in")
+	}
+
+	// A test run from it says what to look for on its page.
+	id, err := testStore.CreateModelTest(t.Context(), bt.Name, bt.Prompt, []string{"user/custom:v1"}, 1, "admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if body := get(h, "/models/testing/"+strconv.FormatInt(id, 10), false).Body.String(); !strings.Contains(body, "(this is the built-in test Reasoning): The ball costs $0.05") {
+		t.Error("the results page should say what to look for")
+	}
 }

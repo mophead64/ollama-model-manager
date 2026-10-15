@@ -10,7 +10,7 @@
   ones that weren't worth keeping.
 </p>
 
-![The dashboard: library totals, free disk space running low, live system load, the models loaded in memory, four models unused for 60+ days, and the most recently used models](docs/images/dashboard.png)
+![The dashboard: library totals, free disk space, live system load, the models loaded in memory, four models unused for 60+ days, a chart of each model's use over the last week, and the most recently used models with their labels](docs/images/dashboard.png)
 
 ## What it adds to Ollama
 
@@ -26,24 +26,32 @@ Manager fills in the rest:
 | **Disk space** | `ollama list` sizes, which count files shared between models again for each | The real space used, exactly what a delete frees, the models you haven't used in months, and the ones you have in two quantisations, cleared out in one go |
 | **Comparing models** | Try each one by hand and eyeball it | Tests: one prompt, many models, many runs, with speed and replies side by side |
 | **Remembering what didn't work** | Nothing | A blacklist that keeps why you deleted a model, and warns you before you download it again |
+| **Keeping track of models** | Their names | Colour-coded labels for what each model is for or who uses it, on every page and to filter by |
 | **Staying up to date** | Check the releases yourself | An orange dot when Ollama has an update, with how to install it |
 
 ## Features
 
 ### Your models, at a glance
 The **dashboard** shows your library's size, free space on the disk Ollama uses, live CPU, memory, GPU and VRAM, what's
-loaded in memory (and how much of it is on the GPU), and the models you've used most recently.
+loaded in memory (and how much of it is on the GPU), a chart of how long each model was in use each day over the last
+week, and the models you've used most recently.
 
-![The dashboard: library totals, free disk space running low, live system load, the models loaded in memory, four models unused for 60+ days, and the most recently used models](docs/images/dashboard.png)
+![The dashboard: library totals, free disk space, live system load, the models loaded in memory, four models unused for 60+ days, a chart of each model's use over the last week, and the most recently used models with their labels](docs/images/dashboard.png)
 
 The **Models** page lists everything installed, with its family, size, quantisation, context length, capabilities, when
 it was downloaded, when it was last used and how many times it's been loaded. Sort by size, parameters, context, download date, last use or
 loads, filter by name, capability or how long it's gone unused, and click a name to copy it.
 
-![The Models page: every installed model, sorted by when it was last used, with selection boxes, and badges for models with another name or another quantisation installed](docs/images/models.png)
+![The Models page: every installed model, sorted by when it was last used, with selection boxes, its labels under its name, and badges for models with another name or another quantisation installed](docs/images/models.png)
 
 Each model's menu loads or unloads it (choosing how long it stays loaded), opens a chat, shows its **other quants** to
-download, links to it on ollama.com or Hugging Face, or deletes it. Tick several to unload or delete them at once.
+download, links to it on ollama.com or Hugging Face, or deletes it. Tick several to unload, label or delete them at
+once.
+
+**Labels** are colour-coded tags for your models: what they're for (built-in labels such as Coding, Chat, Vision and
+Embeddings) or anything of your own, such as which app uses them. Make your own on the **Labels** tab, or while
+labelling a model from its page. They show on the dashboard, the Models page and each model's page, and the Models page
+filters by them.
 
 ### Usage history
 Ollama keeps no record of what you use. This app checks every 15 seconds and records when each model was last used, each
@@ -51,7 +59,7 @@ time it's loaded, and roughly how long it's in use each day, so you can see whic
 model's page has a 30-day chart alongside everything Ollama knows about it: architecture, parameters, template and
 Modelfile.
 
-![A model's page: its details, and a usage chart of time in use per day over the last 30 days](docs/images/model-detail.png)
+![A model's page: its labels and details, and a usage chart of time in use per day over the last 30 days](docs/images/model-detail.png)
 
 ### Reclaiming disk space
 Sizes count each file once: `llama3.2:latest` and `llama3.2:3b` are one model, a variant made from another shares its
@@ -68,21 +76,24 @@ there's room for everything queued ahead of them.
 ### Discover and download models
 Search GGUF models on [Hugging Face](https://huggingface.co/models?library=gguf) and the
 [Ollama library](https://ollama.com/search) without leaving the app. Every size and quantisation is marked
-✓ fits in VRAM, ◐ partly on the CPU, or ✗ too big for your machine, with its real download size. Downloads go into a
-queue that works through them in the background, with progress, speed and ETA, and suggestions for fixing any that fail.
+✓ fits in VRAM, ◐ partly on the CPU, or ✗ too big for your machine, with its real download size and a line on what its
+quantisation (Q4_K_M, IQ3_XXS and so on) means. Downloads go into a queue that works through them in the background,
+with progress, speed and ETA, and suggestions for fixing any that fail.
 
-![Discover: the gemma3 models on ollama.com, each size checked against an Apple M4, with one blacklisted and one installed](docs/images/discover.png)
+![Discover: the gemma3 models on ollama.com, each size checked against an Apple M4 and each quantisation explained, with one blacklisted and some installed](docs/images/discover.png)
 
 **[Discovering and downloading models →](docs/discovery.md)**, including how to get at gated and private Hugging Face
 models.
 
 ### Model testing
 Send one prompt to several models, several times each, and compare them: tokens per second, reply length, response time
-and load time, plus every reply to read side by side. Tests run in the background, one model at a time, unloading each
-when it's done so the next gets the GPU to itself. Save a prompt, models and runs as a **template** to run the same
-comparison again later.
+and load time beside each model's parameters, quantisation, size and context, plus every reply to read side by side.
+Tests run in the background, one model at a time, unloading each when it's done so the next gets the GPU to itself.
+Start from a **built-in test** (speed, coding, reasoning, following instructions, JSON output, summarising, translation
+or a longer answer), each with a note on what a good reply looks like, or save your own prompt, models and runs as a
+**template** to run the same comparison again later.
 
-![A test's results: a comparison table of four models' speed and times (two of them quantisations of qwen3:8b), and the first run's reply, with its code, list and table](docs/images/test-results.png)
+![A test's results: a comparison table of four models' parameters, quantisation, size, context, speed and times (two of them quantisations of qwen3:8b), and the first run's reply, with its code, list and table](docs/images/test-results.png)
 
 **[Model testing →](docs/testing.md)**
 
@@ -105,9 +116,10 @@ Markdown: lists, tables and code blocks. Nothing is saved.
 ### System monitoring and updates
 Live graphs of CPU, memory, GPU and VRAM use, each GPU's memory and utilisation, what's loaded, and how many models you
 have and the space they take. NVIDIA GPUs are read with `nvidia-smi`, AMD and Intel GPUs from `/sys`, and Apple silicon
-natively. The System page also checks for new releases of Ollama and of this app. For Ollama, it says why they matter
-(new models often need them) and shows how to update for Docker, the Linux install script (backing up your
-`ollama.service` settings first), macOS and Windows; for this app, it shows the release notes, which say how to update.
+natively. The System page also checks for new releases of Ollama and of this app. Click a version's badge, **Release
+notes** or **How to update** to see the latest release's notes and the steps to update. For Ollama, that's why updates
+matter (new models often need them) and how to update with Docker, the Linux install script (backing up your
+`ollama.service` settings first), macOS and Windows; for this app, with Docker, the standalone binary or from source.
 
 ![The System page: this machine and the model library, GPUs, loaded models and live graphs, then Ollama's and this app's versions](docs/images/system.png)
 

@@ -8,6 +8,7 @@ download them through a queue, all from the browser.
 - [Searching Hugging Face](#searching-hugging-face)
 - [Searching the Ollama library](#searching-the-ollama-library)
 - [Will it fit?](#will-it-fit)
+- [What quantisation names mean](#what-quantisation-names-mean)
 - [Other quants of a model you have](#other-quants-of-a-model-you-have)
 - [The download queue](#the-download-queue)
 - [Gated and private Hugging Face models](#gated-and-private-hugging-face-models)
@@ -23,7 +24,7 @@ parameter count, its context length, and a **gated** badge if you need to ask fo
 Open **Files and downloads** to see each quantisation (Q4_K_M, Q8_0 and so on) with its real size and fit. Files split
 into several parts, and vision projectors (which aren't models on their own), are handled for you.
 
-![Discover's Hugging Face tab: the note that the app isn't connected to Hugging Face, and a search for Google's official QAT Gemma GGUF with its quantisations](images/discover-hf.png)
+![Discover's Hugging Face tab: the note that the app isn't connected to Hugging Face, and a search for Google's official QAT Gemma GGUF with its quantisations, each explained](images/discover-hf.png)
 
 A note at the top of the tab says whether this app is connected to Hugging Face. Connected (with `HF_TOKEN` set), it
 names the account, and searches include that account's private repos and the gated ones it's been granted. Not
@@ -48,7 +49,7 @@ and a **Download** button. Tags that are the same download under another name (s
 match. Tags you already have are marked **Installed**, ones in the queue show their progress, and ones on your
 [blacklist](blacklist.md) are marked **Blacklisted**.
 
-![A gemma3 result with its tags open: sizes, context, fit, and which are installed](images/discover.png)
+![A gemma3 result with its tags open: sizes, context, fit, what each quantisation means, and which are installed or blacklisted](images/discover.png)
 
 The filters above the results:
 
@@ -68,6 +69,44 @@ The estimate is the download size plus about 20% for the context window and runt
 comfortably" rather than a guarantee: a long context window uses more. The check is against the machine running this
 app, so if `OLLAMA_HOST` points at Ollama on another machine, it describes the wrong one.
 
+## What quantisation names mean
+
+Every tag on ollama.com and file on Hugging Face is a *quantisation*: the model's weights stored with fewer bits, so it
+takes less memory and disk and usually runs faster, at some cost in accuracy. In **Tags and downloads**, **Files and
+downloads** and **Other quants…**, each one has a line saying what its name means, and **What do names like Q4_K_M
+mean?** opens this guide in the app. A tag whose name doesn't say (`gemma3:4b`, `latest`) is explained as the tag it's
+the same download as, when ollama.com lists one (`gemma3:4b-it-q4_K_M`).
+
+Take `Q4_K_M`: **Q4** is about 4 bits per weight, **K** is the method, and **M** is the size variant.
+
+| Bits | |
+|---|---|
+| `F16`, `BF16`, `F32` | Unquantised: the original quality, at 4× (F32: 8×) the size of 4-bit. Rarely worth it to run. |
+| `Q8` | Practically indistinguishable from the original, at about twice the size of 4-bit. |
+| `Q6`, `Q5` | Very close to the original. Worth it if they fit. |
+| `Q4` | The usual choice: a good balance of size and quality. `Q4_K_M` is what Ollama's own tags usually are. |
+| `Q3` | Noticeably less accurate. For fitting a bigger model than would otherwise fit. |
+| `Q2`, `Q1` | A big loss in quality: a last resort. A smaller model at Q4 is often better than a bigger one at Q2. |
+
+| Method | |
+|---|---|
+| `_K` (k-quants) | The usual kind: quantised in blocks, with the parts that matter most kept more precise. |
+| `_0`, `_1` (legacy) | The older, simpler method. A k-quant of the same size is usually better, except `Q8_0`, the usual 8-bit format. |
+| `IQ` (i-quants) | Use an "importance matrix" to squeeze more quality into fewer bits, so they're best at 3 bits and below. They can be slower on a CPU. |
+| `MXFP4` | 4-bit floating point: the format some models, such as gpt-oss, are released in. |
+| `TQ1_0`, `TQ2_0` | Ternary: only for models trained to run that way. |
+
+**Size variants** `XXS`, `XS`, `S`, `M`, `L` and `XL` go from smallest to largest: for the same bits, a larger variant
+keeps more layers precise, so it's a little bigger and a little better. `M` is the usual balance. Uploaders sometimes add
+letters of their own (such as `Q5_K_P`); those are their own variants, so check the repo's description.
+
+**Prefixes and tags:** `UD-` is Unsloth Dynamic, which picks the precision layer by layer, so it's better than a plain
+quant of the same size. `qat` (Gemma's `-it-qat` tags) means quantisation-aware trained: trained to be run at 4 bits, so
+it loses less than an ordinary Q4. `it` and `instruct` aren't quantisations: they mark the instruction-tuned (chat)
+version, as opposed to the base model.
+
+As a rule of thumb, pick the largest quant that fits on your GPU, Q4_K_M or better: Discover's ✓ says which do.
+
 ## Other quants of a model you have
 
 Each installed model's menu (on the dashboard, the Models page and the model's own page) has **Other quants…**. It lists
@@ -75,7 +114,7 @@ every tag (for ollama.com models) or quantisation (for Hugging Face models) of t
 marked, so you can download a bigger or smaller one to compare. **View on ollama.com / Hugging Face** opens its page
 there.
 
-![The Other quants dialog for qwen3:8b: every size, with the installed ones marked and one downloading](images/other-quants.png)
+![The Other quants dialog for qwen3:8b: every size with what its quantisation means, the installed one marked and one downloading](images/other-quants.png)
 
 ## The download queue
 

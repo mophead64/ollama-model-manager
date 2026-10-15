@@ -26,7 +26,7 @@ works the figures out from the files themselves:
 - **Deleting says exactly what it frees.** The delete dialogs say how much space deleting a model frees: only the files
   no other model uses. Deleting one name of a model that has another frees nothing, and the dialog says so.
 
-![The Models page: the filters, the duplicate quantisations note, and the list with selection boxes and badges for other tags and quantisations](images/models.png)
+![The Models page: the filters, the duplicate quantisations note, and the list with selection boxes, labels, and badges for other tags and quantisations](images/models.png)
 
 This needs this app to see Ollama's models folder (`MODELS_DIR`; it's found automatically in the usual places, and at
 `/models` in Docker). Without it, tags of the same model are still counted once, but files shared between different
@@ -80,7 +80,7 @@ Tick models on the Models page (or tick the box in the header for the whole page
 - **Delete…** lists them, with how much space deleting them frees, and asks first. Tick **Also add them to the
   blacklist** to [blacklist](blacklist.md) them as they go, with one reason for them all.
 
-![The Delete dialog for four unused models: each with its size, the 19.3 GB freed, and "Also add them to the blacklist" ticked with a reason](images/bulk-delete.png)
+![The Delete dialog for four unused models: each with its size, the 19.4 GB freed, and "Also add them to the blacklist" ticked with a reason](images/bulk-delete.png)
 
 The selection is kept as you sort, filter and page through the list. If any can't be deleted, the others still are, and
 the page says which failed and why.

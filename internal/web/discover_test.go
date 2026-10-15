@@ -290,6 +290,16 @@ func TestDiscoverHuggingFace(t *testing.T) {
 	if !strings.Contains(files, `value="hf.co/owner/Small-GGUF:Q4_K_M"`) {
 		t.Errorf("Q4_K_M not offered for download:\n%s", files)
 	}
+	// Each quantisation says what it means, with the guide a click away.
+	for _, want := range []string{`<div class="muted disc-alias disc-quant">4-bit k-quant, medium: the usual balance`,
+		`<div class="muted disc-alias disc-quant">8-bit quant:`, `data-dialog-open="quant-guide-modal">What do names like Q4_K_M mean?`} {
+		if !strings.Contains(files, want) {
+			t.Errorf("files missing %q", want)
+		}
+	}
+	if page := get(h, "/discover", false).Body.String(); !strings.Contains(page, `<dialog id="quant-guide-modal"`) {
+		t.Error("Discover should have the quantisation guide for the link to open")
+	}
 	// Q8_0 is queued (under a differently-cased name): its status, not a button.
 	if strings.Contains(files, `value="hf.co/owner/Small-GGUF:Q8_0"`) || strings.Count(files, `class="badge queued"`) != 1 {
 		t.Errorf("queued Q8_0 should show its status:\n%s", files)

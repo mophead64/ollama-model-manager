@@ -18,6 +18,7 @@ type listState struct {
 	Query  string
 	Caps   []string
 	Unused int    // only models not used for this many days (one of unusedChoices); 0 for all
+	Label  int64  // only models with this label; 0 for all
 	Sort   string // "name" or one of sortKeys
 	Desc   bool
 	Page   int
@@ -74,6 +75,7 @@ func parseListState(q url.Values) listState {
 	if p, err := strconv.Atoi(q.Get("page")); err == nil && p > 0 {
 		st.Page = p
 	}
+	st.Label, _ = strconv.ParseInt(q.Get("label"), 10, 64)
 	st.Unused, _ = strconv.Atoi(q.Get("unused"))
 	st.Unused = validUnused(st.Unused)
 	return st
@@ -102,6 +104,9 @@ func (st listState) URL() string {
 	}
 	if st.Unused > 0 {
 		v.Set("unused", strconv.Itoa(st.Unused))
+	}
+	if st.Label > 0 {
+		v.Set("label", strconv.FormatInt(st.Label, 10))
 	}
 	if !st.isDefaultSort() {
 		v.Set("sort", st.Sort)

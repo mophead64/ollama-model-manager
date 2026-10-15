@@ -105,7 +105,11 @@ func (s *Server) handleTests(w http.ResponseWriter, r *http.Request) {
 		form.Name = string([]rune(form.Name)[:testMaxName])
 	}
 	var notice string
-	if id, err := strconv.ParseInt(q.Get("template"), 10, 64); err == nil {
+	if bt := builtinTestBySlug(q.Get("builtin")); bt != nil {
+		// Models ticked already (?model=) stay ticked: they're the ones to compare.
+		form = testForm{Name: bt.Name, Prompt: bt.Prompt, Models: q["model"], Repeats: bt.Repeats}
+		notice = "Filled in from the built-in test " + bt.Name + ". Pick the models to compare, then queue it."
+	} else if id, err := strconv.ParseInt(q.Get("template"), 10, 64); err == nil {
 		switch t, err := s.st.GetModelTestTemplate(r.Context(), id); {
 		case err != nil:
 			s.log.Error("read model test template failed", "error", err)
@@ -122,9 +126,13 @@ func (s *Server) handleTests(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) renderTests(w http.ResponseWriter, r *http.Request, form testForm, formErr, notice string, status int) {
 	q := r.URL.Query()
-	data := map[string]any{"Form": form, "FormError": formErr, "Notice": notice, "Deleted": q.Get("deleted"),
+	data := map[string]any{"Form": form, "FormError": formErr, "Notice": notice, "Deleted": q.Get("deleted"), "Builtins": builtinTests,
 		"TemplateDeleted": q.Get("template_deleted"), "MaxModels": testMaxModels, "MaxRepeats": testMaxRepeats,
 		"DefaultRepeats": testDefaultRepeats, "MaxPrompt": testMaxPrompt, "Presets": []int{1, 3, 5, 10}}
+	// A built-in test's prompt says what to look for in its replies.
+	if bt := builtinTestFor(form.Prompt); bt != nil {
+		data["LookFor"] = bt
+	}
 	if all, err := s.ol.List(r.Context()); err != nil {
 		s.log.Error("list models failed", "error", err)
 		data["Error"] = err.Error()
@@ -315,6 +323,10 @@ type testSummary struct {
 	AvgTokens  float64
 	AvgTotalMS float64
 	MaxLoadMS  int64 // usually the first run, when the model had to be loaded
+	// What Ollama says about the model (parameters, quantisation, size,
+	// context), for comparing like with like; nil if it's no longer installed.
+	Info  *ollama.Model
+	Quant string // what its quantisation means (describeQuant)
 }
 
 func summarise(runs []store.ModelTestRun) []testSummary {
@@ -358,9 +370,31 @@ func (s *Server) handleTestDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	q := r.URL.Query()
-	data := map[string]any{"Test": t, "Summary": summarise(runs), "Cancelled": q.Get("cancelled") != "", "Queued": q.Get("queued") != ""}
-	s.addModelsOverview(r, data)
+	summary := summarise(runs)
+	data := map[string]any{"Test": t, "Summary": summary, "Cancelled": q.Get("cancelled") != "", "Queued": q.Get("queued") != "",
+		"LookFor": builtinTestFor(t.Prompt)}
+	all, err := s.ol.List(r.Context())
+	if err != nil {
+		s.log.Error("list models failed", "error", err)
+		data["Error"] = err.Error()
+	} else {
+		s.addOverview(r, all, data)
+		addModelInfo(summary, all)
+	}
 	s.render(w, r, "test_detail.html", data)
+}
+
+// addModelInfo adds each tested model's details, from the models Ollama has.
+func addModelInfo(summary []testSummary, all []ollama.Model) {
+	for i := range summary {
+		for j := range all {
+			if all[j].Name == summary[i].Model || all[j].Model == summary[i].Model {
+				summary[i].Info = &all[j]
+				summary[i].Quant = describeQuant(all[j].Details.QuantizationLevel)
+				break
+			}
+		}
+	}
 }
 
 // testFromPath is the test named by the {id} in the path, or nil after a

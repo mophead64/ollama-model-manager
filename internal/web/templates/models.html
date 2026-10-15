@@ -22,7 +22,7 @@
         <span class="muted">Ollama at <code>{{.OllamaURL}}</code></span>
       </div>
       <form hx-get="/models" hx-target="#model-results" hx-swap="outerHTML" hx-push-url="true"
-            hx-trigger="submit, change from:.cap-filter, change from:#f-unused" hx-include="#sort-state">
+            hx-trigger="submit, change from:.cap-filter, change from:#f-unused, change from:#f-label" hx-include="#sort-state">
         <div class="row">
           <label for="f-q" class="muted">Name, family or capability contains</label>
           <input id="f-q" type="text" name="q" value="{{.Query}}" placeholder="e.g. llama, vision">
@@ -31,6 +31,13 @@
             <option value="">any time</option>
             {{range .UnusedChoices}}<option value="{{.}}"{{if eq . $.Unused}} selected{{end}}>not in {{.}}+ days</option>{{end}}
           </select>
+          {{with .AllLabels}}
+          <label for="f-label" class="muted">Label</label>
+          <select id="f-label" name="label">
+            <option value="">any</option>
+            {{range .}}<option value="{{.ID}}"{{if eq .ID $.Label}} selected{{end}}>{{.Name}}{{with .Models}} ({{.}}){{end}}</option>{{end}}
+          </select>
+          {{end}}
           <button type="submit">Search</button>
         </div>
         {{with .AllCaps}}
@@ -140,9 +147,24 @@
     <form method="post" action="/models/bulk/unload" class="inline" data-bulk-form>
       <button type="submit" class="secondary small" data-busy="Unloading…">Unload</button>
     </form>
+    <button type="button" class="secondary small" data-dialog-open="bulk-label-modal">Label…</button>
     {{if .AllowDelete}}<button type="button" class="danger-solid small" data-bulk-delete>Delete…</button>{{end}}
   </span>
 </div>
+<dialog id="bulk-label-modal" aria-labelledby="bulk-label-title">
+  <form method="post" action="/models/bulk/label" data-bulk-form>
+    <h2 id="bulk-label-title">Label the selected models</h2>
+    <p>Add a label to every selected model, or take it off them. <a class="hint-link inline" href="/models/labels">Make or change labels</a> on the Labels tab.</p>
+    <div class="lbl-picks" role="radiogroup" aria-label="Label">
+      {{range $i, $l := .AllLabels}}<label class="lbl-pick"><input type="radio" name="label" value="{{.ID}}"{{if eq $i 0}} checked{{end}}>{{template "label_chip" .}}</label>{{end}}
+    </div>
+    <div class="dialog-actions">
+      <button type="button" class="secondary" data-dialog-close>Cancel</button>
+      <button type="submit" name="op" value="remove" class="secondary">Take it off</button>
+      <button type="submit" name="op" value="add">Add it</button>
+    </div>
+  </form>
+</dialog>
 {{if .AllowDelete}}
 <dialog id="bulk-delete-modal" class="wide" aria-labelledby="bulk-delete-title">
   <div id="bulk-delete-body"></div>
@@ -198,6 +220,7 @@
 {{define "models_tabs"}}
 <div class="disc-tabs page-tabs">
   <a href="/models" class="disc-tab"{{if eq .Tab "all"}} aria-current="true"{{end}}>All Models</a>
+  <a href="/models/labels" class="disc-tab"{{if eq .Tab "labels"}} aria-current="true"{{end}}>Labels</a>
   <a href="/models/blacklist" class="disc-tab"{{if eq .Tab "blacklist"}} aria-current="true"{{end}}>Blacklist</a>
   <a href="/models/testing" class="disc-tab"{{if eq .Tab "testing"}} aria-current="true"{{end}}>Testing{{with .ActiveTests}} <span class="nav-badge" title="{{.}} test(s) queued or running">{{.}}</span>{{end}}</a>
   <a href="/models/chat" class="disc-tab"{{if eq .Tab "chat"}} aria-current="true"{{end}}>Chat</a>

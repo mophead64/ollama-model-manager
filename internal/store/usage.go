@@ -155,6 +155,32 @@ func (s *Store) ModelDailyUsage(ctx context.Context, model, from string) ([]Dail
 	return out, rows.Err()
 }
 
+// ModelDayUsage is one model's usage on one day.
+type ModelDayUsage struct {
+	Model string
+	DailyUsage
+}
+
+// DailyUsageSince is every model's usage from day from (YYYY-MM-DD) on, by
+// day then model. Days a model wasn't used aren't included.
+func (s *Store) DailyUsageSince(ctx context.Context, from string) ([]ModelDayUsage, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT model, day, active_seconds, loads FROM model_usage_daily WHERE day >= ? ORDER BY day, model`, from)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []ModelDayUsage
+	for rows.Next() {
+		var u ModelDayUsage
+		if err := rows.Scan(&u.Model, &u.Day, &u.ActiveSeconds, &u.Loads); err != nil {
+			return nil, err
+		}
+		out = append(out, u)
+	}
+	return out, rows.Err()
+}
+
 // ModelUsageTotals is model's usage in all, and the first day any was
 // recorded ("" if none has been).
 func (s *Store) ModelUsageTotals(ctx context.Context, model string) (activeSeconds, loads int, since string, err error) {

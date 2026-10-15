@@ -32,6 +32,8 @@
       </div>
       {{template "model_memory" $}}
       <dl class="kv">
+        <dt>Labels</dt><dd><span class="lbl-inline">{{range $.ModelLabels}}{{template "label_chip" .}}{{else}}<span class="muted">none</span>{{end}}</span>
+          <button type="button" class="link" data-dialog-open="edit-labels-modal">Edit labels</button></dd>
         <dt>Family</dt><dd>{{or .Details.Family "-"}}{{if gt (len .Details.Families) 1}} <span class="muted">({{range $i, $f := .Details.Families}}{{if $i}}, {{end}}{{$f}}{{end}})</span>{{end}}</dd>
         <dt>Parameters</dt><dd>{{or .Details.ParameterSize "-"}}</dd>
         <dt>Quantization</dt><dd>{{or .Details.QuantizationLevel "-"}}</dd>
@@ -77,7 +79,7 @@
     {{end}}
   </main>
   {{template "footer" .}}
-  {{if .Info}}{{template "load_dialog" .}}{{template "quants_dialog"}}{{end}}
+  {{if .Info}}{{template "load_dialog" .}}{{template "quants_dialog"}}{{template "edit_labels_dialog" .}}{{end}}
   {{if and .AllowDelete .Info}}
   <dialog id="delete-model-modal" aria-labelledby="delete-model-title">
     <form method="post" action="/models/delete" data-reset-on-open>
@@ -149,4 +151,31 @@
   <p class="muted usage-note">Recorded while this app is running, from Ollama checks every 15 seconds, so times are approximate.</p>
   {{end}}
 </div>
+{{end}}
+
+{{/* A model's Edit labels dialog: tick its labels, or make a new one for it
+     there and then (handleSetModelLabels); the Labels tab makes and changes
+     them for every model. */}}
+{{define "edit_labels_dialog"}}
+<dialog id="edit-labels-modal" aria-labelledby="edit-labels-title">
+  <form method="post" action="/models/labels/set" data-reset-on-open>
+    <h2 id="edit-labels-title">Labels for <code>{{.Name}}</code></h2>
+    <input type="hidden" name="model" value="{{.Name}}">
+    <div class="lbl-picks">
+      {{range .AllLabels}}<label class="lbl-pick"><input type="checkbox" name="label" value="{{.ID}}"{{if hasid $.ModelLabelIDs .ID}} checked{{end}}>{{template "label_chip" .}}</label>{{end}}
+    </div>
+    <fieldset class="lbl-new">
+      <legend>Or make a new label for it</legend>
+      <input type="text" name="new_name" maxlength="{{.LabelNameMax}}" placeholder="e.g. Used by Home Assistant" aria-label="New label's name">
+      <div class="lbl-picks" role="radiogroup" aria-label="New label's colour">
+        {{range $i, $c := .LabelColors}}<label class="lbl-pick"><input type="radio" name="new_color" value="{{$c}}"{{if eq $i 0}} checked{{end}}><span class="lbl {{$c}}">{{$c}}</span></label>{{end}}
+      </div>
+      <p class="muted lbl-hint">It's kept for reuse on other models. <a class="hint-link inline" href="/models/labels">Manage labels</a></p>
+    </fieldset>
+    <div class="dialog-actions">
+      <button type="button" class="secondary" data-dialog-close>Cancel</button>
+      <button type="submit">Save</button>
+    </div>
+  </form>
+</dialog>
 {{end}}

@@ -44,6 +44,7 @@ var templateFuncs = template.FuncMap{
 	"unloads":    keepTogether(unloadsPhrase),
 	"ago":        keepTogether(timeAgo),
 	"lastused":   lastUsedOf,
+	"labelsof":   labelsOf,
 	"activefor":  keepTogether(formatActive),
 	"loadsof":    func(loads map[string]int, name string) int { return loads[name] },
 	"canchat":    canChat,
@@ -52,6 +53,9 @@ var templateFuncs = template.FuncMap{
 		return map[string]any{"Model": m, "Loaded": loaded, "AllowDelete": allowDelete, "Return": ret, "Storage": st}
 	},
 	"ms": keepTogether(formatMS),
+	// For the System page's update_buttons: the modal they open, and the
+	// update check (Ollama's or this app's) it's about.
+	"updatebuttons": func(modal string, u any) map[string]any { return map[string]any{"Modal": modal, "U": u} },
 	"copycmd": func(id, cmd string) map[string]string {
 		return map[string]string{"ID": id, "Cmd": cmd}
 	},
@@ -63,6 +67,7 @@ var templateFuncs = template.FuncMap{
 		return map[string]any{"Tab": tab, "ActiveTests": activeTests}
 	},
 	"has":     func(list []string, s string) bool { return slices.Contains(list, s) },
+	"hasid":   func(ids []int64, id int64) bool { return slices.Contains(ids, id) },
 	"add":     func(a, b int) int { return a + b },
 	"compact": formatCompact,
 	"tokens":  formatTokens,
