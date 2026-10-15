@@ -29,6 +29,7 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 		"Query":         st.Query,
 		"Caps":          st.Caps,
 		"Unused":        st.Unused,
+		"Label":         st.Label,
 		"UnusedChoices": unusedChoices,
 		"Dir":           st.Dir(),
 		"Page":          st.Page,
@@ -51,7 +52,15 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 		lastUsed := facts.LastUsed
 		storage := s.storage(all)
 		data["Storage"] = storage
+		labels := s.modelLabels(r)
+		data["Labels"] = labels
+		data["AllLabels"] = s.allLabels(r)
 		models := filterModels(all, st.Query, st.Caps)
+		if st.Label > 0 {
+			models = slices.DeleteFunc(models, func(m ollama.Model) bool {
+				return !slices.ContainsFunc(labelsOf(labels, m.Name), func(l store.Label) bool { return l.ID == st.Label })
+			})
+		}
 		if st.Unused > 0 {
 			now := time.Now()
 			models = unusedFor(models, st.Unused, facts, storage, now)
@@ -319,6 +328,7 @@ func (s *Server) handleModelDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := map[string]any{"Name": name}
+	s.addModelLabelData(r, name, data)
 
 	info, err := s.ol.Show(r.Context(), name)
 	var se *ollama.StatusError

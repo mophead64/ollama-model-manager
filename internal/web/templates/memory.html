@@ -4,6 +4,7 @@
 {{define "flash"}}{{with .Flash}}
   {{with .Loaded}}<div class="notice" role="status" data-clear-param="loaded"><span>Loaded <strong>{{.}}</strong> into memory.</span><button type="button" class="notice-close" data-dismiss aria-label="Dismiss">×</button></div>{{end}}
   {{with .Unloaded}}<div class="notice" role="status" data-clear-param="unloaded"><span>Unloaded <strong>{{.}}</strong> from memory.</span><button type="button" class="notice-close" data-dismiss aria-label="Dismiss">×</button></div>{{end}}
+  {{with .Labelled}}<div class="notice" role="status" data-clear-param="labelled"><span>{{.}}</span><button type="button" class="notice-close" data-dismiss aria-label="Dismiss">×</button></div>{{end}}
   {{with .Error}}<div class="notice error" role="alert" data-clear-param="memerror"><span>{{.}}</span><button type="button" class="notice-close" data-dismiss aria-label="Dismiss">×</button></div>{{end}}
 {{end}}{{end}}
 

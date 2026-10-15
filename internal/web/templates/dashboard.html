@@ -43,7 +43,7 @@
         <tbody>
         {{range .Recent}}
           <tr>
-            <td>{{if index $.LoadedNames .Name}}<span class="loaded-dot" role="img" aria-label="Loaded in memory" title="Loaded in memory"></span>{{end}}{{template "model_name" .Name}}</td>
+            <td>{{if index $.LoadedNames .Name}}<span class="loaded-dot" role="img" aria-label="Loaded in memory" title="Loaded in memory"></span>{{end}}{{template "model_name" .Name}}{{template "label_row" (labelsof $.Labels .Name)}}</td>
             <td>{{or .Details.ParameterSize "-"}}</td>
             <td>{{bytes .Size}}</td>
             <td>{{with lastused $.LastUsed .Name}}<span class="tip-wrap" tabindex="0">{{ago .}}<span class="tip" role="tooltip">{{time .}}</span></span>{{end}}</td>

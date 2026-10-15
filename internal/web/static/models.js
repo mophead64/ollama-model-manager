@@ -12,7 +12,6 @@
   var count = bar.querySelector("[data-bulk-count]");
   var all = bar.querySelector("[data-bulk-all]");
   var total = bar.querySelector("[data-bulk-total]");
-  var unloadForm = bar.querySelector("[data-bulk-form]");
   var deleteBtn = bar.querySelector("[data-bulk-delete]");
 
   function results() { return document.getElementById("model-results"); }
@@ -94,7 +93,10 @@
       form.appendChild(i);
     });
   }
-  unloadForm.addEventListener("submit", function () { fill(unloadForm); });
+  // Unload, and the Label dialog's form: both act on the selection.
+  document.addEventListener("submit", function (e) {
+    if (e.target.matches("form[data-bulk-form]")) fill(e.target);
+  });
 
   // Opens the Delete dialog for names: the selection, or a model's tags (the
   // duplicates panel's Delete, for a model listed under more than one).

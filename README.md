@@ -44,7 +44,13 @@ loads, filter by name, capability or how long it's gone unused, and click a name
 ![The Models page: every installed model, sorted by when it was last used, with selection boxes, and badges for models with another name or another quantisation installed](docs/images/models.png)
 
 Each model's menu loads or unloads it (choosing how long it stays loaded), opens a chat, shows its **other quants** to
-download, links to it on ollama.com or Hugging Face, or deletes it. Tick several to unload or delete them at once.
+download, links to it on ollama.com or Hugging Face, or deletes it. Tick several to unload, label or delete them at
+once.
+
+**Labels** are colour-coded tags for your models: what they're for (built-in labels such as Coding, Chat, Vision and
+Embeddings) or anything of your own, such as which app uses them. Make your own on the **Labels** tab, or while
+labelling a model from its page. They show on the dashboard, the Models page and each model's page, and the Models page
+filters by them.
 
 ### Usage history
 Ollama keeps no record of what you use. This app checks every 15 seconds and records when each model was last used, each

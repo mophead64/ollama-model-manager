@@ -639,6 +639,31 @@
   .disc-tag-table td.mono .disc-quant { white-space: normal; max-width: 72ch; line-height: 1.4; margin-top: 2px;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
   .disc-quant-help { margin: 4px 0 6px; font-size: 13px; }
+  /* Labels: colour-coded chips, squarer than status badges, with a dot. */
+  .lbl { display: inline-flex; align-items: center; gap: 5px; padding: 1px 7px; border-radius: 4px; font-size: 12px; font-weight: 600;
+    line-height: 18px; white-space: nowrap; vertical-align: middle; }
+  .lbl::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
+  .lbl.blue { background: var(--b-blue-bg); color: var(--b-blue); }
+  .lbl.green { background: var(--b-green-bg); color: var(--b-green); }
+  .lbl.amber { background: var(--b-amber-bg); color: var(--b-amber); }
+  .lbl.red { background: var(--b-red-bg); color: var(--b-red); }
+  .lbl.purple { background: var(--b-purple-bg); color: var(--b-purple); }
+  .lbl.gray { background: var(--b-gray-bg); color: var(--b-manual); }
+  .lbl-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  .lbl-picks { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
+  .lbl-pick { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-size: 14px; }
+  .lbl-pick input { margin: 0; }
+  .lbl-inline { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-right: 8px; vertical-align: middle; }
+  .lbl-new { border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px 2px; margin: 0 0 16px; }
+  .lbl-new legend { font-size: 13px; color: var(--muted); padding: 0 4px; }
+  .lbl-new input[type=text] { width: 100%; margin-bottom: 10px; }
+  .lbl-hint { font-size: 12px; margin: 0 0 8px; }
+  .labels-intro { font-size: 14px; margin: 0 0 12px; max-width: 780px; }
+  .label-form { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+  .label-form input[type=text] { flex: 1 1 260px; max-width: 360px; }
+  .label-form .lbl-picks { margin: 0; }
+  .label-edit-name { width: 100%; margin-bottom: 12px; }
+  .labels-note { font-size: 12px; margin: 10px 0 0; }
   /* A built-in test's "What to look for", under its prompt. */
   .test-lookfor { margin: 8px 0 0; padding: 8px 12px; font-size: 13px; line-height: 1.5; color: var(--muted);
     border-left: 3px solid var(--accent); background: var(--code-bg); border-radius: 0 6px 6px 0; }

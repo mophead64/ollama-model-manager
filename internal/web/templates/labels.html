@@ -1,0 +1,99 @@
+{{define "labels.html"}}
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ollama Model Manager — Labels</title>
+  {{template "style" .}}
+  {{template "htmx_script" .}}
+  {{template "dialog_script" .}}
+</head>
+<body>
+  {{template "nav" .}}
+  <main>
+    {{with .Created}}<div class="notice" role="status" data-clear-param="created"><span>Made the label <strong>{{.}}</strong>. Add it to models from their pages, or select them on the Models page and choose Label….</span><button type="button" class="notice-close" data-dismiss aria-label="Dismiss">×</button></div>{{end}}
+    {{with .Updated}}<div class="notice" role="status" data-clear-param="updated"><span>Updated the label <strong>{{.}}</strong>.</span><button type="button" class="notice-close" data-dismiss aria-label="Dismiss">×</button></div>{{end}}
+    {{with .Removed}}<div class="notice" role="status" data-clear-param="removed"><span>Deleted the label <strong>{{.}}</strong>, and took it off its models.</span><button type="button" class="notice-close" data-dismiss aria-label="Dismiss">×</button></div>{{end}}
+    {{if and .LabelError (eq .ErrorForm "")}}<div class="notice error" role="alert"><span>{{.LabelError}}</span></div>{{end}}
+    {{if not .Error}}{{template "overview" .}}{{end}}
+    {{template "models_tabs" (modeltabs "labels" .ActiveTests)}}
+
+    <div class="panel">
+      <h2>New label</h2>
+      <p class="muted labels-intro">Labels are colour-coded tags for models, such as what they're used for or by: the built-in ones below, and any you make. They show on the dashboard, the Models page and each model's page, and the Models page can filter by them. You can also make one while labelling a model.</p>
+      {{if eq .ErrorForm "new"}}<div class="error-box">{{.LabelError}}</div>{{end}}
+      <form method="post" action="/models/labels" class="label-form">
+        <input type="text" name="name" maxlength="{{.NameMax}}" required placeholder="e.g. Used by Home Assistant" aria-label="Label name"
+               value="{{if eq .ErrorForm "new"}}{{.FormName}}{{end}}">
+        <div class="lbl-picks" role="radiogroup" aria-label="Colour">
+          {{range $i, $c := .Colors}}<label class="lbl-pick"><input type="radio" name="color" value="{{$c}}"{{if eq $.ErrorForm "new"}}{{if eq $c $.FormColor}} checked{{end}}{{else if eq $i 0}} checked{{end}}><span class="lbl {{$c}}">{{$c}}</span></label>{{end}}
+        </div>
+        <button type="submit">Make label</button>
+      </form>
+    </div>
+
+    <div class="panel">
+      <div class="row between">
+        <h2>Labels</h2>
+        {{with .Labels}}<span class="muted">{{len .}} label(s)</span>{{end}}
+      </div>
+      {{if .LabelsErr}}
+      <div class="error-box" style="margin:0">Couldn't read the labels: {{.LabelsErr}}</div>
+      {{else}}
+      <div class="table-wrap">
+      <table>
+        <thead><tr><th>Label</th><th>Models</th><th></th><th></th></tr></thead>
+        <tbody>
+        {{range .Labels}}
+          <tr>
+            <td>{{template "label_chip" .}}</td>
+            <td>{{if .Models}}<a href="/models?label={{.ID}}">{{.Models}} model{{if ne .Models 1}}s{{end}}</a>{{else}}<span class="muted">none yet</span>{{end}}</td>
+            <td class="muted">{{if .Builtin}}Built-in{{else}}Yours{{end}}</td>
+            <td class="actions">
+              {{if not .Builtin}}
+              <button type="button" class="secondary small" data-dialog-open="edit-label-{{.ID}}">Edit</button>
+              <button type="button" class="danger small" data-dialog-open="delete-label-modal" data-fill-name="{{.Name}}" data-fill-action="/models/labels/{{.ID}}/delete">Delete</button>
+              {{end}}
+            </td>
+          </tr>
+        {{end}}
+        </tbody>
+      </table>
+      </div>
+      <p class="muted labels-note">Built-in labels are there for the usual jobs a model does, and can't be changed. Labels stay with a model's name, so a model you delete and download again gets its labels back.</p>
+      {{end}}
+    </div>
+  </main>
+  {{template "footer" .}}
+
+  {{range .Labels}}{{if not .Builtin}}
+  <dialog id="edit-label-{{.ID}}" aria-labelledby="edit-label-title-{{.ID}}"{{if eq $.ErrorForm (printf "%d" .ID)}} data-dialog-autoopen{{end}}>
+    <form method="post" action="/models/labels/{{.ID}}">
+      <h2 id="edit-label-title-{{.ID}}">Edit label</h2>
+      {{if eq $.ErrorForm (printf "%d" .ID)}}<div class="error-box">{{$.LabelError}}</div>{{end}}
+      <input type="text" name="name" maxlength="{{$.NameMax}}" required value="{{if eq $.ErrorForm (printf "%d" .ID)}}{{$.FormName}}{{else}}{{.Name}}{{end}}" aria-label="Label name" class="label-edit-name">
+      <div class="lbl-picks" role="radiogroup" aria-label="Colour">
+        {{$color := .Color}}{{range $.Colors}}<label class="lbl-pick"><input type="radio" name="color" value="{{.}}"{{if eq . $color}} checked{{end}}><span class="lbl {{.}}">{{.}}</span></label>{{end}}
+      </div>
+      <div class="dialog-actions">
+        <button type="button" class="secondary" data-dialog-close>Cancel</button>
+        <button type="submit">Save</button>
+      </div>
+    </form>
+  </dialog>
+  {{end}}{{end}}
+
+  <dialog id="delete-label-modal" aria-labelledby="delete-label-title">
+    <form method="post" data-fill="action" data-fill-attr="action" action="">
+      <h2 id="delete-label-title">Delete label?</h2>
+      <p>The label <strong data-fill="name"></strong> will be deleted and taken off every model that has it. The models aren't affected.</p>
+      <div class="dialog-actions">
+        <button type="button" class="secondary" data-dialog-close>Cancel</button>
+        <button type="submit" class="danger-solid">Delete label</button>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>
+{{end}}

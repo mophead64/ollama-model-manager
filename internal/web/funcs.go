@@ -44,6 +44,7 @@ var templateFuncs = template.FuncMap{
 	"unloads":    keepTogether(unloadsPhrase),
 	"ago":        keepTogether(timeAgo),
 	"lastused":   lastUsedOf,
+	"labelsof":   labelsOf,
 	"activefor":  keepTogether(formatActive),
 	"loadsof":    func(loads map[string]int, name string) int { return loads[name] },
 	"canchat":    canChat,
@@ -66,6 +67,7 @@ var templateFuncs = template.FuncMap{
 		return map[string]any{"Tab": tab, "ActiveTests": activeTests}
 	},
 	"has":     func(list []string, s string) bool { return slices.Contains(list, s) },
+	"hasid":   func(ids []int64, id int64) bool { return slices.Contains(ids, id) },
 	"add":     func(a, b int) int { return a + b },
 	"compact": formatCompact,
 	"tokens":  formatTokens,
