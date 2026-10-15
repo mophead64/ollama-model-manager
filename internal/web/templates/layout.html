@@ -631,7 +631,7 @@
   .disc-tags[open] summary { margin-bottom: 8px; }
   /* An expanded card takes the whole row, so its tag table isn't squeezed into one column of the grid. */
   .disc-card:has(details.disc-tags[open]) { grid-column: 1 / -1; }
-  .disc-tag-table { max-height: 360px; overflow: auto; }
+  .disc-tag-table { max-height: 520px; overflow: auto; } /* tall enough for six or so tags with their quant lines */
   .disc-tag-table td.mono, .disc-tag-table th { white-space: nowrap; }
   .disc-tag-table td { vertical-align: top; }
   .disc-tag-table .badge { cursor: help; white-space: nowrap; }

@@ -24,7 +24,7 @@ parameter count, its context length, and a **gated** badge if you need to ask fo
 Open **Files and downloads** to see each quantisation (Q4_K_M, Q8_0 and so on) with its real size and fit. Files split
 into several parts, and vision projectors (which aren't models on their own), are handled for you.
 
-![Discover's Hugging Face tab: the note that the app isn't connected to Hugging Face, and a search for Google's official QAT Gemma GGUF with its quantisations](images/discover-hf.png)
+![Discover's Hugging Face tab: the note that the app isn't connected to Hugging Face, and a search for Google's official QAT Gemma GGUF with its quantisations, each explained](images/discover-hf.png)
 
 A note at the top of the tab says whether this app is connected to Hugging Face. Connected (with `HF_TOKEN` set), it
 names the account, and searches include that account's private repos and the gated ones it's been granted. Not
@@ -49,7 +49,7 @@ and a **Download** button. Tags that are the same download under another name (s
 match. Tags you already have are marked **Installed**, ones in the queue show their progress, and ones on your
 [blacklist](blacklist.md) are marked **Blacklisted**.
 
-![A gemma3 result with its tags open: sizes, context, fit, and which are installed](images/discover.png)
+![A gemma3 result with its tags open: sizes, context, fit, what each quantisation means, and which are installed or blacklisted](images/discover.png)
 
 The filters above the results:
 
@@ -114,7 +114,7 @@ every tag (for ollama.com models) or quantisation (for Hugging Face models) of t
 marked, so you can download a bigger or smaller one to compare. **View on ollama.com / Hugging Face** opens its page
 there.
 
-![The Other quants dialog for qwen3:8b: every size, with the installed ones marked and one downloading](images/other-quants.png)
+![The Other quants dialog for qwen3:8b: every size with what its quantisation means, the installed one marked and one downloading](images/other-quants.png)
 
 ## The download queue
 
