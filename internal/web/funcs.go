@@ -52,6 +52,9 @@ var templateFuncs = template.FuncMap{
 		return map[string]any{"Model": m, "Loaded": loaded, "AllowDelete": allowDelete, "Return": ret, "Storage": st}
 	},
 	"ms": keepTogether(formatMS),
+	// For the System page's update_buttons: the modal they open, and the
+	// update check (Ollama's or this app's) it's about.
+	"updatebuttons": func(modal string, u any) map[string]any { return map[string]any{"Modal": modal, "U": u} },
 	"copycmd": func(id, cmd string) map[string]string {
 		return map[string]string{"ID": id, "Cmd": cmd}
 	},

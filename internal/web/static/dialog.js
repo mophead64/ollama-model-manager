@@ -21,6 +21,9 @@
 // An open <details class="split-menu"> dropdown closes on a click outside it,
 // on Escape, or when one of its items is picked.
 //
+// An opener with data-dialog-scroll="<id>" also scrolls the dialog to the
+// element with that id, e.g. one section of a long dialog.
+//
 // A <dialog data-dialog-autoopen> is opened as soon as the page (or the htmx
 // swap bringing it) loads: used when a form inside it posts, fails server-side,
 // and the page re-renders with the error, so the user sees it without
@@ -34,6 +37,10 @@ document.addEventListener("click", function (e) {
       dialog.querySelectorAll("form[data-reset-on-open]").forEach(function (f) { f.reset(); });
       fill(dialog, opener);
       dialog.showModal();
+      var at = opener.getAttribute("data-dialog-scroll");
+      var section = at && document.getElementById(at);
+      if (section && dialog.contains(section)) section.scrollIntoView({ block: "start" });
+      else dialog.scrollTop = 0;
     }
     return;
   }

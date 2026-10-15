@@ -526,7 +526,6 @@
   .system-top, .system-versions { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; margin-bottom: 20px; }
   .system-top .panel, .system-versions .panel { margin-bottom: 0; }
   .system-section { display: contents; }
-  .system-update-panel { grid-column: 1 / -1; }
   @media (max-width: 1000px) { .system-top, .system-versions { grid-template-columns: minmax(0, 1fr); } }
   .library-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 14px; }
   .library-stats .value { font-size: 22px; font-weight: 700; }
@@ -536,21 +535,25 @@
   dl.kv.kv-2 { grid-template-columns: max-content minmax(0, 1fr) max-content minmax(0, 1fr); }
   @media (max-width: 720px) { dl.kv.kv-2 { grid-template-columns: max-content minmax(0, 1fr); } }
   .system-note { font-size: 13px; margin: 14px 0 0; }
-  /* Ollama's and this app's panels stretch to the same height; the folded
-     sections sit at the bottom so they line up, whatever rows are above. */
+  /* Ollama's and this app's panels stretch to the same height; the buttons
+     sit at the bottom so they line up, whatever rows are above. */
   .status-panel { display: flex; flex-direction: column; }
   .status-panel dl.kv { margin: 12px 0 14px; }
-  .status-panel > dl.kv + .status-more { margin-top: auto; }
   .status-panel dd .badge { margin-left: 6px; }
-  .status-more .release-notes { margin-top: 8px; max-height: 360px; }
-  .update-lead { font-size: 14px; line-height: 1.5; margin: 12px 0 0; }
+  button.badge { border: 0; cursor: pointer; font-family: inherit; line-height: inherit; }
+  button.badge:hover { filter: brightness(1.1); }
+  .status-actions { display: flex; gap: 8px; margin-top: auto; }
+  /* The release notes and how to update, in a modal per product. */
+  .update-modal h3 { font-size: 15px; margin: 20px 0 0; }
+  .update-modal section { scroll-margin-top: 12px; }
+  .update-modal .release-notes { margin-top: 8px; max-height: 50vh; }
+  .update-modal .dialog-actions { margin-top: 18px; }
+  .update-lead { font-size: 14px; line-height: 1.5; margin: 0; }
   .update-lead p { margin: 0 0 8px; }
   .update-lead ul { margin: 0 0 8px; padding-left: 20px; display: grid; gap: 4px; }
-  .update-how { font-size: 14px; margin: 14px 0 0; }
-  .status-more { margin-top: 14px; }
-  .status-more + .status-more { margin-top: 8px; }
-  .status-more > summary, .update-steps summary { cursor: pointer; font-weight: 500; font-size: 14px; }
-  .release-meta { font-size: 13px; margin: 8px 0 0; }
+  .update-how { font-size: 14px; margin: 8px 0 0; }
+  .update-steps summary { cursor: pointer; font-weight: 500; font-size: 14px; }
+  .release-meta { font-size: 13px; margin: 6px 0 0; }
   .update-steps { display: grid; gap: 8px; margin-top: 8px; }
   .update-steps details { border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; }
   .update-steps details[open] summary { margin-bottom: 8px; }

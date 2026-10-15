@@ -193,11 +193,12 @@
 </div>
 {{end}}
 
-{{/* Ollama's version, whether there's a newer release, its release notes and
-     how to update. Checked in the background (RunOllamaUpdateChecks); re-checks
-     itself when the page loads, and on "check now". The section is display:
-     contents, so the panel sits in the page's grid and the update panel (when
-     there's an update) spans the row beneath. app_panel is laid out the same. */}}
+{{/* Ollama's version and whether there's a newer release. Checked in the
+     background (RunOllamaUpdateChecks); re-checks itself when the page
+     loads, and on "check now". Its release notes and how to update are in a
+     modal (ollama_update_modal), opened by the version badge or the buttons
+     beneath. The section is display: contents, so the panel sits in the
+     page's grid. app_panel is laid out the same. */}}
 {{define "ollama_panel"}}
 {{$u := .OllamaUpdate}}
 <div class="system-section" id="ollama-section"{{if not .Fragment}} hx-get="/system/ollama" hx-trigger="load" hx-swap="outerHTML"{{end}}>
@@ -211,8 +212,8 @@
     <dt>Version</dt>
     <dd>
       {{if $u.Running}}<span class="mono">{{$u.Running}}</span>{{else}}<span class="muted">couldn't ask Ollama</span>{{end}}
-      {{if $u.Available}}<a class="badge update" href="{{$u.URL}}" target="_blank" rel="noopener noreferrer" title="Release notes">Update available: {{$u.Latest}}</a>
-      {{else if $u.Current}}<span class="badge on">✓ Up to date</span>
+      {{if $u.Available}}<button type="button" class="badge update" data-dialog-open="ollama-update-modal" title="What's new, and how to update">Update available: {{$u.Latest}}</button>
+      {{else if $u.Current}}<button type="button" class="badge on" data-dialog-open="ollama-update-modal" title="Release notes, and how to update">✓ Up to date</button>
       {{else if and $u.Running (not $u.Latest)}}<span class="muted">(couldn't check GitHub for the latest release)</span>{{end}}
     </dd>
     <dt>Checked</dt>
@@ -221,34 +222,42 @@
       · <button type="button" class="link" hx-get="/system/ollama?force=1" hx-target="#ollama-section" hx-swap="outerHTML">check now</button>
     </dd>
   </dl>
-  {{if not $u.Available}}
-  {{if $u.Latest}}{{template "release_notes" $u}}{{end}}
-  <details class="status-more"><summary>How to update Ollama</summary>{{template "ollama_update_steps" $u}}</details>
-  {{end}}
+  {{template "update_buttons" (updatebuttons "ollama-update-modal" $u)}}
 </div>
-{{if $u.Available}}
-<div class="panel system-update-panel">
-  <h2>Update Ollama to {{$u.Latest}}</h2>
-  <div class="update-lead">
-    <p>Ollama <strong>{{$u.Latest}}</strong> is out{{if not $u.Published.IsZero}} ({{ago $u.Published}}){{end}}, and you're running <span class="mono">{{$u.Running}}</span>. Keeping Ollama up to date matters more than for most apps:</p>
-    <ul>
-      <li><strong>New models need it.</strong> Recently released models often use architectures older versions can't load, so they fail to download or run (“requires a newer version of Ollama”, “unknown model architecture”).</li>
-      <li><strong>Downloads from Hugging Face</strong> rely on it too: older versions can't follow some of its newer download hosts.</li>
-      <li><strong>Speed, memory use and GPU support</strong> improve from release to release, along with fixes for tool calling, templates and bugs.</li>
-    </ul>
-  </div>
-  {{template "release_notes" $u}}
-  <p class="update-how">How to update depends on how Ollama was installed:</p>
-  {{template "ollama_update_steps" $u}}
-</div>
-{{end}}
+{{template "ollama_update_modal" .}}
 </div>
 {{end}}
 
-{{/* This app's version, whether there's a newer release, its release notes
-     and how to update, laid out as ollama_panel. The page renders the last
-     check without asking GitHub; the panel then re-checks itself, and on
-     "check now". */}}
+{{define "ollama_update_modal"}}
+{{$u := .OllamaUpdate}}
+<dialog id="ollama-update-modal" class="wide update-modal" aria-labelledby="ollama-update-title">
+  <div class="dialog-body">
+    <h2 id="ollama-update-title">{{if $u.Available}}Update Ollama to {{$u.Latest}}{{else if $u.Running}}Ollama {{$u.Running}}{{else}}Ollama{{end}}</h2>
+    {{if $u.Available}}
+    <div class="update-lead">
+      <p>Ollama <strong>{{$u.Latest}}</strong> is out{{if not $u.Published.IsZero}} ({{ago $u.Published}}){{end}}, and you're running <span class="mono">{{$u.Running}}</span>. Keeping Ollama up to date matters more than for most apps:</p>
+      <ul>
+        <li><strong>New models need it.</strong> Recently released models often use architectures older versions can't load, so they fail to download or run (“requires a newer version of Ollama”, “unknown model architecture”).</li>
+        <li><strong>Downloads from Hugging Face</strong> rely on it too: older versions can't follow some of its newer download hosts.</li>
+        <li><strong>Speed, memory use and GPU support</strong> improve from release to release, along with fixes for tool calling, templates and bugs.</li>
+      </ul>
+    </div>
+    {{end}}
+    {{if $u.Latest}}<section id="ollama-update-modal-notes">{{template "release_notes" $u}}</section>{{end}}
+    <section id="ollama-update-modal-how">
+      <h3>How to update Ollama</h3>
+      <p class="update-how">It depends on how Ollama was installed:</p>
+      {{template "ollama_update_steps" $u}}
+    </section>
+    <div class="dialog-actions"><button type="button" class="secondary" data-dialog-close>Close</button></div>
+  </div>
+</dialog>
+{{end}}
+
+{{/* This app's version and whether there's a newer release, laid out as
+     ollama_panel, with its release notes and how to update in
+     app_update_modal. The page renders the last check without asking
+     GitHub; the panel then re-checks itself, and on "check now". */}}
 {{define "app_panel"}}
 {{$u := .AppUpdate}}
 <div class="system-section" id="app-section"{{if not .Fragment}} hx-get="/system/app" hx-trigger="load" hx-swap="outerHTML"{{end}}>
@@ -262,8 +271,8 @@
     <dd>
       <span class="mono">{{.Version}}</span>
       {{if devbuild .Version}}<span class="badge info" title="Built from source rather than a release, so there's no release to compare it with">Development build</span>
-      {{else if $u.Available}}<a class="badge update" href="{{$u.URL}}" target="_blank" rel="noopener noreferrer" title="Release notes">Update available: {{$u.Latest}}</a>
-      {{else if $u.Current}}<span class="badge on">✓ Up to date</span>
+      {{else if $u.Available}}<button type="button" class="badge update" data-dialog-open="app-update-modal" title="What's new, and how to update">Update available: {{$u.Latest}}</button>
+      {{else if $u.Current}}<button type="button" class="badge on" data-dialog-open="app-update-modal" title="Release notes, and how to update">✓ Up to date</button>
       {{else if and .Fragment (not $u.Checked)}}<span class="muted">(couldn't check GitHub for the latest release)</span>{{end}}
     </dd>
     <dt>Checked</dt>
@@ -272,32 +281,47 @@
       · <button type="button" class="link" hx-get="/system/app?force=1" hx-target="#app-section" hx-swap="outerHTML">check now</button>
     </dd>
   </dl>
-  {{if not $u.Available}}
-  {{if $u.Latest}}{{template "release_notes" $u}}{{end}}
-  <details class="status-more"><summary>How to update Ollama Model Manager</summary>{{template "app_update_steps" $u}}</details>
-  {{end}}
+  {{template "update_buttons" (updatebuttons "app-update-modal" $u)}}
 </div>
-{{if $u.Available}}
-<div class="panel system-update-panel">
-  <h2>Update Ollama Model Manager to {{$u.Latest}}</h2>
-  <div class="update-lead">
-    <p>Ollama Model Manager <strong>{{$u.Latest}}</strong> is out{{if not $u.Published.IsZero}} ({{ago $u.Published}}){{end}}, and you're running <span class="mono">{{.Version}}</span>. Accounts, downloads, usage history, tests and the blacklist are all kept across updates.</p>
-  </div>
-  {{template "release_notes" $u}}
-  <p class="update-how">How to update depends on how you run it:</p>
-  {{template "app_update_steps" $u}}
-</div>
-{{end}}
+{{template "app_update_modal" .}}
 </div>
 {{end}}
 
-{{/* A release's notes, folded away. Takes an ollamaUpdate or updateInfo. */}}
+{{define "app_update_modal"}}
+{{$u := .AppUpdate}}
+<dialog id="app-update-modal" class="wide update-modal" aria-labelledby="app-update-title">
+  <div class="dialog-body">
+    <h2 id="app-update-title">{{if $u.Available}}Update Ollama Model Manager to {{$u.Latest}}{{else}}Ollama Model Manager {{.Version}}{{end}}</h2>
+    {{if $u.Available}}
+    <div class="update-lead">
+      <p>Ollama Model Manager <strong>{{$u.Latest}}</strong> is out{{if not $u.Published.IsZero}} ({{ago $u.Published}}){{end}}, and you're running <span class="mono">{{.Version}}</span>. Accounts, downloads, usage history, tests and the blacklist are all kept across updates.</p>
+    </div>
+    {{end}}
+    {{if $u.Latest}}<section id="app-update-modal-notes">{{template "release_notes" $u}}</section>{{end}}
+    <section id="app-update-modal-how">
+      <h3>How to update Ollama Model Manager</h3>
+      <p class="update-how">It depends on how you run it:</p>
+      {{template "app_update_steps" $u}}
+    </section>
+    <div class="dialog-actions"><button type="button" class="secondary" data-dialog-close>Close</button></div>
+  </div>
+</dialog>
+{{end}}
+
+{{/* A status panel's "Release notes" and "How to update" buttons, each
+     opening Modal at its section. Takes Modal (the dialog's id) and U (the
+     update check); How to update stands out when there's an update. */}}
+{{define "update_buttons"}}
+<div class="status-actions">
+  {{if .U.Latest}}<button type="button" class="secondary small" data-dialog-open="{{.Modal}}" data-dialog-scroll="{{.Modal}}-notes">Release notes</button>{{end}}
+  <button type="button" class="{{if not .U.Available}}secondary {{end}}small" data-dialog-open="{{.Modal}}" data-dialog-scroll="{{.Modal}}-how">How to update</button>
+</div>
+{{end}}
+
 {{define "release_notes"}}
-<details class="status-more">
-  <summary>Release notes for {{.Latest}}</summary>
-  <p class="muted release-meta">{{if not .Published.IsZero}}<span title="{{time .Published}}">Published {{ago .Published}}</span> · {{end}}<a href="{{.URL}}" target="_blank" rel="noopener noreferrer">View on GitHub ↗</a></p>
-  {{with .Notes}}<div class="release-notes">{{.}}</div>{{else}}<p class="muted">This release has no notes.</p>{{end}}
-</details>
+<h3>Release notes for {{.Latest}}</h3>
+<p class="muted release-meta">{{if not .Published.IsZero}}<span title="{{time .Published}}">Published {{ago .Published}}</span> · {{end}}<a href="{{.URL}}" target="_blank" rel="noopener noreferrer">View on GitHub ↗</a></p>
+{{with .Notes}}<div class="release-notes">{{.}}</div>{{else}}<p class="muted">This release has no notes.</p>{{end}}
 {{end}}
 
 {{define "ollama_update_steps"}}

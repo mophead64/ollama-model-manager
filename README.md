@@ -105,9 +105,10 @@ Markdown: lists, tables and code blocks. Nothing is saved.
 ### System monitoring and updates
 Live graphs of CPU, memory, GPU and VRAM use, each GPU's memory and utilisation, what's loaded, and how many models you
 have and the space they take. NVIDIA GPUs are read with `nvidia-smi`, AMD and Intel GPUs from `/sys`, and Apple silicon
-natively. The System page also checks for new releases of Ollama and of this app. For Ollama, it says why they matter
-(new models often need them) and shows how to update for Docker, the Linux install script (backing up your
-`ollama.service` settings first), macOS and Windows; for this app, it shows the release notes, which say how to update.
+natively. The System page also checks for new releases of Ollama and of this app. Click a version's badge, **Release
+notes** or **How to update** to see the latest release's notes and the steps to update. For Ollama, that's why updates
+matter (new models often need them) and how to update with Docker, the Linux install script (backing up your
+`ollama.service` settings first), macOS and Windows; for this app, with Docker, the standalone binary or from source.
 
 ![The System page: this machine and the model library, GPUs, loaded models and live graphs, then Ollama's and this app's versions](docs/images/system.png)
 

@@ -24,7 +24,12 @@ func TestOllamaUpdate(t *testing.T) {
 	page := get(h, "/system", false).Body.String()
 	for _, want := range []string{
 		`<span class="mono">0.12.3</span>`, "Update available: v0.12.5", "Ollama <strong>v0.12.5</strong> is out",
-		"<summary>Release notes for v0.12.5</summary>", "<strong>notes</strong>", "How to update depends on how Ollama was installed",
+		// The badge and both buttons open the modal with the notes and steps.
+		`<button type="button" class="badge update" data-dialog-open="ollama-update-modal"`,
+		`data-dialog-open="ollama-update-modal" data-dialog-scroll="ollama-update-modal-notes">Release notes</button>`,
+		`<button type="button" class="small" data-dialog-open="ollama-update-modal" data-dialog-scroll="ollama-update-modal-how">How to update</button>`,
+		`<dialog id="ollama-update-modal"`, "Update Ollama to v0.12.5", `<section id="ollama-update-modal-notes">`,
+		"<h3>Release notes for v0.12.5</h3>", "<strong>notes</strong>", `<section id="ollama-update-modal-how">`, "It depends on how Ollama was installed",
 		`hx-get="/system/ollama" hx-trigger="load"`, "check now",
 		`value="docker compose pull ollama &amp;&amp; docker compose up -d ollama"`, `value="docker pull ollama/ollama:latest"`,
 		`value="curl -fsSL https://ollama.com/install.sh | sh"`,
@@ -36,15 +41,16 @@ func TestOllamaUpdate(t *testing.T) {
 			t.Errorf("system page missing %q", want)
 		}
 	}
-	if strings.Contains(page, "<summary>How to update Ollama</summary>") {
-		t.Error("with an update out, the steps should be shown, not folded away")
+	if strings.Contains(page, "<summary>Release notes") || strings.Contains(page, "system-update-panel") {
+		t.Error("the release notes and steps belong in the modal, not inline")
 	}
 
-	// Up to date: a green tick, no dot, the steps folded away.
+	// Up to date: a green tick (opening the modal too), no dot.
 	testServer.ollamaUp.releases.url = fakeGitHub(t, "v0.12.3", "")
 	testServer.ollamaUp.releases.expiry = time.Time{} // as if the cache had run out ("check now" is rate limited)
 	frag := get(h, "/system/ollama?force=1", true).Body.String()
-	for _, want := range []string{`<span class="badge on">✓ Up to date</span>`, "<summary>Release notes for v0.12.3</summary>", `<details class="status-more"><summary>How to update Ollama</summary>`, "Checked"} {
+	for _, want := range []string{`<button type="button" class="badge on" data-dialog-open="ollama-update-modal"`, "<h2 id=\"ollama-update-title\">Ollama 0.12.3</h2>",
+		"<h3>Release notes for v0.12.3</h3>", `<button type="button" class="secondary small" data-dialog-open="ollama-update-modal" data-dialog-scroll="ollama-update-modal-how">How to update</button>`, "Checked"} {
 		if !strings.Contains(frag, want) {
 			t.Errorf("up to date panel missing %q", want)
 		}
