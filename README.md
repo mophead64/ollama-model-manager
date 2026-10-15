@@ -10,7 +10,7 @@
   ones that weren't worth keeping.
 </p>
 
-![The dashboard: library totals, free disk space running low, live system load, the models loaded in memory, four models unused for 60+ days, and the most recently used models](docs/images/dashboard.png)
+![The dashboard: library totals, free disk space, live system load, the models loaded in memory, four models unused for 60+ days, a chart of each model's use over the last week, and the most recently used models](docs/images/dashboard.png)
 
 ## What it adds to Ollama
 
@@ -32,9 +32,10 @@ Manager fills in the rest:
 
 ### Your models, at a glance
 The **dashboard** shows your library's size, free space on the disk Ollama uses, live CPU, memory, GPU and VRAM, what's
-loaded in memory (and how much of it is on the GPU), and the models you've used most recently.
+loaded in memory (and how much of it is on the GPU), a chart of how long each model was in use each day over the last
+week, and the models you've used most recently.
 
-![The dashboard: library totals, free disk space running low, live system load, the models loaded in memory, four models unused for 60+ days, and the most recently used models](docs/images/dashboard.png)
+![The dashboard: library totals, free disk space, live system load, the models loaded in memory, four models unused for 60+ days, a chart of each model's use over the last week, and the most recently used models](docs/images/dashboard.png)
 
 The **Models** page lists everything installed, with its family, size, quantisation, context length, capabilities, when
 it was downloaded, when it was last used and how many times it's been loaded. Sort by size, parameters, context, download date, last use or

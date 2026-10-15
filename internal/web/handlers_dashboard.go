@@ -48,6 +48,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		data["Recent"] = recent
+		data["Week"] = s.weekUsage(r)
 		data["LastUsed"] = lastUsed
 	}
 
