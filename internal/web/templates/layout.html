@@ -398,11 +398,27 @@
   td.mono, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; overflow-wrap: anywhere; }
   a.model-link { color: var(--text); font-weight: 600; text-decoration: none; }
   a.model-link:hover { color: var(--accent); }
-  /* Model name that copies itself on click, with a hover/focus tooltip
-     (dialog.js swaps its text to "Copied"). */
-  button.model-name { all: unset; cursor: pointer; color: var(--text); font-weight: 600; border-radius: 4px; }
-  button.model-name:hover { color: var(--accent); }
-  button.model-name:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  /* Model name linking to its page, cut short with an ellipsis when long
+     (the full name then shows on hover: dialog.js marks it .truncated),
+     and a copy button after it (dialog.js swaps its tooltip to "Copied"). */
+  .model-name-wrap { position: relative; display: inline-flex; align-items: center; gap: 4px; max-width: 100%; vertical-align: bottom; }
+  .model-name {
+    display: block; min-width: 0; max-width: 36ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    color: var(--text); font-weight: 600; text-decoration: none; border-radius: 4px;
+  }
+  a.model-name:hover { color: var(--accent); }
+  .model-name:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .name-tip { max-width: 420px; white-space: normal; overflow-wrap: anywhere; color: var(--text); }
+  .model-name-wrap.truncated > .model-name:hover + .name-tip,
+  .model-name-wrap.truncated > .model-name:focus-visible + .name-tip { opacity: 1; visibility: visible; }
+  button.copy-name { all: unset; cursor: pointer; display: inline-flex; padding: 2px; border-radius: 4px; color: var(--muted); }
+  button.copy-name:hover, .copy-tip-wrap.copied button.copy-name { color: var(--accent); }
+  button.copy-name:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  /* A tick in place of the copy icon while "Copied" shows. */
+  button.copy-name .icon-tick, .copy-tip-wrap.copy-ok button.copy-name .icon-copy { display: none; }
+  .copy-tip-wrap.copy-ok button.copy-name .icon-tick { display: block; }
+  .copy-tip-wrap.copy-ok button.copy-name { color: var(--good); }
+  .model-name-wrap .copy-tip-wrap { display: inline-flex; }
   /* .tip-wrap/.tip: the same tooltip, for plain hover text. */
   .copy-tip-wrap, .tip-wrap { position: relative; display: inline-block; }
   .copy-tip, .tip {

@@ -151,8 +151,14 @@
 {{/* A model's labels, under its name; nothing if it has none. */}}
 {{define "label_row"}}{{with .}}<div class="lbl-row">{{range .}}{{template "label_chip" .}}{{end}}</div>{{end}}{{end}}
 
-{{/* A model's name, which copies itself on click (dialog.js). */}}
-{{define "model_name"}}<span class="copy-tip-wrap"><button type="button" class="model-name" data-copy-text="{{.}}">{{.}}</button><span class="copy-tip" role="tooltip">Click to copy model name</span></span>{{end}}
+{{/* A model's name, linking to its page, with a copy button after it. A long
+     name is cut short, and then shows in full on hover (dialog.js). */}}
+{{define "model_name"}}<span class="model-name-wrap"><a class="model-name" href="/models/{{.}}">{{.}}</a><span class="tip name-tip" role="tooltip">{{.}}</span>{{template "copy_name" .}}</span>{{end}}
+
+{{/* model_name without the link, for a model that may not be installed. */}}
+{{define "model_name_text"}}<span class="model-name-wrap"><span class="model-name" tabindex="0">{{.}}</span><span class="tip name-tip" role="tooltip">{{.}}</span>{{template "copy_name" .}}</span>{{end}}
+
+{{define "copy_name"}}<span class="copy-tip-wrap"><button type="button" class="copy-name" data-copy-text="{{.}}" aria-label="Copy {{.}}"><svg class="icon-copy" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg><svg class="icon-tick" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12.5l5 5 10-11"/></svg></button><span class="copy-tip" role="tooltip">Copy name</span></span>{{end}}
 
 {{/* A model row's split button: View, and a menu of Load/Unload, Chat and
      Delete. Takes rowactions; Delete needs the page's delete_model_dialog and

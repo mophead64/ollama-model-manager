@@ -71,6 +71,32 @@ func TestParseSearchChips(t *testing.T) {
 	}
 }
 
+// The late-October 2026 redesign: the description is a line-clamp-2
+// paragraph, and cloud models show prices where the pull count was.
+func TestParseSearchClamp(t *testing.T) {
+	b, err := os.ReadFile("testdata/search-clamp.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := parseSearch(string(b), 1)
+	want := []Model{
+		{Name: "glm-5.3", Description: "Z.ai's flagship model and the most capable open-weights model for coding, with major gains on long-horizon agentic tasks.",
+			Capabilities: []string{"tools", "thinking"}, Cloud: true},
+		{Name: "clef", Description: "Clef is a 27B multimodal model created by Cloudflare that turns a state and a schema of typed questions into decisions.",
+			Capabilities: []string{"vision", "decision"}, Cloud: true, Sizes: []string{"27b"}, Pulls: "43.1K"},
+		{Name: "embeddinggemma-2", Description: "EmbeddingGemma 2 is a multimodal embedding model from Google built on the Gemma 4 architecture.",
+			Capabilities: []string{"vision", "embedding"}, Sizes: []string{"270m", "440m", "570m", "740m"}, Pulls: "90.5K"},
+		{Name: "phonon", Description: "Phonon is Gradium’s text-to-speech family. It turns written text into spoken audio as it generates, making it useful for reading assistant replies, narrating passages, and adding a voice to local apps.",
+			Pulls: "13.6K"},
+	}
+	if !reflect.DeepEqual(p.Models, want) {
+		t.Errorf("models =\n%+v\nwant\n%+v", p.Models, want)
+	}
+	if p.NextPage != 2 {
+		t.Errorf("next page = %d, want 2", p.NextPage)
+	}
+}
+
 func TestParseTags(t *testing.T) {
 	b, err := os.ReadFile("testdata/tags.html")
 	if err != nil {
