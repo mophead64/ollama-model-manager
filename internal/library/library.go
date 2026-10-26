@@ -293,8 +293,10 @@ var (
 	//   - a rounded label each: "cloud", "27b", "vision";
 	//   - "Cloud" with a tooltip saying it runs on Ollama's cloud, the sizes
 	//     together ("27b · 35b"), and an icon and label per capability.
+	// The description has been both a truncated paragraph (max-w-2xl) and,
+	// from late October 2026, a clamped one (line-clamp-2).
 	resultRE = regexp.MustCompile(`<a href="/library/([^"/:?]+)"`)
-	descRE   = regexp.MustCompile(`(?s)<p class="[^"]*\bmax-w-[^"]*"[^>]*>(.*?)</p>`)
+	descRE   = regexp.MustCompile(`(?s)<p class="[^"]*\b(?:max-w-|line-clamp-)[^"]*"[^>]*>(.*?)</p>`)
 	chipREs  = []*regexp.Regexp{
 		regexp.MustCompile(`<span[^>]*class="[^"]*\brounded-md\b[^"]*"[^>]*>([^<]+)</span>`),
 		regexp.MustCompile(`<span\s+class="font-medium text-black">([^<]+)</span>`),
