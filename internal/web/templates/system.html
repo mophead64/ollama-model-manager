@@ -155,7 +155,7 @@
       <tbody>
       {{range .Running}}
         <tr>
-          <td><a class="model-link" href="/models/{{.Name}}">{{.Name}}</a></td>
+          <td>{{template "model_name" .Name}}</td>
           <td>{{bytes .Size}}{{if .SizeVRAM}} <span class="muted">({{bytes .SizeVRAM}} VRAM)</span>{{end}}</td>
           <td>{{.Processor}}</td>
           <td>{{if .ContextLength}}{{count .ContextLength}}{{else}}-{{end}}</td>

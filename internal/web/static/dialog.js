@@ -18,6 +18,9 @@
 // one with data-copy-text="<text>" copies that text. Inside a .copy-tip-wrap,
 // "Copied" shows in its .copy-tip tooltip rather than on the button.
 //
+// A .model-name cut short by its width gets .truncated on its wrapper when
+// hovered or focused, so the full name shows in the wrapper's tooltip.
+//
 // An open <details class="split-menu"> dropdown closes on a click outside it,
 // on Escape, or when one of its items is picked.
 //
@@ -139,6 +142,15 @@ document.addEventListener("submit", function (e) {
   }, 0);
 });
 
+// Checked on each hover rather than once, as names arrive in htmx swaps and
+// the available width changes with the window.
+function markTruncated(e) {
+  var name = e.target.closest && e.target.closest(".model-name");
+  if (name) name.parentElement.classList.toggle("truncated", name.scrollWidth > name.clientWidth);
+}
+document.addEventListener("mouseover", markTruncated);
+document.addEventListener("focusin", markTruncated);
+
 // Coming back to a page via the back button restores it from cache as it was
 // left, busy buttons included; put them back.
 window.addEventListener("pageshow", function (e) {
@@ -161,11 +173,12 @@ function copy(btn) {
     var idle = label.dataset.idleText || label.textContent;
     label.dataset.idleText = idle;
     label.textContent = ok ? "Copied" : "Select and copy it";
-    if (wrap) wrap.classList.add("copied");
+    // .copy-ok only when it worked, e.g. to swap an icon for a tick.
+    if (wrap) { wrap.classList.add("copied"); wrap.classList.toggle("copy-ok", ok); }
     clearTimeout(label._copyTimer);
     label._copyTimer = setTimeout(function () {
       label.textContent = idle;
-      if (wrap) wrap.classList.remove("copied");
+      if (wrap) wrap.classList.remove("copied", "copy-ok");
     }, 2000);
   }
   // The async clipboard API only exists on HTTPS pages (or localhost); the

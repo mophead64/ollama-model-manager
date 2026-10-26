@@ -32,7 +32,7 @@
         <tbody>
         {{range .Entries}}
           <tr>
-            <td>{{template "model_name" .Model}}{{with .Family}}<div class="muted">{{.}}</div>{{end}}</td>
+            <td>{{template "model_name_text" .Model}}{{with .Family}}<div class="muted">{{.}}</div>{{end}}</td>
             <td class="reason">{{or .Reason "-"}}</td>
             <td>{{or .ParameterSize "-"}}</td>
             <td>{{or .Quantization "-"}}</td>

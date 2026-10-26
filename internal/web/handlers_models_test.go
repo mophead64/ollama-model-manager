@@ -278,8 +278,8 @@ func TestModelsTableCopyNameAndActions(t *testing.T) {
 	h := newTestServer(t, fakeOllama(t, 1).URL)
 	body := get(h, "/models", true).Body.String()
 	for _, want := range []string{
-		`<button type="button" class="model-name" data-copy-text="user/custom:v1">user/custom:v1</button>`,
-		`Click to copy model name`,
+		`<a class="model-name" href="/models/user/custom:v1">user/custom:v1</a><span class="tip name-tip" role="tooltip">user/custom:v1</span>`,
+		`<button type="button" class="copy-name" data-copy-text="user/custom:v1" aria-label="Copy user/custom:v1">`,
 		`<a class="btn secondary small" href="/models/user/custom:v1">View</a>`,
 		`<details class="split-menu">`,
 		`aria-label="More actions for user/custom:v1"`,

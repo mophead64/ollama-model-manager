@@ -14,7 +14,7 @@ func TestDashboardRecentlyUsed(t *testing.T) {
 	testStore.MarkModelUsed(t.Context(), "user/custom:v1", time.Now().Add(-10*time.Minute))
 
 	body := get(h, "/", false).Body.String()
-	order := regexp.MustCompile(`class="model-name" data-copy-text="([^"]+)"`).FindAllStringSubmatch(body, -1)
+	order := modelNameRE.FindAllStringSubmatch(recentPanel(body), -1)
 	var got []string
 	for _, m := range order {
 		got = append(got, m[1])
@@ -26,10 +26,10 @@ func TestDashboardRecentlyUsed(t *testing.T) {
 		t.Error("last used should have a timestamp tooltip")
 	}
 	// fakeOllama has user/custom:v1 loaded, and not model-001.
-	if !strings.Contains(body, `aria-label="Loaded in memory" title="Loaded in memory"></span><span class="copy-tip-wrap"><button type="button" class="model-name" data-copy-text="user/custom:v1"`) {
+	if !strings.Contains(body, `aria-label="Loaded in memory" title="Loaded in memory"></span><span class="model-name-wrap"><a class="model-name" href="/models/user/custom:v1"`) {
 		t.Error("loaded model should have the loaded dot")
 	}
-	if strings.Contains(body, `aria-label="Loaded in memory" title="Loaded in memory"></span><span class="copy-tip-wrap"><button type="button" class="model-name" data-copy-text="model-001:latest"`) {
+	if strings.Contains(body, `aria-label="Loaded in memory" title="Loaded in memory"></span><span class="model-name-wrap"><a class="model-name" href="/models/model-001:latest"`) {
 		t.Error("model not in memory shouldn't have the loaded dot")
 	}
 	// The same split button as the models page, with Delete returning here.
@@ -46,10 +46,20 @@ func TestDashboardRecentlyUsedLimit(t *testing.T) {
 		testStore.MarkModelUsed(t.Context(), fmt.Sprintf("model-%03d:latest", i), time.Now().Add(-time.Duration(i)*time.Minute))
 	}
 	body := get(h, "/", false).Body.String()
-	got := regexp.MustCompile(`class="model-name" data-copy-text="([^"]+)"`).FindAllStringSubmatch(body, -1)
+	got := modelNameRE.FindAllStringSubmatch(recentPanel(body), -1)
 	if len(got) != dashboardRecent || got[0][1] != "model-000:latest" || got[9][1] != "model-009:latest" {
 		t.Errorf("recently used = %v, want model-000..009, most recent first", got)
 	}
+}
+
+// modelNameRE finds the models named (by the model_name template) in a page.
+var modelNameRE = regexp.MustCompile(`<a class="model-name" href="/models/([^"]+)"`)
+
+// recentPanel is the dashboard's "Recently used" panel, leaving out the
+// loaded models above it, which name models too.
+func recentPanel(body string) string {
+	_, after, _ := strings.Cut(body, `id="recent-panel"`)
+	return after
 }
 
 func TestLastUsedColumn(t *testing.T) {
@@ -66,7 +76,7 @@ func TestLastUsedColumn(t *testing.T) {
 
 	// Most recently used first (the default); never-used models last.
 	body = get(h, "/models", true).Body.String()
-	order := regexp.MustCompile(`class="model-name" data-copy-text="([^"]+)"`).FindAllStringSubmatch(body, -1)
+	order := modelNameRE.FindAllStringSubmatch(body, -1)
 	var got []string
 	for _, m := range order {
 		got = append(got, m[1])
@@ -113,7 +123,7 @@ func TestLoadsColumn(t *testing.T) {
 	}
 	// Most loaded first; never-seen models last.
 	body = get(h, "/models?sort=loads&dir=desc", true).Body.String()
-	order := regexp.MustCompile(`class="model-name" data-copy-text="([^"]+)"`).FindAllStringSubmatch(body, -1)
+	order := modelNameRE.FindAllStringSubmatch(body, -1)
 	var got []string
 	for _, m := range order {
 		got = append(got, m[1])
